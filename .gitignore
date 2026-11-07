@@ -1,0 +1,8 @@
+# Built by tests/build.sh
+tests/market_price_test
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*~

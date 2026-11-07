@@ -1,0 +1,243 @@
+[worldserver]
+
+###############################################################################
+#
+#   PLAYERBOTS PLUS
+#
+#   Random bots doing what real players do, without an LLM: for now, trading
+#   on the auction house. Works with mod-playerbots; mod-ollama-chat, when it
+#   is in the same build, lets the bots talk about it.
+#
+#   GM commands:
+#       .pbp status          what it is doing
+#       .pbp visit [name]    that bot (or the one selected) trades now
+#       .pbp reload          re-read this file (.reload config does too)
+#
+###############################################################################
+
+#    PlayerbotsPlus.Enable
+#        The whole module.
+#        Default: 1
+PlayerbotsPlus.Enable = 1
+
+###############################################################################
+#
+#   THE AUCTION HOUSE
+#
+#   Random bots in a capital city go to the auction house now and then, like
+#   players: they collect their auction mail, put up what they have no use
+#   for, and buy an upgrade they can afford or what their profession uses.
+#
+#   The auctions are real ones under the bot's own name, in its faction's
+#   auction house: a real player can buy them, and the bots buy real players'
+#   auctions too. The money is real: the deposit, the house's cut, and the
+#   sale paid by mail an hour later, as for anyone. A bot does not walk to the
+#   auctioneer; standing anywhere in the city is enough.
+#
+#   What a bot sells is what playerbots itself would take to the auction house
+#   rather than a vendor: anything of common (white) quality or better that is
+#   not soulbound, not for its quests, not for its professions and not worth
+#   wearing -- cloth, leather, herbs and ore it has no profession for, gear it
+#   will never put on. One whole stack per auction.
+#
+#   What it asks, per one: a little under the cheapest one already up (any
+#   seller's, the auction house bot's too); if there is none, what it is worth
+#   (a multiple of the vendor price); never more than someone of the item's
+#   level could sensibly pay, and never so little that a vendor would pay
+#   more -- if the market is already that low, it keeps it for a vendor. If it
+#   comes back unsold, the bot asks less next time, and after a couple of
+#   tries gives up on it.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Market.Enable
+#        Default: 1
+PlayerbotsPlus.Market.Enable = 1
+
+#    PlayerbotsPlus.Market.IntervalSeconds
+#    PlayerbotsPlus.Market.VisitsPerInterval
+#        Every IntervalSeconds, this many bots that are due go to the auction
+#        house.
+#        Default: 10 seconds, 1 bot
+PlayerbotsPlus.Market.IntervalSeconds = 10
+PlayerbotsPlus.Market.VisitsPerInterval = 1
+
+#    PlayerbotsPlus.Market.VisitCooldownMinutes
+#        After a visit, a bot goes again after a random time in this range
+#        (minutes, min:max). A bot first seen in a city goes some time within
+#        the max, so they do not all go at once.
+#        Default: 40:120
+PlayerbotsPlus.Market.VisitCooldownMinutes = 40:120
+
+#    PlayerbotsPlus.Market.MinLevel
+#        Bots below this level stay out of it.
+#        Default: 10
+PlayerbotsPlus.Market.MinLevel = 10
+
+#    PlayerbotsPlus.Market.ExtraZoneOrAreaIds
+#        Where bots trade besides the capitals (where the game rests you "in a
+#        city"): zone or area ids, separated by commas. Neither of the default
+#        two has an auction house; a bot there uses its faction's, as a player
+#        would by flying over. Empty for capitals only.
+#        3703 = Shattrath City, 4395 = Dalaran.
+#        Default: 3703,4395
+PlayerbotsPlus.Market.ExtraZoneOrAreaIds = 3703,4395
+
+#    PlayerbotsPlus.Market.MaxItemChecksPerVisit
+#        How many items a visit asks playerbots about (is it spare? is it an
+#        upgrade?): each one is a little work for the server.
+#        Default: 30
+PlayerbotsPlus.Market.MaxItemChecksPerVisit = 30
+
+#    PlayerbotsPlus.Market.CollectMail
+#        Bots collect their auction mail when they go: what they sold, what
+#        came back unsold, what they bought. Without it they cannot buy.
+#        Default: 1
+PlayerbotsPlus.Market.CollectMail = 1
+
+#    PlayerbotsPlus.Market.EquipBought
+#        A bot that bought an upgrade puts it on.
+#        Default: 1
+PlayerbotsPlus.Market.EquipBought = 1
+
+#    PlayerbotsPlus.Market.LogTrades
+#        Every visit that did something, and every sale, in the server log
+#        (module.playerbotsplus, info).
+#        Default: 0
+PlayerbotsPlus.Market.LogTrades = 0
+
+# --- selling -------------------------------------------------------------------
+
+#    PlayerbotsPlus.Market.Sell.Enable
+#        Default: 1
+PlayerbotsPlus.Market.Sell.Enable = 1
+
+#    PlayerbotsPlus.Market.Sell.MinQuality
+#    PlayerbotsPlus.Market.Sell.MaxQuality
+#        0 poor, 1 common, 2 uncommon, 3 rare, 4 epic, 5 legendary.
+#        Default: 1 to 4
+PlayerbotsPlus.Market.Sell.MinQuality = 1
+PlayerbotsPlus.Market.Sell.MaxQuality = 4
+
+#    PlayerbotsPlus.Market.Sell.MaxPerVisit
+#    PlayerbotsPlus.Market.Sell.MaxAuctionsPerBot
+#        How many stacks a bot puts up in one visit, and how many it has up at
+#        once at most.
+#        Default: 3, 8
+PlayerbotsPlus.Market.Sell.MaxPerVisit = 3
+PlayerbotsPlus.Market.Sell.MaxAuctionsPerBot = 8
+
+#    PlayerbotsPlus.Market.Sell.MaxBotAuctionsPerHouse
+#        All random bots together never have more than this many up in one
+#        auction house.
+#        Default: 2000
+PlayerbotsPlus.Market.Sell.MaxBotAuctionsPerHouse = 2000
+
+#    PlayerbotsPlus.Market.Sell.MaxRelists
+#        Something that came back unsold more often than this is left for a
+#        vendor.
+#        Default: 2
+PlayerbotsPlus.Market.Sell.MaxRelists = 2
+
+#    PlayerbotsPlus.Market.Sell.DurationWeights
+#        How often a bot picks 12, 24 and 48 hours.
+#        Default: 20,40,40
+PlayerbotsPlus.Market.Sell.DurationWeights = 20,40,40
+
+#    PlayerbotsPlus.Market.Sell.MaxBuyoutGold
+#        No bot auction has a buyout above this.
+#        Default: 50000
+PlayerbotsPlus.Market.Sell.MaxBuyoutGold = 50000
+
+# --- buying ---------------------------------------------------------------------
+
+#    PlayerbotsPlus.Market.Buy.Enable
+#    PlayerbotsPlus.Market.Buy.Upgrades
+#    PlayerbotsPlus.Market.Buy.Materials
+#        Bots buy gear that playerbots rates an upgrade for them (weapons,
+#        armour, bigger bags), and what their professions use to skill up.
+#        Default: 1, 1, 1
+PlayerbotsPlus.Market.Buy.Enable = 1
+PlayerbotsPlus.Market.Buy.Upgrades = 1
+PlayerbotsPlus.Market.Buy.Materials = 1
+
+#    PlayerbotsPlus.Market.Buy.MaxPerVisit
+#        Default: 2
+PlayerbotsPlus.Market.Buy.MaxPerVisit = 2
+
+#    PlayerbotsPlus.Market.Buy.MaxShareOfGoldPct
+#        The most a bot spends on any one thing, as a share of its gold.
+#        Default: 25
+PlayerbotsPlus.Market.Buy.MaxShareOfGoldPct = 25
+
+#    PlayerbotsPlus.Market.Buy.ReserveCopperPerLevel
+#        Gold a bot never spends here, per level, for repairs and training.
+#        Default: 2000 (20 silver a level: 16 gold at 80)
+PlayerbotsPlus.Market.Buy.ReserveCopperPerLevel = 2000
+
+#    PlayerbotsPlus.Market.Buy.UpgradeMinQuality
+#        Default: 2 (uncommon)
+PlayerbotsPlus.Market.Buy.UpgradeMinQuality = 2
+
+#    PlayerbotsPlus.Market.Buy.UpgradeLevelWindow
+#        Gear made for the bot's level or up to this many levels below it.
+#        Default: 6
+PlayerbotsPlus.Market.Buy.UpgradeLevelWindow = 6
+
+#    PlayerbotsPlus.Market.Buy.MaterialsMaxPctOfValue
+#        The most a bot pays per one for materials, as a percentage of what
+#        they are worth (Market.Price.GoodsValuePct of the vendor price).
+#        Default: 200
+PlayerbotsPlus.Market.Buy.MaterialsMaxPctOfValue = 200
+
+# --- prices -----------------------------------------------------------------------
+#
+#   All per one item. "Wealth" is how much gold someone of a level has to
+#   spend: WealthBaseCopper * e^(level / WealthGrowthLevels) -- with the
+#   defaults about 2g at 10, 17g at 30, 117g at 50, 300g at 60, 2000g at 80.
+
+#    PlayerbotsPlus.Market.Price.GearValuePct
+#        What gear (weapons, armour) is worth when nobody else has one up, as a
+#        percentage of its vendor price, by quality: poor, common, uncommon,
+#        rare, epic, legendary, heirloom.
+#        Default: 100,250,500,1000,2500,4000,4000
+PlayerbotsPlus.Market.Price.GearValuePct = 100,250,500,1000,2500,4000,4000
+
+#    PlayerbotsPlus.Market.Price.GoodsValuePct
+#        The same for everything else: cloth, herbs, ore, potions...
+#        Default: 300
+PlayerbotsPlus.Market.Price.GoodsValuePct = 300
+
+#    PlayerbotsPlus.Market.Price.FloorPctOfVendor
+#        Never listed for less than this percentage of the vendor price: the
+#        house keeps 5% of a sale (15% in the neutral ones).
+#        Default: 110
+PlayerbotsPlus.Market.Price.FloorPctOfVendor = 110
+
+#    PlayerbotsPlus.Market.Price.WealthBaseCopper
+#    PlayerbotsPlus.Market.Price.WealthGrowthLevels
+#        Default: 10000, 10.5
+PlayerbotsPlus.Market.Price.WealthBaseCopper = 10000
+PlayerbotsPlus.Market.Price.WealthGrowthLevels = 10.5
+
+#    PlayerbotsPlus.Market.Price.GearCapPctOfWealth
+#        One piece of gear never costs more than this share (percent) of the
+#        wealth at its level, by quality as above. A bot buying an upgrade
+#        pays no more than this at its own level.
+#        Default: 2,5,20,50,120,300,300
+PlayerbotsPlus.Market.Price.GearCapPctOfWealth = 2,5,20,50,120,300,300
+
+#    PlayerbotsPlus.Market.Price.StackCapPctOfWealth
+#        A full stack of anything else never costs more than this share.
+#        Default: 20
+PlayerbotsPlus.Market.Price.StackCapPctOfWealth = 20
+
+#    PlayerbotsPlus.Market.Price.UndercutPct
+#        How far under the cheapest one up a bot goes (percent, min:max).
+#        Default: 1:5
+PlayerbotsPlus.Market.Price.UndercutPct = 1:5
+
+#    PlayerbotsPlus.Market.Price.RelistDiscountPct
+#        Asked this much less (percent) for every time it came back unsold.
+#        Default: 15
+PlayerbotsPlus.Market.Price.RelistDiscountPct = 15
