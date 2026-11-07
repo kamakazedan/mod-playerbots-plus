@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Builds and runs the pricing tests. Needs only g++: the pricing has no game
-# types in it. Run from anywhere: bash tests/build.sh
+# Builds and runs the tests: the market's pricing, and the text helpers with
+# what the conf ships. Needs only g++: neither has game types in it. Run from
+# anywhere: bash tests/build.sh (OUT=<dir> puts the binaries elsewhere).
 set -e
 T=$(cd "$(dirname "$0")" && pwd)
-OUT=${OUT:-$T/market_price_test}
-g++ -std=c++20 -O0 -g -Wall -Wextra -I"$T/../src" \
-    "$T/market_price_test.cpp" "$T/../src/PlayerbotsPlusMarketPrice.cpp" -o "$OUT"
-"$OUT"
+ROOT=$(cd "$T/.." && pwd)
+OUT=${OUT:-$T}
+mkdir -p "$OUT"
+FLAGS=(-std=c++20 -O0 -g -Wall -Wextra -I"$ROOT/src")
+g++ "${FLAGS[@]}" "$T/market_price_test.cpp" "$ROOT/src/PlayerbotsPlusMarketPrice.cpp" -o "$OUT/market_price_test"
+g++ "${FLAGS[@]}" "$T/text_test.cpp" "$ROOT/src/PlayerbotsPlusText.cpp" -o "$OUT/text_test"
+"$OUT/market_price_test"
+"$OUT/text_test" "$ROOT"

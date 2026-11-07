@@ -1,6 +1,11 @@
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlusMarketPrice.h"
+#include "PlayerbotsPlusMarks.h"
+#include "PlayerbotsPlusMute.h"
+#include "PlayerbotsPlusRevive.h"
+#include "PlayerbotsPlusStuck.h"
 
 #include "AuctionHouseMgr.h"
 #include "Chat.h"
@@ -29,7 +34,16 @@ namespace
 
         void OnUpdate(uint32 diff) override
         {
+            // These two also run with the module switched off: they let go
+            // whoever they are holding (sat down, AFK, kept on foot).
+            PbpHangout_Update(diff);
+            PbpStuck_Update(diff);
+            if (!g_Pbp.enable)
+                return;
             PbpMarket_Update(diff);
+            PbpMute_Update(diff);
+            PbpRevive_Update(diff);
+            PbpMarks_Update(diff);
         }
     };
 
@@ -86,9 +100,10 @@ namespace
             PbpSettings const& s = g_Pbp;
             PbpMarketStats const st = PbpMarket_GetStats();
             using PbpPrice::MoneyText;
+            auto onOff = [](bool on) { return on ? "on" : "off"; };
 
             handler->PSendSysMessage("|cff00ff00[Playerbots Plus]|r {}, auction house trading {}",
-                                     s.enable ? "on" : "off", s.market.enable ? "on" : "off");
+                                     s.enable ? "on" : "|cffff0000OFF|r", onOff(s.market.enable));
             handler->PSendSysMessage("Bots in a trading city: {}. Up for auction: {} by bots, of {} in all.",
                                      st.inCities, st.botAuctions, st.allAuctions);
             handler->PSendSysMessage("Visits: {}. Listed {} ({}), sold {} ({}), back unsold {}.",
@@ -100,6 +115,36 @@ namespace
             if (st.tooCheap || st.bagsFull)
                 handler->PSendSysMessage("Not listed, cheaper than a vendor already: {}. Mail left, bags full: {}.",
                                          st.tooCheap, st.bagsFull);
+
+            PbpHangoutStats const h = PbpHangout_GetStats();
+            handler->PSendSysMessage("City hangouts: {} - {} hanging out ({} AFK), {} on their way, {} spots ({} with "
+                                     "an inn to arrive at). Sent {}, fetched from elsewhere {} ({} gone back), "
+                                     "settled {}, never got there {}, moved on {}, cut short {}, back from AFK {}.",
+                                     onOff(pbp::g_HangoutEnable), h.hanging, h.away, h.onTheWay, h.spots, h.withInn,
+                                     h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.movedOn, h.cutShort,
+                                     h.cameBack);
+
+            PbpStuckStats const k = PbpStuck_GetStats();
+            handler->PSendSysMessage("Stuck on a mount: {} - {} mounts noted, {} bots stuck ({} kept off what they "
+                                     "were after, {} with nothing to loot, {} kept on foot); {} held off now, {} on "
+                                     "foot now.",
+                                     onOff(pbp::g_StuckEnable), k.mounts, k.stuck, k.hinted, k.nothing, k.walked,
+                                     k.holding, k.walking);
+
+            PbpReviveStats const r = PbpRevive_GetStats();
+            handler->PSendSysMessage("Getting back up: {} - {} released, {} ran back in, {} stopped waiting for a "
+                                     "rez. Muted bot lines: {}.",
+                                     onOff(pbp::g_ReviveEnable), r.released, r.returned, r.gaveUp,
+                                     PbpMute_GetDropped());
+
+            PbpMarksStats const m = PbpMarks_GetStats();
+            std::string const lastFail = m.lastFail ? fmt::format(", last cast result {}", m.lastFail) : "";
+            handler->PSendSysMessage("Raid marks: {} - {} crowd-control marks given out, the skull moved {} to the "
+                                     "cross and {} to the next mob; {} saps ({} would not cast{}, {} did not take, {} "
+                                     "given up, {} could not sap it at all).",
+                                     onOff(pbp::g_MarksEnable), m.assigned, m.moved, m.picked, m.saps, m.sapFails,
+                                     lastFail, m.sapMissed, m.sapGaveUp, m.sapCant);
+
             handler->SendSysMessage("Select a random bot and type .pbp visit to send it to the auction house now.");
             return true;
         }
@@ -144,4 +189,6 @@ void Addmod_playerbots_plusScripts()
     new PlayerbotsPlusWorldScript();
     new PlayerbotsPlusAuctionScript();
     new PlayerbotsPlusCommandScript();
+    new PbpStuckScript();
+    new PbpMuteScript();
 }

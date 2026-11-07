@@ -1,5 +1,6 @@
 # Built by tests/build.sh
 tests/market_price_test
+tests/text_test
 
 # Editors
 .vscode/

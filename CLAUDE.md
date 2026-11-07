@@ -19,6 +19,22 @@ it is safe to touch a bot's `Player`, its inventory, its mail and its
 playerbots AI. Do not add threads. Do not call into this module from a map
 thread or a packet hook.
 
+Two hooks are the exception, and they touch nothing of the world:
+
+- `PbpStuckScript::OnAuraApply` runs on map threads. It only notes the mount
+  under a mutex; the world tick looks at the notes.
+- `PbpMuteScript::CanPacketSend` runs on whatever thread sends the packet. It
+  reads only a snapshot (patterns and bot guids) published from the world
+  thread, and `PlayerbotsPlus::OwnLine` is a thread-local counter.
+
+## Talking is the chat module's
+
+Nothing here makes a bot say anything. Where a bot would say something, raise a
+`PlayerbotsPlus::BotEvent` (`PbpRaiseBotEvent`) or a market event, with the
+facts a prompt needs (names, not pointers), and let a listener voice it. Add a
+new event type to `PlayerbotsPlus.h` and bump `PLAYERBOTS_PLUS_API_VERSION`
+when a listener needs to know it is there.
+
 ## Auctions and mail copy the game's own handlers
 
 `CreateAuction`, `BuyOut` and `CollectMail` in `PlayerbotsPlusMarket.cpp` do
@@ -42,10 +58,13 @@ Whether a bot can spare something or wants it comes from playerbots' own
 qualifier for as long as the bot is logged in, and the market asks about
 thousands of different auctions.
 
-## Pricing is pure
+## Pure files are tested
 
-`PlayerbotsPlusMarketPrice.{h,cpp}` has no game types in it, so it can be
-tested without a server. Keep it that way: `tests/build.sh`.
+`PlayerbotsPlusMarketPrice.{h,cpp}` and `PlayerbotsPlusText.{h,cpp}` have no
+game types in them, so they can be tested without a server. Keep it that way:
+`tests/build.sh`. The text test also checks the conf against the code: every
+key the code reads is in the conf, and the default mute list and hangout spots
+are the same in both.
 
 ## Conventions
 
