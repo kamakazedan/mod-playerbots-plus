@@ -123,12 +123,18 @@ int main(int argc, char** argv)
         const std::string value = ConfValue(conf, "PlayerbotsPlus.Mute.Patterns");
         EqS("conf default is the code's", value, SourceLiteral(config, "kDefaultMutePatterns"));
         const std::vector<std::string> patterns = PbpSplit(value, ';');
-        True("default patterns", patterns.size() == 6);
+        True("default patterns", patterns.size() == 8);
         True("mute item use", Muted(patterns, "Using |cffffffff|Hitem:6948:0:0:0:0:0:0:0:5|h[Hearthstone]|h|r"));
         True("mute drinking",
              Muted(patterns, "Drinking |cffffffff|Hitem:5350:0:0:0:0:0:0:0:5|h[Conjured Water]|h|r (40%)"));
         True("mute eating", Muted(patterns, "Eating |cffffffff|Hitem:4540:0:0:0:0:0:0:0:5|h[Tough Hunk of Bread]|h|r"));
         True("mute ai reset", Muted(patterns, "AI was reset to defaults"));
+        True("mute equipping", Muted(patterns, "Equipping |cff1eff00|Hitem:15357:0:0:0:0:0:0:0:20|h[Vigorous "
+                                               "Handguards]|h|r"));
+        True("mute equipping a hand",
+             Muted(patterns, "Equipping |cff1eff00|Hitem:2489:0:0:0:0:0:0:0:20|h[Two-Handed Sword]|h|r in main hand"));
+        True("mute opened", Muted(patterns, "Opened item: Satchel of Helpful Goods"));
+        True("keep an outfit", !Muted(patterns, "Equipping outfit pvp"));
         True("mute dungeon", Muted(patterns, "I don't know this dungeon, lead the way!"));
         // Without a chat module these are all a bot says about an order or a
         // group: they stay.
@@ -168,9 +174,22 @@ int main(int argc, char** argv)
         True("mute bye", Muted(patterns, "See you later!"));
         True("mute pleasure", Muted(patterns, "A pleasure doing business with you"));
         True("mute flight", Muted(patterns, "I am ready for the next flight"));
+        True("mute cant do", Muted(patterns, "I can't do this right now"));
         True("keep plain ratio", !Muted(patterns, "im 3/10 on that"));
         True("keep thanks for", !Muted(patterns, "Thanks for the water"));
         True("keep staying here", !Muted(patterns, "staying here till you are back"));
+    }
+
+    // ---- playerbots' error lines ---------------------------------------------------------
+    {
+        std::vector<std::string> names;
+        std::string text;
+        True("error line", PbpSplitErrorLine("Mungehdo|cfff00000: I can't do this right now", names, text) &&
+                               names.size() == 1 && names[0] == "Mungehdo" && text == "I can't do this right now");
+        True("error line, two", PbpSplitErrorLine("Mungehdo, Milino|cfff00000: I am in combat", names, text) &&
+                                    names.size() == 2 && names[1] == "Milino" && text == "I am in combat");
+        True("not an error line", !PbpSplitErrorLine("Welcome to Dangaming!", names, text));
+        True("no names", !PbpSplitErrorLine("|cfff00000: text", names, text));
     }
 
     // ---- hangout spot lines --------------------------------------------------------------

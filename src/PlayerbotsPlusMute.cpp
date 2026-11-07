@@ -20,13 +20,23 @@
 
 namespace
 {
+    // Who is a bot: by guid for what they say, by name for playerbots' red
+    // error lines to a master, which come from nobody ("Name|cfff00000: I
+    // can't do this right now").
+    struct Bots
+    {
+        std::unordered_set<uint64_t>    guids;
+        std::unordered_set<std::string> names;
+    };
+
     // What the packet hook reads. Replaced whole, never changed in place.
     struct Snapshot
     {
-        bool                         enable = false;
-        std::vector<std::string>     patterns;
-        std::unordered_set<uint64_t> bots;
+        bool                     enable = false;
+        std::vector<std::string> patterns;
+        Bots                     bots;
     };
+
 
     std::mutex                      g_mutex;
     std::shared_ptr<const Snapshot> g_snapshot = std::make_shared<Snapshot>();
@@ -47,7 +57,7 @@ namespace
         return g_snapshot;
     }
 
-    void Publish(std::unordered_set<uint64_t> bots)
+    void Publish(Bots bots)
     {
         auto next = std::make_shared<Snapshot>();
         next->enable   = g_enable && !g_patterns.empty();
@@ -60,14 +70,30 @@ namespace
         g_enabled.store(g_enable && !g_patterns.empty(), std::memory_order_relaxed);
     }
 
-    std::unordered_set<uint64_t> OnlineBots()
+    Bots OnlineBots()
     {
-        std::unordered_set<uint64_t> bots;
+        Bots bots;
         for (auto const& entry : ObjectAccessor::GetPlayers())
             if (Player* p = entry.second)
                 if (PbpIsBotPlayer(p))
-                    bots.insert(p->GetGUID().GetRawValue());
+                {
+                    bots.guids.insert(p->GetGUID().GetRawValue());
+                    bots.names.insert(p->GetName());
+                }
         return bots;
+    }
+
+    // "Name, Name|cfff00000: text" from bots only: the text. Empty otherwise.
+    std::string ErrorText(std::string const& line, Bots const& bots)
+    {
+        std::vector<std::string> names;
+        std::string text;
+        if (!PbpSplitErrorLine(line, names, text))
+            return {};
+        for (std::string const& name : names)
+            if (!bots.names.count(name))
+                return {};
+        return text;
     }
 }
 
@@ -133,7 +159,8 @@ bool PbpMuteScript::CanPacketSend(WorldSession* session, WorldPacket const& pack
         return true;
 
     const uint8 type = packet.read<uint8>(0);
-    if (type != CHAT_MSG_WHISPER && type != CHAT_MSG_PARTY && type != CHAT_MSG_PARTY_LEADER &&
+    const bool system = type == CHAT_MSG_SYSTEM;
+    if (!system && type != CHAT_MSG_WHISPER && type != CHAT_MSG_PARTY && type != CHAT_MSG_PARTY_LEADER &&
         type != CHAT_MSG_RAID && type != CHAT_MSG_RAID_LEADER)
         return true;
     if (packet.read<uint32>(1) == uint32(LANG_ADDON))
@@ -144,11 +171,17 @@ bool PbpMuteScript::CanPacketSend(WorldSession* session, WorldPacket const& pack
         return true;
 
     const std::shared_ptr<const Snapshot> snap = Current();
-    if (!snap->enable || !snap->bots.count(packet.read<uint64>(5)))
+    if (!snap->enable || (!system && !snap->bots.guids.count(packet.read<uint64>(5))))
         return true;
 
     const char* text = reinterpret_cast<const char*>(packet.contents() + kTextAt);
-    const std::string line(text, strnlen(text, length - 1));
+    std::string line(text, strnlen(text, length - 1));
+    if (system)
+    {
+        line = ErrorText(line, snap->bots);
+        if (line.empty())
+            return true;   // a system message of any other kind
+    }
     for (const std::string& pattern : snap->patterns)
     {
         if (PbpGlobMatch(pattern, line))

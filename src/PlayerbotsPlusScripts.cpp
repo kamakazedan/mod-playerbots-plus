@@ -112,9 +112,10 @@ namespace
             handler->PSendSysMessage("Bought {} ({}), put on after {} visit{}. Mail collected: {} ({}, {} item{}).",
                                      st.bought, MoneyText(st.boughtMoney), st.equipped, st.equipped == 1 ? "" : "s",
                                      st.mails, MoneyText(st.mailMoney), st.mailItems, st.mailItems == 1 ? "" : "s");
-            if (st.tooCheap || st.bagsFull)
-                handler->PSendSysMessage("Not listed, cheaper than a vendor already: {}. Mail left, bags full: {}.",
-                                         st.tooCheap, st.bagsFull);
+            if (st.tooCheap || st.bagsFull || st.takenDown)
+                handler->PSendSysMessage("Not listed, cheaper than a vendor already: {}. Taken down, not their own "
+                                         "loot: {}. Mail left, bags full: {}.", st.tooCheap, st.takenDown,
+                                         st.bagsFull);
 
             PbpHangoutStats const h = PbpHangout_GetStats();
             handler->PSendSysMessage("City hangouts: {} - {} hanging out ({} AFK), {} on their way, {} spots ({} with "

@@ -54,7 +54,8 @@ namespace pbp
     std::string g_MarksClassIcon[16];
     bool        g_MarksAddCcStrategy         = true;
     bool        g_MarksSapStar               = true;
-    bool        g_MarksAutoSkull             = true;
+    bool        g_MarksCrossToSkull          = false;
+    bool        g_MarksAutoSkull             = false;
     uint32_t    g_MarksInUseSeconds          = 180;
     uint32_t    g_MarksSapStealthWaitSeconds = 12;
     uint32_t    g_MarksSapApproachSeconds    = 40;
@@ -252,7 +253,9 @@ namespace
         g_MarksEnable                = B("PlayerbotsPlus.Marks.Enable", true);
         g_MarksAddCcStrategy         = B("PlayerbotsPlus.Marks.AddCcStrategy", true);
         g_MarksSapStar               = B("PlayerbotsPlus.Marks.SapStar", true);
-        g_MarksAutoSkull             = B("PlayerbotsPlus.Marks.AutoSkull", true);
+        // Off by default: the marks are the players'. Nothing here puts one on.
+        g_MarksCrossToSkull          = B("PlayerbotsPlus.Marks.CrossToSkull", false);
+        g_MarksAutoSkull             = B("PlayerbotsPlus.Marks.AutoSkull", false);
         g_MarksInUseSeconds          = U("PlayerbotsPlus.Marks.InUseSeconds", 180);
         g_MarksSapStealthWaitSeconds = U("PlayerbotsPlus.Marks.SapStealthWaitSeconds", 12);
         g_MarksSapApproachSeconds    = U("PlayerbotsPlus.Marks.SapApproachSeconds", 40);
@@ -308,7 +311,7 @@ namespace
     // nobody needs: with a chat module that says the rest in its own words,
     // the conf mutes more ("Staying", "Hello!"; see the conf).
     constexpr char const* kDefaultMutePatterns =
-        "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;"
+        "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;Equipping |c*;Opened item: *;"
         "I don't know this dungeon, lead the way!";
 }
 

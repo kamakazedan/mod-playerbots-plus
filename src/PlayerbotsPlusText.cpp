@@ -61,6 +61,28 @@ std::vector<std::string> PbpSplit(std::string const& raw, char sep)
     return out;
 }
 
+bool PbpSplitErrorLine(std::string const& line, std::vector<std::string>& names, std::string& text)
+{
+    static const std::string kMark = "|cfff00000: ";
+    const size_t mark = line.find(kMark);
+    if (mark == std::string::npos || mark == 0)
+        return false;
+    names.clear();
+    size_t start = 0;
+    while (start < mark)
+    {
+        size_t end = line.find(", ", start);
+        if (end == std::string::npos || end > mark)
+            end = mark;
+        if (end == start)
+            return false;
+        names.push_back(line.substr(start, end - start));
+        start = end + 2;
+    }
+    text = line.substr(mark + kMark.size());
+    return true;
+}
+
 bool PbpParseSpotLine(std::string const& text, PbpSpotLine& out)
 {
     std::istringstream in(text);

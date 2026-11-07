@@ -16,6 +16,11 @@ bool PbpGlobMatch(std::string const& pattern, std::string const& text);
 // `raw` cut at `sep`, each part trimmed, empty ones left out.
 std::vector<std::string> PbpSplit(std::string const& raw, char sep);
 
+// Playerbots' red error line to a master, "Name, Name|cfff00000: text"
+// (PlayerbotMgr::CheckTellErrors): the names, and the text. False for any
+// other line.
+bool PbpSplitErrorLine(std::string const& line, std::vector<std::string>& names, std::string& text);
+
 // A place on a map, as a config line: "map x y z radius capacity name", the
 // name being the rest of the line ("0 -8833.4 628.6 94 22 14 the Trade
 // District in Stormwind"). The radius is kept to 3..60 yards and the capacity

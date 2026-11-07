@@ -370,11 +370,81 @@ namespace
         return value.Calculate();
     }
 
+    // What playerbots hands its bots for nothing -- and hands them again every
+    // time it refreshes them, every few hours: ammo, food and drink, potions,
+    // class reagents, and the sharpening stones, weightstones, oils and poisons
+    // of PlayerbotFactory::InitConsumables (both kinds of stone, whatever the
+    // weapon, so one of them is always "no use" to it). Selling those would be
+    // minting gold out of nothing, and filling the house with them.
+    bool HandedOutFree(ItemTemplate const* proto)
+    {
+        switch (proto->Class)
+        {
+            case ITEM_CLASS_PROJECTILE:
+            case ITEM_CLASS_REAGENT:
+                return true;
+            case ITEM_CLASS_MISC:
+                if (proto->SubClass == ITEM_SUBCLASS_JUNK_REAGENT)
+                    return true;
+                break;
+            case ITEM_CLASS_CONSUMABLE:
+                if (proto->SubClass == ITEM_SUBCLASS_FOOD || proto->SubClass == ITEM_SUBCLASS_POTION)
+                    return true;
+                break;
+            default:
+                break;
+        }
+        static const std::unordered_set<uint32_t> kGiven = {
+            ROUGH_SHARPENING_STONE, COARSE_SHARPENING_STONE, HEAVY_SHARPENING_STONE, SOLID_SHARPENING_STONE,
+            DENSE_SHARPENING_STONE, ELEMENTAL_SHARPENING_STONE, FEL_SHARPENING_STONE, ADAMANTITE_SHARPENING_STONE,
+            ROUGH_WEIGHTSTONE, COARSE_WEIGHTSTONE, HEAVY_WEIGHTSTONE, SOLID_WEIGHTSTONE, DENSE_WEIGHTSTONE,
+            FEL_WEIGHTSTONE, ADAMANTITE_WEIGHTSTONE,
+            MINOR_WIZARD_OIL, LESSER_WIZARD_OIL, WIZARD_OIL, BRILLIANT_WIZARD_OIL, SUPERIOR_WIZARD_OIL,
+            MINOR_MANA_OIL, LESSER_MANA_OIL, BRILLIANT_MANA_OIL, SUPERIOR_MANA_OIL,
+            INSTANT_POISON, INSTANT_POISON_II, INSTANT_POISON_III, INSTANT_POISON_IV, INSTANT_POISON_V,
+            INSTANT_POISON_VI, INSTANT_POISON_VII, INSTANT_POISON_VIII, INSTANT_POISON_IX,
+            DEADLY_POISON, DEADLY_POISON_II, DEADLY_POISON_III, DEADLY_POISON_IV, DEADLY_POISON_V,
+            DEADLY_POISON_VI, DEADLY_POISON_VII, DEADLY_POISON_VIII, DEADLY_POISON_IX,
+        };
+        return kGiven.count(proto->ItemId) != 0;
+    }
+
+    // Anything a vendor sells: a bot that has one bought it there (food,
+    // thread for its profession...), and it is no loot of its own. Read off
+    // every vendor's list once.
+    bool SoldByVendors(uint32_t entry)
+    {
+        static std::unordered_set<uint32_t> sold;
+        static bool built = false;
+        if (!built)
+        {
+            built = true;
+            if (CreatureTemplateContainer const* creatures = sObjectMgr->GetCreatureTemplates())
+                for (auto const& [creature, info] : *creatures)
+                    if (VendorItemData const* items = sObjectMgr->GetNpcVendorItemList(creature))
+                        for (VendorItem const* v : items->m_items)
+                            if (v)
+                                sold.insert(v->item);
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} different items are sold by vendors: bots never "
+                     "put those up.", sold.size());
+        }
+        return sold.count(entry) != 0;
+    }
+
+    // Only what a bot looted or made goes up: never its free supplies, never
+    // what a vendor sells.
+    bool OwnLoot(ItemTemplate const* proto)
+    {
+        return !HandedOutFree(proto) && !SoldByVendors(proto->ItemId);
+    }
+
     // Could go on the auction house at all, before playerbots is asked.
     bool Listable(Player* bot, Item* item, ItemTemplate const* proto, TraderState const& state)
     {
         auto const& m = Cfg();
         if (!proto || proto->Quality < m.sellMinQuality || proto->Quality > m.sellMaxQuality)
+            return false;
+        if (!OwnLoot(proto))
             return false;
         if (!proto->SellPrice)
             return false;   // worthless to anyone
@@ -909,6 +979,52 @@ namespace
         return bought > 0;
     }
 
+    // Its own auctions of something it should never have put up (its free
+    // supplies, vendor goods: listed before they were kept out), taken down
+    // the way a player cancels one: the deposit is gone, the item comes back
+    // by mail. Not one somebody has bid on: that one runs its course.
+    void TakeDown(Player* bot, AuctionHouseObject* house, VisitReport& r)
+    {
+        std::vector<AuctionEntry*> wrong;
+        for (auto const& [id, auction] : house->GetAuctions())
+            if (auction && auction->owner == bot->GetGUID() && !auction->bidder)
+                if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(auction->item_template))
+                    if (!OwnLoot(proto))
+                        wrong.push_back(auction);
+
+        uint32_t taken = 0;
+        for (AuctionEntry* auction : wrong)
+        {
+            if (taken >= 10)
+                break;   // the rest next time
+            Item* item = sAuctionMgr->GetAItem(auction->item_guid);
+            if (!item)
+                continue;
+
+            // HandleAuctionRemoveItem, from the mail on.
+            CharacterDatabaseTransaction trans = CharacterDatabase.BeginTransaction();
+            MailDraft(auction->BuildAuctionMailSubject(AUCTION_CANCELED),
+                      AuctionEntry::BuildAuctionMailBody(ObjectGuid::Empty, 0, auction->buyout, auction->deposit))
+                .AddItem(item)
+                .SendMailTo(trans, bot, auction, MAIL_CHECK_MASK_COPIED);
+            bot->SaveInventoryAndGoldToDB(trans);
+            auction->DeleteFromDB(trans);
+            CharacterDatabase.CommitTransaction(trans);
+
+            const uint32_t entry = auction->item_template, count = auction->itemCount;
+            sAuctionMgr->RemoveAItem(auction->item_guid);
+            house->RemoveAuction(auction);
+            ++taken;
+            ++g_stats.takenDown;
+            if (Cfg().logTrades)
+                LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} took down its auction of {}: not loot of "
+                         "its own.", bot->GetName(), StackText(entry, count));
+        }
+        if (taken)
+            r.notes.push_back(fmt::format("took down {} auction{} of things it should not have put up", taken,
+                                          taken == 1 ? "" : "s"));
+    }
+
     bool Visit(Player* bot, PlayerbotAI* ai, VisitReport& r)
     {
         const AuctionHouseId houseId = HouseOf(bot);
@@ -926,6 +1042,8 @@ namespace
 
         if (m.collectMail)
             CollectMail(bot, r);
+
+        TakeDown(bot, house, r);
 
         HouseIndex& idx = IndexOf(houseId);
         if (m.sell)

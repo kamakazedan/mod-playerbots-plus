@@ -122,7 +122,8 @@ namespace pbp
     extern std::string g_MarksClassIcon[16];   // by class id: the mark it controls
     extern bool        g_MarksAddCcStrategy;
     extern bool        g_MarksSapStar;
-    extern bool        g_MarksAutoSkull;
+    extern bool        g_MarksCrossToSkull;   // the skull moves onto the cross when its mob dies
+    extern bool        g_MarksAutoSkull;      // ...or onto the next loose mob
     extern uint32_t    g_MarksInUseSeconds;
     extern uint32_t    g_MarksSapStealthWaitSeconds;
     extern uint32_t    g_MarksSapApproachSeconds;

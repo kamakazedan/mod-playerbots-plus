@@ -14,7 +14,7 @@ their own words.
 | [City hangouts](#city-hangouts) | Gather where players do in the capitals: on a bench, mounted, or AFK |
 | [Stuck on a mount](#stuck-on-a-mount) | Stop getting on and off their mount at a herb they can't pick, and move on |
 | [Getting back up](#getting-back-up) | Release and run back when nobody in the group can resurrect them |
-| [Raid marks](#raid-marks) | Crowd-control their own mark, sap the star, and move the skull on |
+| [Raid marks](#raid-marks) | Crowd-control their own mark and sap the star |
 | [Muted bot lines](#muted-bot-lines) | Playerbots' stock whispers, like "Using [Hearthstone]", are dropped |
 
 Each one can be switched off on its own. Every setting is documented in
@@ -29,7 +29,8 @@ players do:
   unsold, and things they bought.
 - **They list what they have no use for:** cloth, leather, herbs and ore they
   have no profession for, and gear they will never wear. That's whatever
-  playerbots itself would take to the auction house rather than a vendor.
+  playerbots itself would take to the auction house rather than a vendor, as
+  long as the bot looted or made it.
 - **They buy:** an upgrade they can afford (playerbots decides what counts as
   an upgrade), or materials their profession uses to skill up. They put the
   upgrade on straight away.
@@ -52,6 +53,13 @@ How a bot prices one item:
    already below that, the bot keeps the item for a vendor.
 5. If an item comes back unsold, the bot asks 15% less next time. After a
    couple of tries it gives up on that item.
+
+Bots never list what playerbots gives them for free. Playerbots hands every
+random bot ammo, food and drink, potions, class reagents, sharpening stones,
+weightstones, oils and poisons, and tops them up every few hours. Selling those
+would make gold out of nothing, so they stay out of the auction house. So does
+anything a vendor sells. A bot that listed such things before this rule takes
+those auctions down on its next visit.
 
 Bots don't walk to the auctioneer: being anywhere in the city is enough.
 Shattrath and Dalaran count as cities too. Neither has an auction house, so a
@@ -137,7 +145,7 @@ Groups use marks so a plan needs no explaining:
 | Mark | Meaning |
 |---|---|
 | Skull | Kill first. Putting it on a mob starts the fight |
-| Cross | Kill next. It becomes the skull when the skull's mob dies |
+| Cross | Kill next |
 | Moon | Polymorph (mage) |
 | Star | Sap (rogue) |
 | Diamond | Banish or fear (warlock) |
@@ -154,10 +162,10 @@ Groups use marks so a plan needs no explaining:
   round behind it and saps it. A rogue that can't, because it has no Sap yet,
   Sap doesn't work on that mob, or it couldn't get into stealth in time,
   leaves the mob alone.
-- **The skull moves on:** while someone in the group is marking, the skull
-  moves by itself when its mob dies: to the cross, or else to the nearest mob
-  still fighting the group that nobody marked to control. So the bots finish
-  the loose mobs before breaking anything that's controlled.
+- **The marks are yours:** nothing here puts a mark on anything. If you want
+  it, two settings make the skull move by itself when its mob dies: to the
+  cross, or else to the nearest mob still fighting the group that nobody
+  marked to control. Both are off by default.
 
 Groups that don't mark see none of this. Which class controls which mark can
 be changed.
@@ -171,11 +179,13 @@ never reach you:
 
 - "Using [Hearthstone]", "Drinking [Conjured Water]", "Eating [...]" and
   "Feasting [...]"
+- "Equipping [Vigorous Handguards]" and "Opened item: Satchel of Helpful Goods"
 - "AI was reset to defaults"
 - "I don't know this dungeon, lead the way!"
 
 Only whispers and party or raid lines from bots are looked at, and only whole
-lines. You can add any line you like.
+lines. Playerbots' red error lines to you, such as "Mungehdo: I can't do this
+right now", can be muted too. You can add any line you like.
 
 Settings: `PlayerbotsPlus.Mute.*`.
 

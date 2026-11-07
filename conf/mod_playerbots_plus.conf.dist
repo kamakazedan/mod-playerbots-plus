@@ -575,14 +575,15 @@ PlayerbotsPlus.Revive.RunBackSeconds = 40
 #   no stealth in time -- leaves the mob alone; with mod-ollama-chat it says
 #   why in party.
 #
-#   While someone in the group is marking (a mark changed in the last
-#   InUseSeconds that this did not make), the skull moves on by itself when
-#   its mob dies: to the cross, else to the nearest mob still fighting the
-#   group that nobody marked to control and nothing is controlling
-#   (AutoSkull). So the bots finish the loose mobs before they break
-#   anything that is controlled. It only ever moves onto a mob already in
-#   the fight: a cross on the next pack waits for its own skull. Groups that
-#   do not mark see none of this.
+#   Nothing here puts a mark on anything by default: the marks are the
+#   players'. Two settings let the skull move on by itself when its mob dies,
+#   while someone in the group is marking (a mark changed in the last
+#   InUseSeconds that this did not make): onto the cross (CrossToSkull), and
+#   failing that onto the nearest mob still fighting the group that nobody
+#   marked to control (AutoSkull), so the bots finish the loose mobs before
+#   they break anything that is controlled. Either only ever moves it onto a
+#   mob already in the fight: a cross on the next pack waits for its own
+#   skull. Groups that do not mark see none of this.
 #
 #   In a 5-man dungeon playerbots' bots only crowd-control what is marked
 #   for them; in raids and out in the world they also pick targets of their
@@ -615,15 +616,19 @@ PlayerbotsPlus.Marks.AddCcStrategy = 1
 #        Default: 1
 PlayerbotsPlus.Marks.SapStar = 1
 
+#    PlayerbotsPlus.Marks.CrossToSkull
 #    PlayerbotsPlus.Marks.AutoSkull
-#        With no cross in the fight to move to, the skull goes on the next
-#        loose mob in it.
-#        Default: 1
-PlayerbotsPlus.Marks.AutoSkull = 1
+#        When the skull's mob dies, the skull moves onto the cross's
+#        (CrossToSkull) or, with no cross in the fight, onto the next loose
+#        mob in it (AutoSkull). The players' own marks get moved, so both are
+#        off by default.
+#        Default: 0, 0
+PlayerbotsPlus.Marks.CrossToSkull = 0
+PlayerbotsPlus.Marks.AutoSkull = 0
 
 #    PlayerbotsPlus.Marks.InUseSeconds
-#        How long after someone last changed a mark the skull keeps moving
-#        on by itself.
+#        With CrossToSkull or AutoSkull on: how long after someone last
+#        changed a mark the skull keeps moving on by itself.
 #        Default: 180
 PlayerbotsPlus.Marks.InUseSeconds = 180
 
@@ -652,7 +657,8 @@ PlayerbotsPlus.Marks.SapWaitSeconds = 20
 #   MUTED BOT LINES
 #
 #   Playerbots whispers a stock line for a lot of what bots do: "Using
-#   [Hearthstone]", "Drinking [Conjured Water] (40%)", "AI was reset to
+#   [Hearthstone]", "Drinking [Conjured Water] (40%)", "Equipping [Lorekeeper's
+#   Ring]", "Opened item: Satchel of Helpful Goods", "AI was reset to
 #   defaults", "I don't know this dungeon, lead the way!". The ones listed
 #   here never reach you.
 #
@@ -661,7 +667,9 @@ PlayerbotsPlus.Marks.SapWaitSeconds = 20
 #   "staying here till you are back". A line another module sends for a bot
 #   in its own words (mod-ollama-chat's) is never muted, so "Hi" on the list
 #   mutes playerbots' stock "Hi" whisper on joining a group but never a
-#   bot's own "hi".
+#   bot's own "hi". Playerbots' red error lines to a master ("Mungehdo: I
+#   can't do this right now") are looked at too, by what comes after the
+#   names, when every name in front is a bot's.
 #
 #   Patterns are separated by ; (an item link starts with |, so | cannot be
 #   the separator here), compared ignoring case; * matches anything, so
@@ -673,9 +681,10 @@ PlayerbotsPlus.Marks.SapWaitSeconds = 20
 #   Mute playerbots' stock lines for those too, with this list instead of the
 #   default (it is the default and then: orders; dying; the hellos on
 #   joining; quest progress, "Kobold Vermin 3/10 [Kobold Camp Cleanup]" being
-#   "* */* |c*|Hquest:*"; goodbyes; trades; and taxis):
+#   "* */* |c*|Hquest:*"; goodbyes; trades; taxis; and the red "I can't do
+#   this right now" a bot sends when it tries to put on gear mid-fight):
 #
-#PlayerbotsPlus.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;Releasing...;Meet me at the graveyard;Hello;Hello!;Hi;Hi!;Hello there!;* */* |c*|Hquest:*;Quest completed |c*;I have accepted |c*;Grinding;Moving away from group;Hello, I follow you!;Hello, lead the way!;Hi, lead the way!;Goodbye!;Bye bye!;See you later!;Fair trade;Off with you;A pleasure doing business with you;Thanks;I am ready for the next flight"
+#PlayerbotsPlus.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;Equipping |c*;Opened item: *;I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;Releasing...;Meet me at the graveyard;Hello;Hello!;Hi;Hi!;Hello there!;* */* |c*|Hquest:*;Quest completed |c*;I have accepted |c*;Grinding;Moving away from group;Hello, I follow you!;Hello, lead the way!;Hi, lead the way!;Goodbye!;Bye bye!;See you later!;Fair trade;Off with you;A pleasure doing business with you;Thanks;I am ready for the next flight;I can't do this right now"
 #
 ###############################################################################
 
@@ -684,5 +693,5 @@ PlayerbotsPlus.Marks.SapWaitSeconds = 20
 PlayerbotsPlus.Mute.Enable = 1
 
 #    PlayerbotsPlus.Mute.Patterns
-#        Default: "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;I don't know this dungeon, lead the way!"
-PlayerbotsPlus.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;I don't know this dungeon, lead the way!"
+#        Default: "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;Equipping |c*;Opened item: *;I don't know this dungeon, lead the way!"
+PlayerbotsPlus.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;Equipping |c*;Opened item: *;I don't know this dungeon, lead the way!"

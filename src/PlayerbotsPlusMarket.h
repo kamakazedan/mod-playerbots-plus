@@ -62,6 +62,7 @@ struct PbpMarketStats
     uint64_t mailMoney     = 0;
     uint64_t mailItems     = 0;
     uint64_t tooCheap      = 0;   // not listed: cheaper than a vendor already
+    uint64_t takenDown     = 0;   // its own auctions of free supplies or vendor goods, cancelled
     uint64_t bagsFull      = 0;   // mail left: no room for it
     uint32_t botAuctions   = 0;   // up right now, all houses (as of the last look)
     uint32_t allAuctions   = 0;

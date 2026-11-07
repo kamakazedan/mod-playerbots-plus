@@ -886,10 +886,14 @@ namespace
         if (g_MarksSapStar && !newStar.IsEmpty())
             StartSap(ref, group, newStar, now);
 
-        // The skull moves on when its mob dies, while somebody is marking: to
-        // the cross, else to the nearest loose mob -- each only when it is in
-        // the fight already. A cross on the next pack is "that one next", not
-        // "pull it": nothing starts a fight but somebody putting the skull on.
+        // With Marks.CrossToSkull or Marks.AutoSkull, the skull moves on when
+        // its mob dies, while somebody is marking: to the cross, else to the
+        // nearest loose mob -- each only when it is in the fight already. A
+        // cross on the next pack is "that one next", not "pull it": nothing
+        // starts a fight but somebody putting the skull on. Both are off by
+        // default: the marks are the players' to put where they like.
+        if (!g_MarksCrossToSkull && !g_MarksAutoSkull)
+            return;
         if (Unit* skull = LiveMark(ref, m.icons[ICON_SKULL]))
         {
             m.liveSkull = skull->GetGUID();
@@ -903,7 +907,7 @@ namespace
         if (!died || !marking || !ref->IsAlive())
             return;   // taken off a living mob: theirs to put somewhere
 
-        Unit* next = LiveMark(ref, m.icons[ICON_CROSS]);
+        Unit* next = g_MarksCrossToSkull ? LiveMark(ref, m.icons[ICON_CROSS]) : nullptr;
         if (next && !FightingGroup(next, group, ref))
             next = nullptr;
         if (next)
