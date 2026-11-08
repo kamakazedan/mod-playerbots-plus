@@ -910,10 +910,15 @@ PlayerbotsPlus.Duels.ChallengePlayerMinutes = 10
 #   Mute playerbots' stock lines for those too, with this list instead of the
 #   default (it is the default and then: orders; dying; the hellos on
 #   joining; quest progress, "Kobold Vermin 3/10 [Kobold Camp Cleanup]" being
-#   "* */* |c*|Hquest:*"; goodbyes; trades; taxis; and the red "I can't do
-#   this right now" a bot sends when it tries to put on gear mid-fight):
+#   "* */* |c*|Hquest:*"; goodbyes; trades; taxis; the red "I can't do this
+#   right now" a bot sends when it tries to put on gear mid-fight; and the
+#   whispers about quests as you take and hand them in -- "Quest Available:
+#   [Call of Fire]", "Can't take [Call of Fire]", "Accepted [...]", a quest
+#   handed in or dropped from a full log, "Quest shared". What a bot answers
+#   when you ask it about its quests ("quests", "drop") is left alone, and so
+#   is "Choose reward:", which waits for you to pick):
 #
-#PlayerbotsPlus.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;Equipping |c*;Opened item: *;I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;Releasing...;Meet me at the graveyard;Hello;Hello!;Hi;Hi!;Hello there!;* */* |c*|Hquest:*;Quest completed |c*;I have accepted |c*;Grinding;Moving away from group;Hello, I follow you!;Hello, lead the way!;Hi, lead the way!;Goodbye!;Bye bye!;See you later!;Fair trade;Off with you;A pleasure doing business with you;Thanks;I am ready for the next flight;I can't do this right now"
+#PlayerbotsPlus.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;Equipping |c*;Opened item: *;I don't know this dungeon, lead the way!;Staying;Following;Fleeing;Running away;Attacking;Releasing...;Meet me at the graveyard;Hello;Hello!;Hi;Hi!;Hello there!;* */* |c*|Hquest:*;Quest completed |c*;I have accepted |c*;Grinding;Moving away from group;Hello, I follow you!;Hello, lead the way!;Hi, lead the way!;Goodbye!;Bye bye!;See you later!;Fair trade;Off with you;A pleasure doing business with you;Thanks;I am ready for the next flight;I can't do this right now;Quest*|Hquest:*;Accepted *|Hquest:*;Already completed *|Hquest:*;Already on *|Hquest:*;Can't take *|Hquest:*;Bags are full *|Hquest:*;Cannot accept *|Hquest:*;Quest accepted;Quest shared;I have this quest;I can't take this quest;Failed timer for *"
 #
 ###############################################################################
 

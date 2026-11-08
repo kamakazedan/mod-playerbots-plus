@@ -289,7 +289,9 @@ Settings: `PlayerbotsPlus.Mute.*`.
   - It says much of the rest in its own words too: "Staying", "Following",
     hello when it joins a group, a quest objective done. Mute playerbots' own
     lines for those with the longer list in the conf's `MUTED BOT LINES`
-    section.
+    section. That list also drops the whispers about quests as you take and
+    hand them in ("Quest Available: [Call of Fire]", "Can't take [Call of
+    Fire]"), which nobody in a real group sends.
 
   This works through the `PlayerbotsPlus.h` interface. Each module builds and
   runs without the other.

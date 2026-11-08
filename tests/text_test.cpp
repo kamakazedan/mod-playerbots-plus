@@ -177,6 +177,35 @@ int main(int argc, char** argv)
         True("mute pleasure", Muted(patterns, "A pleasure doing business with you"));
         True("mute flight", Muted(patterns, "I am ready for the next flight"));
         True("mute cant do", Muted(patterns, "I can't do this right now"));
+        // The quest whispers as you take and hand quests in, playerbots' own words.
+        const std::string q = "|cFFFFFF00|Hquest:2984:20|h[Call of Fire]|h|r";
+        True("mute quest available", Muted(patterns, "Quest |cff00ff00Available|r: " + q));
+        True("mute quest incomplete", Muted(patterns, "Quest |cffff0000Incompleted|r: " + q));
+        True("mute cant take", Muted(patterns, "Can't take " + q));
+        True("mute accepted quest", Muted(patterns, "Accepted " + q));
+        True("mute already on", Muted(patterns, "Already on " + q));
+        True("mute already completed", Muted(patterns, "Already completed " + q));
+        True("mute log full", Muted(patterns, "Quest log is full " + q));
+        True("mute bags full", Muted(patterns, "Bags are full " + q));
+        True("mute cannot accept", Muted(patterns, "Cannot accept " + q));
+        True("mute handed in", Muted(patterns, "Quest I have completed the quest " + q + ": " + q));
+        True("mute rewarded", Muted(patterns, "Quest Rewarded |cff1eff00|Hitem:6070:0:0:0:0:0:0:0:20|h[Wolfskin "
+                                              "Bracers]|h|r: " + q));
+        True("mute removed from a full log", Muted(patterns, "Quest removed " + q));
+        True("mute confirm", Muted(patterns, "Quest: " + q + " confirm accept"));
+        True("mute quest accepted", Muted(patterns, "Quest accepted"));
+        True("mute quest shared", Muted(patterns, "Quest shared"));
+        True("mute have this quest", Muted(patterns, "I have this quest"));
+        True("mute cant take this quest", Muted(patterns, "I can't take this quest"));
+        // ...but not what a bot answers when asked about its quests, nor a
+        // reward it waits for you to pick.
+        True("keep quests list", !Muted(patterns, q));
+        True("keep quests heading", !Muted(patterns, "--- Incompleted quests ---"));
+        True("keep query", !Muted(patterns, "--- " + q + " |c0000FF00completed|r ---"));
+        True("keep dropped on request", !Muted(patterns, "Quest removed"));
+        True("keep choose reward", !Muted(patterns, "Choose reward: |cff1eff00|Hitem:6070:0:0:0:0:0:0:0:20|h[Wolfskin "
+                                                    "Bracers]|h|r"));
+        True("keep a quest named in chat", !Muted(patterns, "anyone done " + q + " yet?"));
         True("keep plain ratio", !Muted(patterns, "im 3/10 on that"));
         True("keep thanks for", !Muted(patterns, "Thanks for the water"));
         True("keep staying here", !Muted(patterns, "staying here till you are back"));
