@@ -15,6 +15,8 @@ their own words.
 | [Stuck on a mount](#stuck-on-a-mount) | Stop getting on and off their mount at a herb they can't pick, and move on |
 | [Getting back up](#getting-back-up) | Release and run back when nobody in the group can resurrect them |
 | [Raid marks](#raid-marks) | Crowd-control their own mark and sap the star |
+| [Hunters' pets and companions](#hunters-pets-and-companions) | Name their hunter pets the way players do, and keep companions of their side and level |
+| [Duels outside the cities](#duels-outside-the-cities) | Duel each other near you, outside the gates |
 | [Muted bot lines](#muted-bot-lines) | Playerbots' stock whispers, like "Using [Hearthstone]", are dropped |
 
 Each one can be switched off on its own. Every setting is documented in
@@ -74,8 +76,10 @@ Commons, the Valley of Strength, outside the bank in Dalaran. Playerbots never
 sends a bot anywhere in particular, so idle bots in a city just wander from
 NPC to NPC. With hangouts, they gather where players do.
 
-- **Where:** 14 spots in the capitals, Shattrath and Dalaran come set up. You
-  can add your own, or change how many bots each one holds.
+- **Where:** 18 spots in the capitals, Shattrath and Dalaran come set up,
+  six of them in and around Orgrimmar: the Valley of Strength, outside the
+  bank, the Drag, the Valley of Honor, outside the gates and the zeppelin
+  tower. You can add your own, or change how many bots each one holds.
 - **Who:** idle random bots near a spot, of its zone and floor. A bot that is
   grouped, queued, questing, gathering, fighting or flying is left alone, and
   so is one a real player has targeted.
@@ -172,6 +176,59 @@ be changed.
 
 Settings: `PlayerbotsPlus.Marks.*`.
 
+## Hunters' pets and companions
+
+**Pet names.** Playerbots tames a beast for a hunter and leaves it called
+what it is: "Boar", "Wind Serpent". Players rename theirs, mostly after
+something they love or for a laugh: a cat called Aslan, a boar called
+Porkchop, a worm called Graboid. A random bot's hunter does the same:
+
+- The name comes from its pet family's list, now and then from the list any
+  pet may have. Every family has its own list, and you can change them.
+- It's renamed the way the game renames a player's pet: the same checks,
+  its one rename, the name saved.
+- About one hunter in seven never bothers and keeps the name it was tamed
+  with.
+- Your own bots' pets are left alone.
+
+**Companions.** Most players carry a companion or two and have one trotting
+along. Random bots near you do too:
+
+- **What they own:** most own a common one or two, bought from their side's
+  pet sellers: Orgrimmar's snakes, Silvermoon's dragonhawks, Elwynn's cats,
+  the Exodar's moths. A few collect them, more as they level: Booty Bay's
+  parrots, drops like the Sprite Darter, the Argent Tournament's pets, and
+  now and then a rare or promotional one.
+- **Having one out:** a bot that owns some usually has one out near you, on
+  foot and out of a fight.
+- **Never** in a dungeon, raid, battleground or arena.
+
+With mod-ollama-chat, a bot knows what its pet is called and what is
+following it, and talks about it when someone does.
+
+Settings: `PlayerbotsPlus.Pets.*`, `PlayerbotsPlus.Companions.*`.
+
+## Duels outside the cities
+
+Players with nothing on stand outside the gates and duel each other to
+practise. Playerbots only starts a duel through its old RPG strategy, which a
+realm on the new one never runs, so bots never did. Now, near you, wherever
+duels are allowed (not in a capital, a dungeon or a battleground):
+
+- **Who:** two idle random bots of the same side and about the same level,
+  in good health.
+- **Idle means:** hanging out at a spot, or with nothing on in playerbots'
+  own terms. A bot that is questing, grinding, travelling, grouped or
+  fighting is left alone.
+- **How:** one walks over to the other and challenges it, playerbots accepts,
+  and they fight it out. With mod-ollama-chat they say gg.
+- **How often:** two at a time near you at most, and a bot doesn't duel again
+  for 20 minutes.
+
+The spot outside Orgrimmar's gates gives them somewhere to idle.
+
+Settings: `PlayerbotsPlus.Duels.*`.
+
 ## Muted bot lines
 
 Playerbots whispers a stock line for a lot of what bots do. By default these
@@ -203,6 +260,8 @@ Settings: `PlayerbotsPlus.Mute.*`.
     An AFK one stays quiet until someone talks to it, then it's back.
   - A bot that was stuck on its mount knows it, and may laugh it off.
   - A rogue that can't sap the star says why in party.
+  - A hunter knows its pet's name, and any bot knows what companion is
+    following it, when someone asks or coos over it. Duels get a gg.
   - It says much of the rest in its own words too: "Staying", "Following",
     hello when it joins a group, a quest objective done. Mute playerbots' own
     lines for those with the longer list in the conf's `MUTED BOT LINES`
@@ -247,7 +306,7 @@ Copy `conf/mod_playerbots_plus.conf.dist` to your module config folder as
 
 | Command | What it does |
 |---|---|
-| `.pbp status` | What it's doing: the auction house, hangouts, stuck bots, revives, marks and muted lines |
+| `.pbp status` | What it's doing: the auction house, hangouts, stuck bots, revives, marks, pets, companions, duels and muted lines |
 | `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |
 

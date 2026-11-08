@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 PbpSettings g_Pbp;
@@ -60,6 +61,30 @@ namespace pbp
     uint32_t    g_MarksSapStealthWaitSeconds = 12;
     uint32_t    g_MarksSapApproachSeconds    = 40;
     uint32_t    g_MarksSapWaitSeconds        = 20;
+
+    bool        g_PetNamesEnable             = true;
+    uint32_t    g_PetNameChance              = 85;
+    uint32_t    g_PetNamesPerMinute          = 20;
+    std::unordered_map<std::string, std::vector<std::string>> g_PetNames;
+
+    bool        g_CompanionsEnable           = true;
+    std::vector<PbpCompanionEntry> g_Companions;
+    uint32_t    g_CompanionsOwnChance        = 70;
+    uint32_t    g_CompanionsCollectorChance  = 15;
+    uint32_t    g_CompanionsCommonWeight     = 4;
+    uint32_t    g_CompanionsOutChance        = 60;
+    uint32_t    g_CompanionsCheckSeconds     = 10;
+    float       g_CompanionsRange            = 80.0f;
+
+    bool        g_DuelsEnable                = true;
+    uint32_t    g_DuelsCheckSeconds          = 20;
+    uint32_t    g_DuelsChance                = 40;
+    float       g_DuelsRange                 = 60.0f;
+    float       g_DuelsPairRange             = 25.0f;
+    uint32_t    g_DuelsLevelGap              = 5;
+    uint32_t    g_DuelsMinLevel              = 10;
+    uint32_t    g_DuelsBotCooldownMinutes    = 20;
+    uint32_t    g_DuelsMaxAtOnce             = 2;
 }
 
 namespace
@@ -154,8 +179,12 @@ namespace
         { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind" },
         { "StormwindBank",      "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind" },
         { "IronforgeCommons",   "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge" },
-        { "OrgrimmarValley",    "1 1657.9 -4433.0 17.5 22 10 the Valley of Strength in Orgrimmar" },
-        { "OrgrimmarBank",      "1 1615.6 -4391.6 10.3 14 6 outside the bank in Orgrimmar" },
+        { "OrgrimmarValley",    "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar" },
+        { "OrgrimmarBank",      "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar" },
+        { "OrgrimmarDrag",      "1 1768.0 -4320.9 6.6 16 8 the Drag in Orgrimmar" },
+        { "OrgrimmarHonor",     "1 2076.4 -4824.2 23.7 18 8 the Valley of Honor in Orgrimmar" },
+        { "OrgrimmarGates",     "1 1320.0 -4400.0 27.0 22 8 outside the gates of Orgrimmar" },
+        { "OrgrimmarZeppelins", "1 1342.0 -4645.0 53.6 10 5 the zeppelin tower outside Orgrimmar" },
         { "UndercityTrade",     "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity" },
         { "ThunderBluffBank",   "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff" },
         { "DarnassusBank",      "1 9943.0 2497.7 1317.7 16 8 outside the bank in Darnassus" },
@@ -315,6 +344,171 @@ namespace
         "I don't know this dungeon, lead the way!";
 }
 
+namespace
+{
+    // What hunters call their pets, by family (PlayerbotsPlus.Pets.Names.<Family>),
+    // and what any pet may be called (.Any). Used when the conf has no
+    // PlayerbotsPlus.Pets.Names.* keys.
+    const std::pair<const char*, const char*> kDefaultPetNames[] = {
+        { "Any",         "Fluffy|Mittens|Snuggles|Biscuit|Pickles|Nugget|Waffles|Muffin|Noodle|Pudding|Gizmo|Chewie|"
+                         "Buddy|Rocky|Tank|Bruno|Kevin|Steve|Gary|Dave|Barry|Nigel|Trevor|Colin|Keith|Derek|Geoff|"
+                         "Clive|Bob|Doug|Princess|Tiny|Chonk|Pebbles" },
+        { "Wolf",        "Ghost|Nymeria|Greywind|Fenrir|Balto|Akela|Lupin|Sirius|Fang|Scooby|Snoopy|Gromit|Goodboy|"
+                         "Barkley|Bigbad|Wolfgang|Howler|Lassie|Beethoven|Hachiko" },
+        { "Cat",         "Aslan|Simba|Nala|Mufasa|Bagheera|Sherekhan|Garfield|Salem|Tigger|Hobbes|Crookshanks|"
+                         "Bigglesworth|Tibbles|Whiskers|Purrcy|Clawdia|Catniss|Felix|Smudge|Jinx" },
+        { "Spider",      "Aragog|Shelob|Charlotte|Itsy|Bitsy|Webster|Spidey|Parker|Legsy|Tickles|Nopenope|Eightball" },
+        { "Bear",        "Baloo|Paddington|Pooh|Yogi|Booboo|Fozzie|Iorek|Smokey|Rupert|Bungle|Winnie|Barnaby|Teddy|"
+                         "Grizzwald" },
+        { "Boar",        "Pumbaa|Babe|Wilbur|Hamlet|Porkchop|Bacon|Truffles|Napoleon|Piglet|Peppa|Hogwart|Sausage|"
+                         "Gammon|Squealer|Kevin" },
+        { "Crocolisk",   "Tick|Tock|Snappy|Lyle|Dundee|Sobek|Chompers|Handbag|Smiley|Crunch|Gator|Wally" },
+        { "CarrionBird", "Nevermore|Quoth|Edgar|Iago|Zazu|Scuttle|Beaky|Plucky|Crowley|Pecky|Vulcan" },
+        { "Crab",        "Sebastian|Krabs|Pinchy|Crabby|Snappy|Larry|Clawdius|Itchy|Clawde|Sidestep|Shelly" },
+        { "Gorilla",     "Kong|Caesar|Cornelius|Koko|Bubbles|Bananas|Mojo|Magilla|Donkey|Bigfoot|Grape" },
+        { "Raptor",      "Blue|Rexy|Clever|Littlefoot|Barney|Yoshi|Chompy|Velma|Raptorella|Ducky|Spike|Dino" },
+        { "Tallstrider", "Bigbird|Roadrunner|Ozzy|Stilts|Legs|Gonzo|Strider|Dodo|Tweety|Lanky" },
+        { "Scorpid",     "Pinchy|Stinger|Scorpio|Sting|Snippy|Pinchers|Tailspin|Zappa|Kevin|Stingo" },
+        { "Turtle",      "Leonardo|Raphael|Donatello|Michelangelo|Crush|Squirt|Shelly|Speedy|Morla|Koopa|Bowser|"
+                         "Franklin|Sheldon|Turbo" },
+        { "Bat",         "Stellaluna|Nosferatu|Dracula|Vlad|Bruce|Alfred|Robin|Batty|Wayne|Count|Echo|Fang" },
+        { "Hyena",       "Shenzi|Banzai|Ed|Giggles|Cackles|Chuckles|Snickers|Hehe|Scraps|Mangy" },
+        { "Owl",         "Hedwig|Errol|Archimedes|Hootie|Hoot|Owlbert|Hootsalot|Fawkes|Buckbeak|Talon|Kevin" },
+        { "WindSerpent", "Falkor|Haku|Mushu|Shenron|Puff|Noodle|Toothless|Drogon|Spyro|Dangernoodle|Zephyr|Kaa" },
+        { "Dragonhawk",  "Puff|Smaug|Norbert|Drogon|Rhaegal|Viserion|Toothless|Spyro|Saphira|Elliott|Ember|Sparky" },
+        { "Ravager",     "Spike|Gnasher|Chomper|Mangler|Pokey|Snips|Pincushion|Kevin|Rex|Shredder" },
+        { "WarpStalker", "Blinky|Ghost|Houdini|Shadow|Flicker|Peekaboo|Kurt|Blink|Phase|Poof" },
+        { "Sporebat",    "Shroom|Spore|Toadstool|Morel|Portobello|Funguy|Mushy|Puffball|Truffle|Floaty" },
+        { "NetherRay",   "Manta|Raymond|Ray|Stingray|Flappy|Rayray|Rayman|Skate|Sheila|Wobbles" },
+        { "Serpent",     "Kaa|Nagini|Hiss|Slinky|Monty|Noodle|Snek|Dangernoodle|Sirhiss|Basil|Slither" },
+        { "Moth",        "Mothra|Mothy|Flutter|Lumos|Dusty|Moffy|Lampy|Fuzzy|Nightlight|Lamp" },
+        { "Chimaera",    "Hydra|Cerberus|Fluffy|Ghidorah|Chimchim|Twoface|Gemini|Twins" },
+        { "Devilsaur",   "Rex|Godzilla|Rexy|Chomper|Tiny|Sharptooth|Barney|Littlefoot|Princess|Dino|Stompy" },
+        { "Silithid",    "Bug|Buggy|Klendathu|Antz|Skitter|Zerg|Crunchy|Kafka|Chitter|Kevin" },
+        { "Worm",        "Graboid|Shaihulud|Wiggles|Squiggles|Jim|Wormtail|Slurms|Noodle|Wormy|Dune" },
+        { "Rhino",       "Rocksteady|Bebop|Bruiser|Tank|Rhonda|Kevin|Thunder|Stompy|Horace" },
+        { "Wasp",        "Buzz|Buzzy|Stingy|Bumble|Waspy|Beeyonce|Zippy|Hornet|Bzzt" },
+        { "CoreHound",   "Cerberus|Fluffy|Hotdog|Ember|Cinder|Sparky|Magma|Scorch|Toasty|Lava" },
+        { "SpiritBeast", "Ghost|Spirit|Casper|Phantom|Spectre|Boo|Wisp|Shimmer|Aslan|Moonlight" },
+    };
+
+    // Companions by side, "item:minimum level:weight" (weight 10 and level 1
+    // when left out): the pet sellers' wares commonest, then drops, quest
+    // rewards, holidays and the rare and promotional ones.
+    constexpr char const* kDefaultCompanionsAlliance =
+        "8485|8486|8487|8488|8489:1:8|8497:1:8|8500:1:8|8501:1:8|29901:1:8|29903:1:8|29904:1:8|23002:10:2|"
+        "49662:1:1|44998:78:2|44965:78:2|44970:78:2|44974:78:2|44984:78:2|45002:78:2|46820:78:1";
+    constexpr char const* kDefaultCompanionsHorde =
+        "10360|10361|10392|10393:1:8|10394:1:8|29953:1:8|29956:1:8|29957:1:8|23007:10:2|49663:1:1|45022:78:2|"
+        "44971:78:2|44973:78:2|44980:78:2|44982:78:2|45606:78:2|46821:78:1";
+    constexpr char const* kDefaultCompanionsBoth =
+        "11110:10:4|11026:10:4|11027:10:4|23015:10:3|11023:25:6|8495:30:6|8496:30:6|8490:65:4|29363:65:4|"
+        "29364:65:4|29902:65:4|29958:65:4|44822:72:4|46398:72:4|48120:72:3|54436:72:2|4401:15:2|8492:18:2|"
+        "8491:20:2|8499:25:2|10822:30:2|8498:45:2|10398:45:3|11474:45:2|34535:55:2|20769:55:2|29960:62:2|"
+        "44983:74:2|32233:20:2|19450:20:2|48114:17:1|48124:20:1|48118:30:1|48112:35:1|48122:50:1|48126:60:1|"
+        "48116:76:1|8494:40:1|11825:41:1|11826:41:1|18964:40:1|15996:53:1|21277:55:1|27445:65:1|34478:64:1|"
+        "38628:70:1|35504:70:1|33993:70:1|38658:70:1|33816:70:1|33818:70:1|35349:70:1|35350:70:1|39973:72:1|"
+        "43698:74:1|44723:76:1|46544:72:1|46545:72:1|39896:76:1|39899:76:1|39898:76:1|44721:76:1|44738:75:1|"
+        "33154:10:1|46707:20:1|23083:10:1|49912:15:1|49665:1:1|49693:1:1|54847:1:1|13582:1:1|13583:1:1|"
+        "13584:1:1|25535:1:1|39286:1:1|49343:1:1";
+
+    // "graboid" -> "Graboid": a pet name the way the game keeps one. Empty
+    // for one the game would not take: letters only, 2 to 12 of them.
+    std::string PetName(std::string name)
+    {
+        if (name.size() < 2 || name.size() > 12 ||
+            !std::all_of(name.begin(), name.end(), [](unsigned char c) { return std::isalpha(c) != 0; }))
+            return {};
+        for (char& c : name)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        name[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(name[0])));
+        return name;
+    }
+
+    std::string Lower(std::string s)
+    {
+        for (char& c : s)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return s;
+    }
+
+    void LoadPetsDuels()
+    {
+        using namespace pbp;
+        g_PetNamesEnable    = B("PlayerbotsPlus.Pets.NamesEnable", true);
+        g_PetNameChance     = std::min<uint32_t>(100, U("PlayerbotsPlus.Pets.NameChance", 85));
+        g_PetNamesPerMinute = std::clamp<uint32_t>(U("PlayerbotsPlus.Pets.NamesPerMinute", 20), 1, 600);
+
+        g_PetNames.clear();
+        std::string bad;
+        auto addNames = [&bad](std::string const& family, std::string const& value)
+        {
+            std::vector<std::string>& names = g_PetNames[Lower(family)];
+            for (std::string const& raw : PbpSplit(value, '|'))
+            {
+                const std::string name = PetName(raw);
+                if (name.empty())
+                    bad += (bad.empty() ? "" : ", ") + raw;
+                else
+                    names.push_back(name);
+            }
+        };
+        const std::string namesPrefix = "PlayerbotsPlus.Pets.Names.";
+        const std::vector<std::string> nameKeys = sConfigMgr->GetKeysByString(namesPrefix);
+        if (nameKeys.empty())
+            for (auto const& [family, names] : kDefaultPetNames)
+                addNames(family, names);
+        for (std::string const& key : nameKeys)
+            addNames(key.substr(namesPrefix.size()), sConfigMgr->GetOption<std::string>(key, ""));
+        if (!bad.empty())
+            LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Pets.Names: left out {} (a pet name is "
+                      "2 to 12 letters, nothing else).", bad);
+
+        g_CompanionsEnable          = B("PlayerbotsPlus.Companions.Enable", true);
+        g_CompanionsOwnChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Companions.OwnChance", 70));
+        g_CompanionsCollectorChance = std::min<uint32_t>(100, U("PlayerbotsPlus.Companions.CollectorChance", 15));
+        g_CompanionsCommonWeight    = U("PlayerbotsPlus.Companions.CommonWeight", 4);
+        g_CompanionsOutChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Companions.OutChance", 60));
+        g_CompanionsCheckSeconds    = std::clamp<uint32_t>(U("PlayerbotsPlus.Companions.CheckSeconds", 10), 2, 300);
+        g_CompanionsRange           = std::clamp(F("PlayerbotsPlus.Companions.Range", 80.0f), 10.0f, 200.0f);
+        g_Companions.clear();
+        std::string badCompanions;
+        auto addCompanions = [&badCompanions](char const* key, char const* def, uint8_t side)
+        {
+            for (std::string const& part : PbpSplit(sConfigMgr->GetOption<std::string>(key, def), '|'))
+            {
+                const std::vector<std::string> f = PbpSplit(part, ':');
+                PbpCompanionEntry e;
+                e.side = side;
+                if (f.empty() || f.size() > 3 || !ToUInt(f[0], e.item) || !e.item ||
+                    (f.size() > 1 && !ToUInt(f[1], e.minLevel)) || (f.size() > 2 && !ToUInt(f[2], e.weight)) ||
+                    !e.weight)
+                {
+                    badCompanions += (badCompanions.empty() ? "" : ", ") + part;
+                    continue;
+                }
+                g_Companions.push_back(e);
+            }
+        };
+        addCompanions("PlayerbotsPlus.Companions.Alliance", kDefaultCompanionsAlliance, 1);
+        addCompanions("PlayerbotsPlus.Companions.Horde", kDefaultCompanionsHorde, 2);
+        addCompanions("PlayerbotsPlus.Companions.Both", kDefaultCompanionsBoth, 0);
+        if (!badCompanions.empty())
+            LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Companions: could not read {} (want "
+                      "item, item:level or item:level:weight).", badCompanions);
+
+        g_DuelsEnable             = B("PlayerbotsPlus.Duels.Enable", true);
+        g_DuelsCheckSeconds       = std::clamp<uint32_t>(U("PlayerbotsPlus.Duels.CheckSeconds", 20), 5, 600);
+        g_DuelsChance             = std::min<uint32_t>(100, U("PlayerbotsPlus.Duels.Chance", 40));
+        g_DuelsRange              = std::clamp(F("PlayerbotsPlus.Duels.Range", 60.0f), 10.0f, 150.0f);
+        g_DuelsPairRange          = std::clamp(F("PlayerbotsPlus.Duels.PairRange", 25.0f), 5.0f, 60.0f);
+        g_DuelsLevelGap           = std::min<uint32_t>(79, U("PlayerbotsPlus.Duels.LevelGap", 5));
+        g_DuelsMinLevel           = std::clamp<uint32_t>(U("PlayerbotsPlus.Duels.MinLevel", 10), 1, 80);
+        g_DuelsBotCooldownMinutes = U("PlayerbotsPlus.Duels.BotCooldownMinutes", 20);
+        g_DuelsMaxAtOnce          = std::clamp<uint32_t>(U("PlayerbotsPlus.Duels.MaxAtOnce", 2), 1, 10);
+    }
+}
+
 void PlayerbotsPlus_LoadConfig(bool reload)
 {
     PbpSettings s;   // starts from the defaults in the header
@@ -375,6 +569,7 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     pbp::g_PbpDebug = B("PlayerbotsPlus.Debug", false);
     LoadHangout();
     LoadStuckReviveMarks();
+    LoadPetsDuels();
     // The packet hook goes by what is published here alone: with the module
     // off, nothing is muted.
     const std::string mute = sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Mute.Patterns", kDefaultMutePatterns);
@@ -398,4 +593,13 @@ void PlayerbotsPlus_LoadConfig(bool reload)
              pbp::g_HangoutBringIn ? "on" : "off", pbp::g_StuckEnable ? "on" : "off",
              pbp::g_ReviveEnable ? "on" : "off", pbp::g_MarksEnable ? "on" : "off",
              pbp::g_MarksSapStar ? "on" : "off");
+
+    size_t names = 0;
+    for (auto const& [family, list] : pbp::g_PetNames)
+        names += list.size();
+    LOG_INFO(where,
+             "[Playerbots Plus] Hunters naming their pets {} ({} names), companions {} ({} in the list), duels "
+             "outside the cities {}.",
+             pbp::g_PetNamesEnable ? "on" : "off", names, pbp::g_CompanionsEnable ? "on" : "off",
+             pbp::g_Companions.size(), pbp::g_DuelsEnable ? "on" : "off");
 }

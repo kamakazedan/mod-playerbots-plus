@@ -6,8 +6,10 @@
 #
 #   Random bots doing what real players do, without an LLM: trading on the
 #   auction house, hanging out where players do in the cities, getting
-#   unstuck, getting back up after dying, and using raid marks the way groups
-#   do; and the stock lines playerbots whispers that nobody needs, muted.
+#   unstuck, getting back up after dying, using raid marks the way groups
+#   do, naming their hunter pets, keeping companions and duelling outside
+#   the cities; and the stock lines playerbots whispers that nobody needs,
+#   muted.
 #   Works with mod-playerbots. mod-ollama-chat, when it is in the same build,
 #   has the bots talk about all of it in their own words; without it, they
 #   just do it.
@@ -408,14 +410,21 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        how far from it a place may be; capacity how many bots at most;
 #        name what bots call it ("the Trade District in Stormwind"). Add as
 #        many as you like, one key each; capacity 0 turns one off. With no
-#        Spot keys at all, these are the defaults.
+#        Spot keys at all, these are the defaults. Orgrimmar has the most:
+#        the Valley of Strength and the bank, the Drag, the Valley of Honor,
+#        and outside the city the gates (where people duel, see DUELS
+#        OUTSIDE THE CITIES) and the zeppelin tower.
 #        Maps: 0 Eastern Kingdoms, 1 Kalimdor, 530 Outland and the Blood
 #        Elf and Draenei lands, 571 Northrend.
 PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind"
 PlayerbotsPlus.Hangout.Spot.IronforgeCommons = "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge"
-PlayerbotsPlus.Hangout.Spot.OrgrimmarValley = "1 1657.9 -4433.0 17.5 22 10 the Valley of Strength in Orgrimmar"
-PlayerbotsPlus.Hangout.Spot.OrgrimmarBank = "1 1615.6 -4391.6 10.3 14 6 outside the bank in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarValley = "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarBank = "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarDrag = "1 1768.0 -4320.9 6.6 16 8 the Drag in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarHonor = "1 2076.4 -4824.2 23.7 18 8 the Valley of Honor in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarGates = "1 1320.0 -4400.0 27.0 22 8 outside the gates of Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarZeppelins = "1 1342.0 -4645.0 53.6 10 5 the zeppelin tower outside Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.UndercityTrade = "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity"
 PlayerbotsPlus.Hangout.Spot.ThunderBluffBank = "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff"
 PlayerbotsPlus.Hangout.Spot.DarnassusBank = "1 9943.0 2497.7 1317.7 16 8 outside the bank in Darnassus"
@@ -651,6 +660,177 @@ PlayerbotsPlus.Marks.InUseSeconds = 180
 PlayerbotsPlus.Marks.SapStealthWaitSeconds = 12
 PlayerbotsPlus.Marks.SapApproachSeconds = 40
 PlayerbotsPlus.Marks.SapWaitSeconds = 20
+
+###############################################################################
+#
+#   HUNTERS' PETS AND COMPANIONS
+#
+#   Playerbots tames a beast for a hunter and leaves it called what it is
+#   ("Boar", "Wind Serpent"). Players rename theirs, mostly after something
+#   they love or for a laugh: a cat called Aslan, a boar called Porkchop, a
+#   worm called Graboid. And most players carry a companion or two and have one
+#   trotting along: a cat from the pet seller in Elwynn, a snake from
+#   Orgrimmar, a parrot from Booty Bay, something rare that took a week to
+#   drop. With mod-ollama-chat, a bot knows what its pet is called and what is
+#   following it, and talks about it when someone does.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Pets.NamesEnable
+#    PlayerbotsPlus.Pets.NameChance
+#    PlayerbotsPlus.Pets.NamesPerMinute
+#        A random bot's hunter whose pet still has the name it was tamed
+#        with gives it one, the way the game does when a player renames a pet:
+#        the same checks (reserved and rude names are refused), its one
+#        rename, the name saved. NameChance of them do; the rest are the
+#        kind who never bother. NamesPerMinute caps it, the realm over, so a
+#        fresh start does not rename everyone at once. Your own bots' pets
+#        are left alone.
+#        Default: 1, 85, 20
+PlayerbotsPlus.Pets.NamesEnable = 1
+PlayerbotsPlus.Pets.NameChance = 85
+PlayerbotsPlus.Pets.NamesPerMinute = 20
+
+#    PlayerbotsPlus.Pets.Names.<Family>
+#        The names, separated by |: 2 to 12 letters, nothing else (no
+#        spaces), written however you like ("Graboid", "graboid": the game
+#        keeps the first letter capital). A pet mostly gets one of its own
+#        family's and now and then one of Any. Families: Wolf, Cat, Spider,
+#        Bear, Boar, Crocolisk, CarrionBird, Crab, Gorilla, Raptor,
+#        Tallstrider, Scorpid, Turtle, Bat, Hyena, Owl, WindSerpent,
+#        Dragonhawk, Ravager, WarpStalker, Sporebat, NetherRay, Serpent,
+#        Moth, Chimaera, Devilsaur, Silithid, Worm, Rhino, Wasp, CoreHound,
+#        SpiritBeast. With no Names keys at all, these are the defaults.
+PlayerbotsPlus.Pets.Names.Any = "Fluffy|Mittens|Snuggles|Biscuit|Pickles|Nugget|Waffles|Muffin|Noodle|Pudding|Gizmo|Chewie|Buddy|Rocky|Tank|Bruno|Kevin|Steve|Gary|Dave|Barry|Nigel|Trevor|Colin|Keith|Derek|Geoff|Clive|Bob|Doug|Princess|Tiny|Chonk|Pebbles"
+PlayerbotsPlus.Pets.Names.Wolf = "Ghost|Nymeria|Greywind|Fenrir|Balto|Akela|Lupin|Sirius|Fang|Scooby|Snoopy|Gromit|Goodboy|Barkley|Bigbad|Wolfgang|Howler|Lassie|Beethoven|Hachiko"
+PlayerbotsPlus.Pets.Names.Cat = "Aslan|Simba|Nala|Mufasa|Bagheera|Sherekhan|Garfield|Salem|Tigger|Hobbes|Crookshanks|Bigglesworth|Tibbles|Whiskers|Purrcy|Clawdia|Catniss|Felix|Smudge|Jinx"
+PlayerbotsPlus.Pets.Names.Spider = "Aragog|Shelob|Charlotte|Itsy|Bitsy|Webster|Spidey|Parker|Legsy|Tickles|Nopenope|Eightball"
+PlayerbotsPlus.Pets.Names.Bear = "Baloo|Paddington|Pooh|Yogi|Booboo|Fozzie|Iorek|Smokey|Rupert|Bungle|Winnie|Barnaby|Teddy|Grizzwald"
+PlayerbotsPlus.Pets.Names.Boar = "Pumbaa|Babe|Wilbur|Hamlet|Porkchop|Bacon|Truffles|Napoleon|Piglet|Peppa|Hogwart|Sausage|Gammon|Squealer|Kevin"
+PlayerbotsPlus.Pets.Names.Crocolisk = "Tick|Tock|Snappy|Lyle|Dundee|Sobek|Chompers|Handbag|Smiley|Crunch|Gator|Wally"
+PlayerbotsPlus.Pets.Names.CarrionBird = "Nevermore|Quoth|Edgar|Iago|Zazu|Scuttle|Beaky|Plucky|Crowley|Pecky|Vulcan"
+PlayerbotsPlus.Pets.Names.Crab = "Sebastian|Krabs|Pinchy|Crabby|Snappy|Larry|Clawdius|Itchy|Clawde|Sidestep|Shelly"
+PlayerbotsPlus.Pets.Names.Gorilla = "Kong|Caesar|Cornelius|Koko|Bubbles|Bananas|Mojo|Magilla|Donkey|Bigfoot|Grape"
+PlayerbotsPlus.Pets.Names.Raptor = "Blue|Rexy|Clever|Littlefoot|Barney|Yoshi|Chompy|Velma|Raptorella|Ducky|Spike|Dino"
+PlayerbotsPlus.Pets.Names.Tallstrider = "Bigbird|Roadrunner|Ozzy|Stilts|Legs|Gonzo|Strider|Dodo|Tweety|Lanky"
+PlayerbotsPlus.Pets.Names.Scorpid = "Pinchy|Stinger|Scorpio|Sting|Snippy|Pinchers|Tailspin|Zappa|Kevin|Stingo"
+PlayerbotsPlus.Pets.Names.Turtle = "Leonardo|Raphael|Donatello|Michelangelo|Crush|Squirt|Shelly|Speedy|Morla|Koopa|Bowser|Franklin|Sheldon|Turbo"
+PlayerbotsPlus.Pets.Names.Bat = "Stellaluna|Nosferatu|Dracula|Vlad|Bruce|Alfred|Robin|Batty|Wayne|Count|Echo|Fang"
+PlayerbotsPlus.Pets.Names.Hyena = "Shenzi|Banzai|Ed|Giggles|Cackles|Chuckles|Snickers|Hehe|Scraps|Mangy"
+PlayerbotsPlus.Pets.Names.Owl = "Hedwig|Errol|Archimedes|Hootie|Hoot|Owlbert|Hootsalot|Fawkes|Buckbeak|Talon|Kevin"
+PlayerbotsPlus.Pets.Names.WindSerpent = "Falkor|Haku|Mushu|Shenron|Puff|Noodle|Toothless|Drogon|Spyro|Dangernoodle|Zephyr|Kaa"
+PlayerbotsPlus.Pets.Names.Dragonhawk = "Puff|Smaug|Norbert|Drogon|Rhaegal|Viserion|Toothless|Spyro|Saphira|Elliott|Ember|Sparky"
+PlayerbotsPlus.Pets.Names.Ravager = "Spike|Gnasher|Chomper|Mangler|Pokey|Snips|Pincushion|Kevin|Rex|Shredder"
+PlayerbotsPlus.Pets.Names.WarpStalker = "Blinky|Ghost|Houdini|Shadow|Flicker|Peekaboo|Kurt|Blink|Phase|Poof"
+PlayerbotsPlus.Pets.Names.Sporebat = "Shroom|Spore|Toadstool|Morel|Portobello|Funguy|Mushy|Puffball|Truffle|Floaty"
+PlayerbotsPlus.Pets.Names.NetherRay = "Manta|Raymond|Ray|Stingray|Flappy|Rayray|Rayman|Skate|Sheila|Wobbles"
+PlayerbotsPlus.Pets.Names.Serpent = "Kaa|Nagini|Hiss|Slinky|Monty|Noodle|Snek|Dangernoodle|Sirhiss|Basil|Slither"
+PlayerbotsPlus.Pets.Names.Moth = "Mothra|Mothy|Flutter|Lumos|Dusty|Moffy|Lampy|Fuzzy|Nightlight|Lamp"
+PlayerbotsPlus.Pets.Names.Chimaera = "Hydra|Cerberus|Fluffy|Ghidorah|Chimchim|Twoface|Gemini|Twins"
+PlayerbotsPlus.Pets.Names.Devilsaur = "Rex|Godzilla|Rexy|Chomper|Tiny|Sharptooth|Barney|Littlefoot|Princess|Dino|Stompy"
+PlayerbotsPlus.Pets.Names.Silithid = "Bug|Buggy|Klendathu|Antz|Skitter|Zerg|Crunchy|Kafka|Chitter|Kevin"
+PlayerbotsPlus.Pets.Names.Worm = "Graboid|Shaihulud|Wiggles|Squiggles|Jim|Wormtail|Slurms|Noodle|Wormy|Dune"
+PlayerbotsPlus.Pets.Names.Rhino = "Rocksteady|Bebop|Bruiser|Tank|Rhonda|Kevin|Thunder|Stompy|Horace"
+PlayerbotsPlus.Pets.Names.Wasp = "Buzz|Buzzy|Stingy|Bumble|Waspy|Beeyonce|Zippy|Hornet|Bzzt"
+PlayerbotsPlus.Pets.Names.CoreHound = "Cerberus|Fluffy|Hotdog|Ember|Cinder|Sparky|Magma|Scorch|Toasty|Lava"
+PlayerbotsPlus.Pets.Names.SpiritBeast = "Ghost|Spirit|Casper|Phantom|Spectre|Boo|Wisp|Shimmer|Aslan|Moonlight"
+
+#    PlayerbotsPlus.Companions.Enable
+#    PlayerbotsPlus.Companions.OwnChance
+#    PlayerbotsPlus.Companions.CollectorChance
+#    PlayerbotsPlus.Companions.CommonWeight
+#        A random bot near a real player, out in the world, may own some of
+#        the companions below: OwnChance of them do, the same ones every
+#        session. Most own a common one or two (weight CommonWeight or more:
+#        the pet sellers' wares), and CollectorChance of the owners collect
+#        them, the rare ones too, more as they level: two at first, up to
+#        six by 78. A companion is learned the way its item teaches it. Bots
+#        nobody sees get nothing.
+#        Default: 1, 70, 15, 4
+PlayerbotsPlus.Companions.Enable = 1
+PlayerbotsPlus.Companions.OwnChance = 70
+PlayerbotsPlus.Companions.CollectorChance = 15
+PlayerbotsPlus.Companions.CommonWeight = 4
+
+#    PlayerbotsPlus.Companions.OutChance
+#    PlayerbotsPlus.Companions.CheckSeconds
+#    PlayerbotsPlus.Companions.Range
+#        A bot that owns some has one out, OutChance of the time (decided
+#        again every half hour or so), once it is within Range yards of a
+#        real player: on foot, not in a fight, not sat on a bench. Never in
+#        a dungeon, raid, battleground or arena. Looked at every
+#        CheckSeconds.
+#        Default: 60, 10, 80
+PlayerbotsPlus.Companions.OutChance = 60
+PlayerbotsPlus.Companions.CheckSeconds = 10
+PlayerbotsPlus.Companions.Range = 80
+
+#    PlayerbotsPlus.Companions.Alliance
+#    PlayerbotsPlus.Companions.Horde
+#    PlayerbotsPlus.Companions.Both
+#        The companions, by who can get them, separated by |: the item that
+#        teaches one, then a minimum level and a weight, "item:level:weight"
+#        (level 1 and weight 10 when left out). The level is where it comes
+#        from (Booty Bay's parrots at 30, Dalaran's pet shop at 72); the
+#        weight how common it is: 8-10 the pet sellers' wares, 4-6 the easy
+#        drops and quest rewards, 1-3 the rare ones, the holidays' and the
+#        promotional ones. An item that is not a companion's is left out,
+#        and the server log says how many.
+PlayerbotsPlus.Companions.Alliance = "8485|8486|8487|8488|8489:1:8|8497:1:8|8500:1:8|8501:1:8|29901:1:8|29903:1:8|29904:1:8|23002:10:2|49662:1:1|44998:78:2|44965:78:2|44970:78:2|44974:78:2|44984:78:2|45002:78:2|46820:78:1"
+PlayerbotsPlus.Companions.Horde = "10360|10361|10392|10393:1:8|10394:1:8|29953:1:8|29956:1:8|29957:1:8|23007:10:2|49663:1:1|45022:78:2|44971:78:2|44973:78:2|44980:78:2|44982:78:2|45606:78:2|46821:78:1"
+PlayerbotsPlus.Companions.Both = "11110:10:4|11026:10:4|11027:10:4|23015:10:3|11023:25:6|8495:30:6|8496:30:6|8490:65:4|29363:65:4|29364:65:4|29902:65:4|29958:65:4|44822:72:4|46398:72:4|48120:72:3|54436:72:2|4401:15:2|8492:18:2|8491:20:2|8499:25:2|10822:30:2|8498:45:2|10398:45:3|11474:45:2|34535:55:2|20769:55:2|29960:62:2|44983:74:2|32233:20:2|19450:20:2|48114:17:1|48124:20:1|48118:30:1|48112:35:1|48122:50:1|48126:60:1|48116:76:1|8494:40:1|11825:41:1|11826:41:1|18964:40:1|15996:53:1|21277:55:1|27445:65:1|34478:64:1|38628:70:1|35504:70:1|33993:70:1|38658:70:1|33816:70:1|33818:70:1|35349:70:1|35350:70:1|39973:72:1|43698:74:1|44723:76:1|46544:72:1|46545:72:1|39896:76:1|39899:76:1|39898:76:1|44721:76:1|44738:75:1|33154:10:1|46707:20:1|23083:10:1|49912:15:1|49665:1:1|49693:1:1|54847:1:1|13582:1:1|13583:1:1|13584:1:1|25535:1:1|39286:1:1|49343:1:1"
+
+###############################################################################
+#
+#   DUELS OUTSIDE THE CITIES
+#
+#   Players with nothing on stand outside the gates and duel each other to
+#   practise. Playerbots only starts one through its old RPG strategy, which
+#   a realm on the new one (Playerbots.EnableNewRpgStrategy = 1) never runs,
+#   so bots never did.
+#
+#   Near each real player who is somewhere duels are allowed (not in a
+#   capital, a dungeon or a battleground), two idle random bots of the same
+#   side and about the same level duel each other now and then: ones
+#   hanging out at a spot, or with nothing on in playerbots' own terms -- not
+#   questing, grinding, travelling, grouped, fighting or hurt. One walks over
+#   to the other and challenges it; playerbots accepts and fights it out.
+#   With mod-ollama-chat they say so ("gg") the way it does for any duel.
+#   Outside Orgrimmar's gates there is a hangout spot for them to idle at.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Duels.Enable
+#    PlayerbotsPlus.Duels.CheckSeconds
+#    PlayerbotsPlus.Duels.Chance
+#        Every CheckSeconds, near each real player, Chance of the time a pair
+#        that fits starts a duel.
+#        Default: 1, 20, 40
+PlayerbotsPlus.Duels.Enable = 1
+PlayerbotsPlus.Duels.CheckSeconds = 20
+PlayerbotsPlus.Duels.Chance = 40
+
+#    PlayerbotsPlus.Duels.Range
+#    PlayerbotsPlus.Duels.PairRange
+#    PlayerbotsPlus.Duels.LevelGap
+#    PlayerbotsPlus.Duels.MinLevel
+#        The two are within Range yards of the real player and PairRange of
+#        each other (the closer one walks over; two settled at a spot only
+#        duel from where they stand), no more than LevelGap levels apart,
+#        and at least MinLevel.
+#        Default: 60, 25, 5, 10
+PlayerbotsPlus.Duels.Range = 60
+PlayerbotsPlus.Duels.PairRange = 25
+PlayerbotsPlus.Duels.LevelGap = 5
+PlayerbotsPlus.Duels.MinLevel = 10
+
+#    PlayerbotsPlus.Duels.BotCooldownMinutes
+#    PlayerbotsPlus.Duels.MaxAtOnce
+#        A bot does not duel again for BotCooldownMinutes, and no more than
+#        MaxAtOnce duels go on near any one real player.
+#        Default: 20, 2
+PlayerbotsPlus.Duels.BotCooldownMinutes = 20
+PlayerbotsPlus.Duels.MaxAtOnce = 2
 
 ###############################################################################
 #

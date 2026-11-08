@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -128,6 +129,41 @@ namespace pbp
     extern uint32_t    g_MarksSapStealthWaitSeconds;
     extern uint32_t    g_MarksSapApproachSeconds;
     extern uint32_t    g_MarksSapWaitSeconds;
+
+    // Hunter pets' names (PlayerbotsPlusPets)
+    extern bool        g_PetNamesEnable;
+    extern uint32_t    g_PetNameChance;       // of the random bots' hunters: the rest keep the name it was tamed with
+    extern uint32_t    g_PetNamesPerMinute;
+    // "cat" -> the names a cat may get; "any" -> the ones any pet may.
+    extern std::unordered_map<std::string, std::vector<std::string>> g_PetNames;
+
+    // Companions (PlayerbotsPlusPets)
+    struct PbpCompanionEntry
+    {
+        uint32_t item     = 0;    // the item that teaches it
+        uint32_t minLevel = 1;    // where it comes from is not somewhere a lower level goes
+        uint32_t weight   = 10;   // how common it is
+        uint8_t  side     = 0;    // 0 both sides, 1 the Alliance, 2 the Horde
+    };
+    extern bool        g_CompanionsEnable;
+    extern std::vector<PbpCompanionEntry> g_Companions;
+    extern uint32_t    g_CompanionsOwnChance;         // of the random bots: own any at all
+    extern uint32_t    g_CompanionsCollectorChance;   // of those: collect them, the rare ones too
+    extern uint32_t    g_CompanionsCommonWeight;      // this weight and up is one anybody might have
+    extern uint32_t    g_CompanionsOutChance;         // has one out when somebody is about
+    extern uint32_t    g_CompanionsCheckSeconds;
+    extern float       g_CompanionsRange;             // from a real player
+
+    // Duels outside the cities (PlayerbotsPlusDuels)
+    extern bool        g_DuelsEnable;
+    extern uint32_t    g_DuelsCheckSeconds;
+    extern uint32_t    g_DuelsChance;             // a check near a real player starts one
+    extern float       g_DuelsRange;              // bots this close to a real player
+    extern float       g_DuelsPairRange;          // ...and to each other: one walks over to the other
+    extern uint32_t    g_DuelsLevelGap;
+    extern uint32_t    g_DuelsMinLevel;
+    extern uint32_t    g_DuelsBotCooldownMinutes;
+    extern uint32_t    g_DuelsMaxAtOnce;          // near any one real player
 }
 
 // Reads the conf into g_Pbp and the pbp:: settings. `reload`: .reload config

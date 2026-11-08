@@ -1,9 +1,11 @@
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlusMarketPrice.h"
 #include "PlayerbotsPlusMarks.h"
 #include "PlayerbotsPlusMute.h"
+#include "PlayerbotsPlusPets.h"
 #include "PlayerbotsPlusRevive.h"
 #include "PlayerbotsPlusStuck.h"
 
@@ -29,7 +31,10 @@ namespace
         {
             PlayerbotsPlus_LoadConfig(reload);
             if (reload)
+            {
                 PbpMarket_Reset();
+                PbpPets_Reset();
+            }
         }
 
         void OnUpdate(uint32 diff) override
@@ -44,6 +49,8 @@ namespace
             PbpMute_Update(diff);
             PbpRevive_Update(diff);
             PbpMarks_Update(diff);
+            PbpPets_Update(diff);
+            PbpDuels_Update(diff);
         }
     };
 
@@ -146,6 +153,17 @@ namespace
                                      onOff(pbp::g_MarksEnable), m.assigned, m.moved, m.picked, m.saps, m.sapFails,
                                      lastFail, m.sapMissed, m.sapGaveUp, m.sapCant);
 
+            PbpPetsStats const p = PbpPets_GetStats();
+            handler->PSendSysMessage("Hunters' pets: {} - {} given a name, {} left as they were tamed. Companions: "
+                                     "{} - {} on the lists ({} left out), {} learned, {} brought out.",
+                                     onOff(pbp::g_PetNamesEnable), p.named, p.keptName,
+                                     onOff(pbp::g_CompanionsEnable), p.companions, p.badEntries, p.learned,
+                                     p.summoned);
+
+            PbpDuelsStats const d = PbpDuels_GetStats();
+            handler->PSendSysMessage("Duels outside the cities: {} - {} challenges, {} walking over now, {} given up.",
+                                     onOff(pbp::g_DuelsEnable), d.challenged, d.walking, d.gaveUp);
+
             handler->SendSysMessage("Select a random bot and type .pbp visit to send it to the auction house now.");
             return true;
         }
@@ -178,6 +196,7 @@ namespace
             }
             PlayerbotsPlus_LoadConfig(true);
             PbpMarket_Reset();
+            PbpPets_Reset();
             handler->SendSysMessage("Playerbots Plus: settings reloaded.");
             return true;
         }

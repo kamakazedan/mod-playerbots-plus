@@ -49,6 +49,11 @@ with the core's own prepared statements (`CHAR_DEL_MAIL_BY_ID`,
 `CHAR_UPD_MAIL`, ...), because `Player::_SaveMail` is not public. A mail
 removed with `RemoveMail` is deleted here: the core leaves that to its caller.
 
+`Rename` in `PlayerbotsPlusPets.cpp` does what `HandlePetRename` does, in the
+same order, without the declined names a client sends. It only touches a pet
+that still has the name it was tamed with (its family's: "Cat"), because
+playerbots' own "rename pet" command leaves the game's renamed flag set.
+
 ## Playerbots' judgement, not ours
 
 Whether a bot can spare something or wants it comes from playerbots' own
@@ -63,8 +68,8 @@ thousands of different auctions.
 `PlayerbotsPlusMarketPrice.{h,cpp}` and `PlayerbotsPlusText.{h,cpp}` have no
 game types in them, so they can be tested without a server. Keep it that way:
 `tests/build.sh`. The text test also checks the conf against the code: every
-key the code reads is in the conf, and the default mute list and hangout spots
-are the same in both.
+key the code reads is in the conf, and the default mute list, hangout spots,
+companion lists and pet names are the same in both.
 
 ## Conventions
 

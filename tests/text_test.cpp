@@ -6,6 +6,8 @@
 
 #include "PlayerbotsPlusText.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <fstream>
 #include <regex>
@@ -241,8 +243,66 @@ int main(int argc, char** argv)
             else
                 std::printf("   not the code's default: %s\n", text.c_str());
         }
-        True("conf spots", spots == 14 && good == 14);
-        True("conf spots are the code's", same == 14);
+        True("conf spots", spots == 18 && good == 18);
+        True("conf spots are the code's", same == 18);
+    }
+
+    // ---- hunters' pet names and companions: what the conf ships is the code's --------
+    {
+        for (char const* side : { "Alliance", "Horde", "Both" })
+        {
+            const std::string key   = std::string("PlayerbotsPlus.Companions.") + side;
+            const std::string value = ConfValue(conf, key);
+            EqS(key + " is the code's", value, SourceLiteral(config, std::string("kDefaultCompanions") + side));
+            // item, item:level or item:level:weight
+            bool readable = !value.empty();
+            for (std::string const& part : PbpSplit(value, '|'))
+                readable = readable && std::regex_match(part, std::regex("[0-9]+(:[0-9]+(:[1-9][0-9]*)?)?"));
+            True(key + " reads", readable);
+        }
+
+        // Every Names line in the conf is one of the code's, word for word,
+        // and every name is one the game takes.
+        std::istringstream in(conf);
+        std::string text;
+        int lines = 0, same = 0, names = 0, good = 0;
+        const std::string prefix = "PlayerbotsPlus.Pets.Names.";
+        while (std::getline(in, text))
+        {
+            if (text.rfind(prefix, 0) != 0)
+                continue;
+            ++lines;
+            const std::string family = text.substr(prefix.size(), text.find(' ') - prefix.size());
+            const size_t q1 = text.find('"'), q2 = text.rfind('"');
+            const std::string value = q1 != std::string::npos && q2 > q1 ? text.substr(q1 + 1, q2 - q1 - 1) : "";
+            std::string joined;
+            const size_t at = config.find("{ \"" + family + "\",");
+            if (at != std::string::npos)
+            {
+                const size_t end = config.find('}', at);
+                const std::regex literal("\"((?:[^\"\\\\]|\\\\.)*)\"");
+                const std::string part = config.substr(at, end - at);
+                int n = 0;
+                for (std::sregex_iterator it(part.begin(), part.end(), literal), stop; it != stop; ++it, ++n)
+                    if (n)   // the first is the family
+                        joined += (*it)[1].str();
+            }
+            if (joined == value)
+                ++same;
+            else
+                std::printf("   not the code's default: %s\n", family.c_str());
+            for (std::string const& name : PbpSplit(value, '|'))
+            {
+                ++names;
+                if (name.size() >= 2 && name.size() <= 12 &&
+                    std::all_of(name.begin(), name.end(), [](unsigned char c) { return std::isalpha(c) != 0; }))
+                    ++good;
+                else
+                    std::printf("   not a name the game takes: %s\n", name.c_str());
+            }
+        }
+        True("conf pet name families", lines == 33 && same == 33);
+        True("conf pet names are all names the game takes", names > 300 && good == names);
     }
 
     // ---- the rest of the conf: every key the code reads is in it -------------------------
