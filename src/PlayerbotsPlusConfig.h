@@ -117,6 +117,16 @@ namespace pbp
     extern bool        g_FireEnable;
     extern float       g_FireMargin;
 
+    // Room to stand (PlayerbotsPlusSpace)
+    extern bool        g_SpaceEnable;
+    extern uint32_t    g_SpaceCheckSeconds;
+    extern uint32_t    g_SpaceStillSeconds;
+    extern float       g_SpaceDistance;
+    extern float       g_SpaceStepMin;
+    extern float       g_SpaceStepMax;
+    extern uint32_t    g_SpaceCooldownSeconds;
+    extern float       g_SpaceRange;
+
     // Getting back up (PlayerbotsPlusRevive)
     extern bool        g_ReviveEnable;
     extern uint32_t    g_ReviveReleaseDelaySeconds;

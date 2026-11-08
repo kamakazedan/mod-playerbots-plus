@@ -85,15 +85,16 @@ bool PbpHangout_Get(Player* bot, std::string& spot, std::string& doing, bool& aw
 // that came from it are in a duel.
 void PbpHangout_At(const std::string& spotKey, std::vector<Player*>& settled, uint32_t& duelling);
 
-// A bot burned by a fire (PlayerbotsPlusFire.h) that is to step out to x, y, z.
-enum class PbpHangoutFire : uint8_t
+// A bot that is to step to x, y, z: out of a fire (PlayerbotsPlusFire.h), or
+// out of someone's way (PlayerbotsPlusSpace.h).
+enum class PbpHangoutMove : uint8_t
 {
     NotHere,   // not hanging out (or in a duel at the gates, its own AI running): the caller moves it
     Moved,     // at its place, or on the last steps to it: x, y, z is its place from now on, and it is
                // walking there, to stand, sit or ride the way it did, for the rest of its time
     OnItsWay   // on its way to a spot, only passing by: left to get there
 };
-PbpHangoutFire PbpHangout_OutOfFire(Player* bot, float x, float y, float z);
+PbpHangoutMove PbpHangout_MoveTo(Player* bot, float x, float y, float z);
 
 // How full each city is: its spots taken together, by the city their names
 // end with ("outside the bank in Thunder Bluff" -> "Thunder Bluff").

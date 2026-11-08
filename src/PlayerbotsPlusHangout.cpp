@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusConfig.h"
 #include "PlayerbotsPlusFire.h"
+#include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusText.h"
 #include "PlayerbotsPlusUtil.h"
 
@@ -333,15 +334,22 @@ namespace
     }
 
     // A place within the spot: on the ground near the middle's height, in
-    // sight of the middle (so not inside a building or behind a wall), out
-    // of the water, not where another bot stands -- and one you can walk to
-    // from the middle, so not the top of a crate or a market stall.
+    // sight of the middle (so not behind a wall), outdoors if the middle is
+    // (so not inside the inn off the Valley of Strength), out of the water
+    // and any fire, not where another bot's place is or anyone stands -- and
+    // one you can walk to from the middle, so not the top of a crate or a
+    // market stall.
     bool PickPlace(Player* bot, const PbpHangoutSpot& s, float& outX, float& outY, float& outZ)
     {
         Map* map = bot->GetMap();
         const uint32_t phaseMask = bot->GetPhaseMask();
+        float groundZ = map->GetHeight(phaseMask, s.x, s.y, s.z + 3.0f, true, g_HangoutHeightTolerance + 6.0f);
+        if (groundZ <= INVALID_HEIGHT)
+            groundZ = s.z;
+        PositionFullTerrainStatus middle;
+        map->GetFullTerrainStatusForPosition(phaseMask, s.x, s.y, groundZ, bot->GetCollisionHeight(), middle);
         int paths = 0;
-        for (int tries = 0; tries < 16 && paths < 4; ++tries)
+        for (int tries = 0; tries < 24 && paths < 6; ++tries)
         {
             const float angle = Frand(0.0f, kTwoPi);
             const float dist  = s.radius * std::sqrt(Frand(0.0f, 1.0f));
@@ -357,8 +365,15 @@ namespace
                 continue;
             if (Taken(s.key, x, y, 2.5f))
                 continue;
-            // Not in a campfire or a brazier: nobody stands in one for half an hour.
-            if (PbpFire_Burns(bot, x, y, z, 1.0f))
+            if (middle.outdoors)
+            {
+                PositionFullTerrainStatus there;
+                map->GetFullTerrainStatusForPosition(phaseMask, x, y, z, bot->GetCollisionHeight(), there);
+                if (!there.outdoors)
+                    continue;   // under a roof off an open square: a shop, the inn
+            }
+            // Not in a campfire or a brazier, nor in a vendor or the next person.
+            if (PbpFire_Burns(bot, x, y, z, 1.0f) || PbpSpace_Crowded(map, bot, x, y, z, 2.5f, bot))
                 continue;
 
             ++paths;
@@ -571,6 +586,38 @@ namespace
         return !RealPlayerNear(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 150.0f);
     }
 
+    // Where a bot fetched in at an inn turns up: a few steps in front of the
+    // innkeeper, wherever there is floor in sight of it with nobody standing
+    // there (and nobody else just turning up there), out of any fire.
+    bool ArrivalPoint(Player* bot, Map* base, Inn const& inn, float& outX, float& outY, float& outZ)
+    {
+        for (int tries = 0; tries < 12; ++tries)
+        {
+            const float angle = inn.o + Frand(-1.3f, 1.3f);
+            const float dist  = Frand(2.5f, 6.0f);
+            const float x = inn.x + dist * std::cos(angle);
+            const float y = inn.y + dist * std::sin(angle);
+            const float z = base->GetHeight(PHASEMASK_NORMAL, x, y, inn.z + 2.0f, true, 6.0f);
+            if (z <= INVALID_HEIGHT || std::fabs(z - inn.z) > 1.0f || base->IsInWater(PHASEMASK_NORMAL, x, y, z, 2.0f))
+                continue;
+            if (!base->isInLineOfSight(inn.x, inn.y, inn.z + 1.5f, x, y, z + 1.5f, PHASEMASK_NORMAL,
+                                       LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing))
+                continue;
+            bool landing = false;
+            for (const auto& [guid, v] : g_visits)
+                if (v.phase == Phase::Arriving && v.map == base->GetId() && std::hypot(v.x - x, v.y - y) < 2.5f)
+                    landing = true;
+            if (landing || PbpSpace_Crowded(base, bot, x, y, z, 2.5f, bot) ||
+                PbpFire_BurnsAt(base, bot, bot->GetObjectSize(), x, y, z, 0.5f))
+                continue;
+            outX = x;
+            outY = y;
+            outZ = z;
+            return true;
+        }
+        return false;
+    }
+
     // Off it goes: to an inn in the city while someone is in it (it walks
     // over from there, like anyone who has just hearthed in), straight to the
     // spot while nobody is.
@@ -586,18 +633,23 @@ namespace
             Inn const* inn = InnFor(bot, InnsFor(s, zone));
             if (!inn)
                 return false;   // nowhere to come in that a player would not see it appear
-            // A step out from behind the counter, if there is floor there.
+            // Somewhere in front of the innkeeper where nobody stands: people
+            // who hearth in turn up about the room, not inside one another.
             x = inn->x;
             y = inn->y;
             z = inn->z;
             o = inn->o;
-            const float sx = inn->x + 1.5f * std::cos(inn->o), sy = inn->y + 1.5f * std::sin(inn->o);
-            const float sz = base->GetHeight(PHASEMASK_NORMAL, sx, sy, inn->z + 2.0f, true, 6.0f);
-            if (sz > INVALID_HEIGHT && std::fabs(sz - inn->z) < 0.6f)
+            if (!ArrivalPoint(bot, base, *inn, x, y, z))
             {
-                x = sx;
-                y = sy;
-                z = sz;
+                // A step out from behind the counter, if there is floor there.
+                const float sx = inn->x + 1.5f * std::cos(inn->o), sy = inn->y + 1.5f * std::sin(inn->o);
+                const float sz = base->GetHeight(PHASEMASK_NORMAL, sx, sy, inn->z + 2.0f, true, 6.0f);
+                if (sz > INVALID_HEIGHT && std::fabs(sz - inn->z) < 0.6f)
+                {
+                    x = sx;
+                    y = sy;
+                    z = sz;
+                }
             }
         }
         else
@@ -632,12 +684,22 @@ namespace
         if (floor > INVALID_HEIGHT && v.fromZ - floor > 1.0f && v.fromZ - floor < 50.0f)
             v.fromZ = floor + 0.05f;
 
-        // The way playerbots sends a random bot somewhere itself.
+        // The way playerbots sends a random bot somewhere itself -- on foot
+        // and at the keyboard, as anyone who has just hearthed in: not sat
+        // on a horse in the inn, nor <AFK> from out where nobody was.
         bot->GetMotionMaster()->Clear();
         ai->Reset(true);
         bot->RemoveAurasWithInterruptFlags(AURA_INTERRUPT_FLAG_TELEPORTED | AURA_INTERRUPT_FLAG_CHANGE_MAP);
+        bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
+        if (bot->isAFK())
+            bot->ToggleAFK();
+        if (bot->IsSitState())
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
         if (!bot->TeleportTo(s.map, x, y, z, o))
             return false;
+        v.x = x;   // where it lands, until it has its place: the next one lands elsewhere
+        v.y = y;
+        v.z = z;
         g_visits[bot->GetGUID().GetRawValue()] = std::move(v);
         g_fetchTimes.push_back(now);
         ++g_stats.broughtIn;
@@ -659,22 +721,42 @@ namespace
             return false;
         }
         if (v.landedAt == Clock::time_point{})
+        {
             v.landedAt = now;
+            // Where people are now: playerbots' idea of whether it has
+            // anything to do is taken again at once, not left as it was out
+            // where nobody was -- that left it stood at the innkeeper, <AFK>
+            // and doing nothing, for ten seconds or more.
+            ai->AllowActivity(ALL_ACTIVITY, true);
+            ai->SetNextCheckDelay(0);
+            if (bot->isAFK())
+                bot->ToggleAFK();
+        }
         if (now - v.landedAt < std::chrono::seconds(1) || now < v.nextTry)
             return true;   // a moment to land, or to look again
-        if (!PickPlace(bot, s, v.x, v.y, v.z))
+        float px = 0.0f, py = 0.0f, pz = 0.0f;
+        if (!PickPlace(bot, s, px, py, pz))
         {
             v.nextTry = now + std::chrono::seconds(1);
-            if (now - v.landedAt < std::chrono::seconds(20))
+            if (now - v.landedAt < std::chrono::seconds(6))
                 return true;   // everywhere taken just now: another look in a moment
             ++g_stats.gaveUp;
             g_spotNextFetch[v.spotKey] = now + std::chrono::minutes(2);   // nowhere to put them: not for a while
             Let(bot, ai, v, false, now);
-            if (!SendBack(bot, ai, v) && g_PbpDebug)
-                LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} found no room at {}.", bot->GetName(),
-                         v.spotName);
+            if (!SendBack(bot, ai, v))
+            {
+                // Not left stood at the innkeeper: out to the spot, to look
+                // round it like anyone (playerbots' own "go camp").
+                ai->rpgInfo.ChangeToGoCamp(WorldPosition(v.map, v.cx, v.cy, v.cz));
+                if (g_PbpDebug)
+                    LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} found no room at {}, and wanders over "
+                             "anyway.", bot->GetName(), v.spotName);
+            }
             return false;
         }
+        v.x = px;
+        v.y = py;
+        v.z = pz;
         if (v.viaInn)
         {
             // In at the inn: it walks over from there, like anyone who has just hearthed in.
@@ -1348,24 +1430,24 @@ PbpHangoutStats PbpHangout_GetStats()
     return s;
 }
 
-PbpHangoutFire PbpHangout_OutOfFire(Player* bot, float x, float y, float z)
+PbpHangoutMove PbpHangout_MoveTo(Player* bot, float x, float y, float z)
 {
     if (!bot || g_visits.empty())
-        return PbpHangoutFire::NotHere;
+        return PbpHangoutMove::NotHere;
     auto it = g_visits.find(bot->GetGUID().GetRawValue());
     if (it == g_visits.end())
-        return PbpHangoutFire::NotHere;
+        return PbpHangoutMove::NotHere;
     Visit& v = it->second;
     if (v.phase == Phase::Duelling)
-        return PbpHangoutFire::NotHere;
+        return PbpHangoutMove::NotHere;
     if (v.phase == Phase::Arriving || v.phase == Phase::Travel)
-        return PbpHangoutFire::OnItsWay;
+        return PbpHangoutMove::OnItsWay;
     PlayerbotAI* ai = AiOf(bot);
     if (!ai)
-        return PbpHangoutFire::NotHere;
+        return PbpHangoutMove::NotHere;
 
-    // Its place from now on. Back at the keyboard to get out of the fire,
-    // and away again once it is there, if it was (Hold).
+    // Its place from now on. Back at the keyboard to move (out of a fire, or
+    // out of someone's way), and away again once it is there, if it was (Hold).
     v.x = x;
     v.y = y;
     v.z = z;
@@ -1384,7 +1466,7 @@ PbpHangoutFire PbpHangout_OutOfFire(Player* bot, float x, float y, float z)
     v.approachStart = Clock::now();
     ai->SetNextCheckDelay(kHoldMs);
     bot->GetMotionMaster()->MovePoint(kPointId, x, y, z);
-    return PbpHangoutFire::Moved;
+    return PbpHangoutMove::Moved;
 }
 
 std::vector<PbpHangoutCity> PbpHangout_Cities()

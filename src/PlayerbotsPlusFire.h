@@ -5,6 +5,7 @@
 
 #include <cstdint>
 
+class Map;
 class Unit;
 class WorldObject;
 
@@ -45,6 +46,10 @@ void PbpFire_Update(uint32_t diff);
 // in a fire (a damaging trap of the world's own), with `extra` yards to
 // spare. False for a place whose grid is not loaded: nothing is known there.
 bool PbpFire_Burns(WorldObject const* who, float x, float y, float z, float extra = 0.0f);
+
+// The same on `map`, for someone of `size` who may not be on it yet
+// (`phaseRef` gives the phase).
+bool PbpFire_BurnsAt(Map* map, WorldObject const* phaseRef, float size, float x, float y, float z, float extra = 0.0f);
 
 struct PbpFireStats
 {

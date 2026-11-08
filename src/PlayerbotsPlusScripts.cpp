@@ -8,6 +8,7 @@
 #include "PlayerbotsPlusMute.h"
 #include "PlayerbotsPlusPets.h"
 #include "PlayerbotsPlusRevive.h"
+#include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusStuck.h"
 
 #include "AuctionHouseMgr.h"
@@ -46,6 +47,7 @@ namespace
             PbpHangout_Update(diff);
             PbpStuck_Update(diff);
             PbpFire_Update(diff);
+            PbpSpace_Update(diff);
             if (!g_Pbp.enable)
                 return;
             PbpMarket_Update(diff);
@@ -153,6 +155,11 @@ namespace
                                      "them hanging out, given a new place; {} burned again within a minute and sent "
                                      "off to do something else), {} with nowhere to step to.",
                                      onOff(pbp::g_FireEnable), f.burns, f.stepped, f.moved, f.sentOn, f.nowhere);
+
+            PbpSpaceStats const sp = PbpSpace_GetStats();
+            handler->PSendSysMessage("Room to stand: {} - {} bots found standing in someone, {} stepped aside ({} of "
+                                     "them hanging out, given a new place), {} with nowhere to step to just then.",
+                                     onOff(pbp::g_SpaceEnable), sp.crowded, sp.stepped, sp.moved, sp.nowhere);
 
             PbpReviveStats const r = PbpRevive_GetStats();
             handler->PSendSysMessage("Getting back up: {} - {} released, {} ran back in, {} stopped waiting for a "

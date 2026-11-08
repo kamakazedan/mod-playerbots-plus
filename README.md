@@ -14,6 +14,7 @@ their own words.
 | [City hangouts](#city-hangouts) | Gather where players do in the capitals: on a bench, mounted, or AFK |
 | [Stuck on a mount](#stuck-on-a-mount) | Stop getting on and off their mount at a herb they can't pick, and move on |
 | [Out of the fire](#out-of-the-fire) | Step out of a campfire or brazier that's burning them, instead of standing in it |
+| [Room to stand](#room-to-stand) | Step aside when they've stopped inside someone, instead of piling up on one spot |
 | [Getting back up](#getting-back-up) | Release and run back when nobody in the group can resurrect them |
 | [Raid marks](#raid-marks) | Crowd-control their own mark and sap the star |
 | [Hunters' pets and companions](#hunters-pets-and-companions) | Name their hunter pets the way players do, and keep companions of their side and level |
@@ -91,15 +92,20 @@ NPC to NPC. With hangouts, they gather where players do.
 - **Keeping spots busy:** playerbots sends few bots to the capitals, so a
   spot short of bots gets some fetched from elsewhere. While someone is in
   the city, a fetched bot arrives at the nearest friendly inn, the way people
-  hearth in, and walks over. While nobody is, it's put down at the spot, and
-  it goes back to where it came from when it's done, if nobody would see.
+  hearth in: a few steps in front of the innkeeper where nobody stands, on
+  foot and not AFK, and it sets off for its spot straight away. While nobody
+  is, it's put down at the spot, and it goes back to where it came from when
+  it's done, if nobody would see.
 - **Letting go:** an invite, a trade, a duel, a queue or a fight lets a bot go
   at once, except a duel at the gates, which is what that crowd is there for.
   Switching hangouts off lets everyone go.
 
 Nothing happens while no real player is online. Every place a bot stands is
-checked to be on the spot's own floor, in sight of its middle, reachable on
-foot and out of any fire, so never under the city, on a roof or in a brazier.
+checked to be on the spot's own floor, in sight of its middle, indoors or out
+the way the middle is, reachable on foot, out of any fire and not where
+anyone stands, so never under the city, on a roof, in the inn off the spot or
+in a brazier. Orgrimmar has no benches, so bots there stand, sit on the
+ground or stay on their mounts.
 `.pbp status` shows how full each city is.
 
 Settings: `PlayerbotsPlus.Hangout.*`.
@@ -141,6 +147,23 @@ spot for as long as it stays there.
   it doesn't walk straight back to the guard it was talking to.
 
 Settings: `PlayerbotsPlus.Fire.*`.
+
+## Room to stand
+
+Players who stop somewhere stand a step apart. Playerbots never minds where
+it stops: a bot sent to an innkeeper walks to the innkeeper's own spot, a bot
+with nothing to do stands wherever it last stopped, and a handful of them end
+up on one spot, inside each other.
+
+- A random bot that has stood still for 10 seconds inside someone, a player
+  or an NPC, steps aside two to five yards onto free, walkable ground on the
+  same floor, and turns back to face them.
+- Of two bots on one spot, the one that got there last moves.
+- A bot hanging out at a city spot takes the new place as its own.
+- Pets, companions and people walking past don't count, bots in a group or a
+  fight are left alone, and only bots near a real player are looked at.
+
+Settings: `PlayerbotsPlus.Space.*`.
 
 ## Getting back up
 
@@ -351,7 +374,7 @@ Copy `conf/mod_playerbots_plus.conf.dist` to your module config folder as
 
 | Command | What it does |
 |---|---|
-| `.pbp status` | What it's doing: the auction house, hangouts (and how full each city is), stuck bots, fires, revives, marks, pets, companions, duels and muted lines |
+| `.pbp status` | What it's doing: the auction house, hangouts (and how full each city is), stuck bots, fires, room to stand, revives, marks, pets, companions, duels and muted lines |
 | `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |
 

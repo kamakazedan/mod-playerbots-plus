@@ -6,10 +6,10 @@
 #
 #   Random bots doing what real players do, without an LLM: trading on the
 #   auction house, hanging out where players do in the cities, getting
-#   unstuck, stepping out of fires, getting back up after dying, using raid
-#   marks the way groups do, naming their hunter pets, keeping companions
-#   and duelling at the city gates; and the stock lines playerbots whispers
-#   that nobody needs, muted.
+#   unstuck, stepping out of fires, leaving each other room to stand,
+#   getting back up after dying, using raid marks the way groups do, naming
+#   their hunter pets, keeping companions and duelling at the city gates;
+#   and the stock lines playerbots whispers that nobody needs, muted.
 #   Works with mod-playerbots. mod-ollama-chat, when it is in the same build,
 #   has the bots talk about all of it in their own words; without it, they
 #   just do it.
@@ -30,8 +30,8 @@ PlayerbotsPlus.Enable = 1
 #    PlayerbotsPlus.Debug
 #        More of what the bots do, in the server log at INFO
 #        (module.playerbotsplus): each one heading over to a hangout, settling
-#        and leaving; a bot stepping out of a fire; a rogue's sap step by
-#        step; a dead bot released.
+#        and leaving; a bot stepping out of a fire or out of someone's way; a
+#        rogue's sap step by step; a dead bot released.
 #        Default: 0
 PlayerbotsPlus.Debug = 0
 
@@ -276,13 +276,16 @@ PlayerbotsPlus.Market.Price.RelistDiscountPct = 15
 #   player has targeted, and not one that hung out in the last
 #   CooldownMinutes. It walks over (playerbots' own "go camp") to a place of
 #   its own in the spot -- on the ground within HeightTolerance of the
-#   middle's height, in sight of the middle, out of the water, and one you
-#   can walk to, so not the top of a market stall -- and stays StayMinutesMin
-#   to StayMinutesMax:
+#   middle's height, in sight of the middle, indoors or out the way the
+#   middle is (so not inside the inn off the Valley of Strength), out of the
+#   water and any fire, not in a vendor or anyone else, and one you can walk
+#   to, so not the top of a market stall -- and stays StayMinutesMin to
+#   StayMinutesMax:
 #
 #     * on a free bench within BenchRange, in sight of the middle
 #       (BenchChance, when there is one; a seat whose name has one of
-#       BenchWords);
+#       BenchWords). Orgrimmar has no benches at all, so nobody there
+#       goes looking: it is one of the others;
 #     * mounted (MountedChance), if it can ride and it is outdoors --
 #       playerbots puts an idle random bot on its best mount anyway;
 #     * sat on the ground (SitChance), or else just standing about;
@@ -316,9 +319,13 @@ PlayerbotsPlus.Market.Price.RelistDiscountPct = 15
 #     * While someone is in that city, a fetched bot comes in at an inn
 #       within ArrivalRange of the spot, the way people hearth in -- the
 #       nearest one friendly to its side, so never the other side's inn in
-#       Dalaran -- and walks over from there; no more than one every eight
-#       seconds in a city, whichever of its spots it is for. A spot with no
-#       inn in reach only gets bots while nobody is in its city.
+#       Dalaran -- and walks over from there; no more than one every
+#       InnArrivalSeconds in a city, whichever of its spots it is for. It
+#       turns up a few steps in front of the innkeeper where nobody stands,
+#       off its mount and at the keyboard, and sets off at once: not stood
+#       <AFK> on its horse in the innkeeper's face. One that finds no place
+#       at its spot within a few seconds wanders over to it anyway. A spot
+#       with no inn in reach only gets bots while nobody is in its city.
 #     * While nobody is, it is put down in the middle of the spot and walks
 #       to its place, so the spot is already busy when someone gets there.
 #       Once it is done, it goes back to where it was fetched from, so long
@@ -547,6 +554,69 @@ PlayerbotsPlus.Fire.Enable = 1
 #        give or take a yard and a half. 0.5 to 5.
 #        Default: 1.5
 PlayerbotsPlus.Fire.Margin = 1.5
+
+###############################################################################
+#
+#   ROOM TO STAND
+#
+#   Players who stop somewhere stand a step apart: nobody waits for the
+#   innkeeper inside the next person, or inside the innkeeper. Playerbots
+#   never minds where it stops. A bot sent to an innkeeper walks to the
+#   innkeeper's own spot, a bot with nothing to do stands wherever it last
+#   stopped, and a handful of them end up in one place, on top of each
+#   other.
+#
+#   A random bot that has stood still for StillSeconds -- out of any fight,
+#   not in a group, with no real player as its master, not casting, not on a
+#   chair or bench -- closer than Distance yards to someone else who is
+#   standing still (a player, or an NPC, a big one's own size added; pets,
+#   companions and passers-by do not count) steps aside: StepMin to StepMax
+#   yards away from them, onto ground it can walk to, on the same floor,
+#   indoors or out the way it was, in sight, out of any fire and out of
+#   everyone else's way, and turns back to face them. Of two bots on one
+#   spot, the one that got there last moves. A bot hanging out at a city
+#   spot takes the new place as its own and settles there as it was. One that
+#   has just stepped aside does not again for CooldownSeconds, so nothing
+#   pulling it back can make it shuffle on the spot. Only bots within Range
+#   yards of a real player are looked at: crowding nobody sees is left
+#   alone. With PlayerbotsPlus.Debug on, each step is logged.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Space.Enable
+#        Default: 1
+PlayerbotsPlus.Space.Enable = 1
+
+#    PlayerbotsPlus.Space.Distance
+#        Closer than this (yards, from middle to middle) is standing in
+#        someone. 0.5 to 5.
+#        Default: 1.75
+PlayerbotsPlus.Space.Distance = 1.75
+
+#    PlayerbotsPlus.Space.StillSeconds
+#        How long a bot stands still before it notices. A bot that only
+#        stops for a moment -- a word with a vendor, a look round -- is left
+#        alone.
+#        Default: 10
+PlayerbotsPlus.Space.StillSeconds = 10
+
+#    PlayerbotsPlus.Space.StepMin
+#    PlayerbotsPlus.Space.StepMax
+#        How far it steps (yards).
+#        Default: 2.5, 5
+PlayerbotsPlus.Space.StepMin = 2.5
+PlayerbotsPlus.Space.StepMax = 5
+
+#    PlayerbotsPlus.Space.CooldownSeconds
+#    PlayerbotsPlus.Space.CheckSeconds
+#    PlayerbotsPlus.Space.Range
+#        How long before the same bot may step aside again; how often bots
+#        are looked at (1 to 30 seconds); and how near a real player
+#        (yards) a bot has to be to be looked at (0: anywhere).
+#        Default: 60, 2, 120
+PlayerbotsPlus.Space.CooldownSeconds = 60
+PlayerbotsPlus.Space.CheckSeconds = 2
+PlayerbotsPlus.Space.Range = 120
 
 ###############################################################################
 #

@@ -48,6 +48,14 @@ namespace pbp
     uint32_t    g_StuckWalkMinutes        = 10;
     bool        g_FireEnable              = true;
     float       g_FireMargin              = 1.5f;
+    bool        g_SpaceEnable             = true;
+    uint32_t    g_SpaceCheckSeconds       = 2;
+    uint32_t    g_SpaceStillSeconds       = 10;
+    float       g_SpaceDistance           = 1.75f;
+    float       g_SpaceStepMin            = 2.5f;
+    float       g_SpaceStepMax            = 5.0f;
+    uint32_t    g_SpaceCooldownSeconds    = 60;
+    float       g_SpaceRange              = 120.0f;
 
     bool        g_ReviveEnable              = true;
     uint32_t    g_ReviveReleaseDelaySeconds = 5;
@@ -298,6 +306,15 @@ namespace
 
         g_FireEnable = B("PlayerbotsPlus.Fire.Enable", true);
         g_FireMargin = std::clamp(F("PlayerbotsPlus.Fire.Margin", 1.5f), 0.5f, 5.0f);
+
+        g_SpaceEnable          = B("PlayerbotsPlus.Space.Enable", true);
+        g_SpaceCheckSeconds    = std::clamp<uint32_t>(U("PlayerbotsPlus.Space.CheckSeconds", 2), 1, 30);
+        g_SpaceStillSeconds    = std::min<uint32_t>(U("PlayerbotsPlus.Space.StillSeconds", 10), 3600);
+        g_SpaceDistance        = std::clamp(F("PlayerbotsPlus.Space.Distance", 1.75f), 0.5f, 5.0f);
+        g_SpaceStepMin         = std::clamp(F("PlayerbotsPlus.Space.StepMin", 2.5f), 1.0f, 10.0f);
+        g_SpaceStepMax         = std::clamp(F("PlayerbotsPlus.Space.StepMax", 5.0f), g_SpaceStepMin, 15.0f);
+        g_SpaceCooldownSeconds = std::min<uint32_t>(U("PlayerbotsPlus.Space.CooldownSeconds", 60), 3600);
+        g_SpaceRange           = std::clamp(F("PlayerbotsPlus.Space.Range", 120.0f), 0.0f, 1000.0f);
 
         g_ReviveEnable              = B("PlayerbotsPlus.Revive.Enable", true);
         g_ReviveReleaseDelaySeconds = U("PlayerbotsPlus.Revive.ReleaseDelaySeconds", 5);
@@ -648,9 +665,10 @@ void PlayerbotsPlus_LoadConfig(bool reload)
         places += spot.capacity;
     LOG_INFO(where,
              "[Playerbots Plus] City hangouts {} ({} spots, room for {}; fetched from elsewhere {}), stuck mounts {}, "
-             "out of fires {}, getting back up {}, raid marks {} (sapping the star {}).",
+             "out of fires {}, room to stand {}, getting back up {}, raid marks {} (sapping the star {}).",
              pbp::g_HangoutEnable ? "on" : "off", pbp::g_HangoutSpots.size(), places,
              pbp::g_HangoutBringIn ? "on" : "off", pbp::g_StuckEnable ? "on" : "off", pbp::g_FireEnable ? "on" : "off",
+             pbp::g_SpaceEnable ? "on" : "off",
              pbp::g_ReviveEnable ? "on" : "off", pbp::g_MarksEnable ? "on" : "off",
              pbp::g_MarksSapStar ? "on" : "off");
 

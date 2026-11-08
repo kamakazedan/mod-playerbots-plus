@@ -135,13 +135,13 @@ namespace
         float       dist  = 0.0f;   // from its middle to the place
     };
 
-    void FiresAround(WorldObject const* who, float x, float y, float z, std::vector<Fire>& out)
+    void FiresAround(Map* map, WorldObject const* phaseRef, float size, float x, float y, float z,
+                     std::vector<Fire>& out)
     {
         std::list<GameObject*> near;
         Acore::GameObjectInRangeCheck check(x, y, z, kSearch);
-        Acore::GameObjectListSearcher<Acore::GameObjectInRangeCheck> searcher(who, near, check);
-        Cell::VisitObjects(x, y, who->GetMap(), searcher, kSearch);
-        const float size = who->GetObjectSize();
+        Acore::GameObjectListSearcher<Acore::GameObjectInRangeCheck> searcher(phaseRef, near, check);
+        Cell::VisitObjects(x, y, map, searcher, kSearch);
         for (GameObject* go : near)
             if (const float reach = Reach(go, size); reach > 0.0f)
                 out.push_back({ go, reach, go->GetExactDist(x, y, z) });
@@ -218,16 +218,23 @@ void PbpFireScript::OnDamage(Unit* attacker, Unit* victim, uint32& /*damage*/)
         g_noted.push_back(victim->GetGUID().GetRawValue());
 }
 
-bool PbpFire_Burns(WorldObject const* who, float x, float y, float z, float extra)
+bool PbpFire_BurnsAt(Map* map, WorldObject const* phaseRef, float size, float x, float y, float z, float extra)
 {
-    if (!who || !who->IsInWorld() || !who->GetMap())
+    if (!map || !phaseRef)
         return false;
     std::vector<Fire> fires;
-    FiresAround(who, x, y, z, fires);
+    FiresAround(map, phaseRef, size, x, y, z, fires);
     for (Fire const& f : fires)
         if (f.dist < f.reach + extra)
             return true;
     return false;
+}
+
+bool PbpFire_Burns(WorldObject const* who, float x, float y, float z, float extra)
+{
+    if (!who || !who->IsInWorld())
+        return false;
+    return PbpFire_BurnsAt(who->GetMap(), who, who->GetObjectSize(), x, y, z, extra);
 }
 
 void PbpFire_Update(uint32_t /*diff*/)
@@ -264,7 +271,8 @@ void PbpFire_Update(uint32_t /*diff*/)
 
         // The fire it is in: the one it stands nearest the middle of.
         std::vector<Fire> fires;
-        FiresAround(bot, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), fires);
+        FiresAround(bot->GetMap(), bot, bot->GetObjectSize(), bot->GetPositionX(), bot->GetPositionY(),
+                    bot->GetPositionZ(), fires);
         Fire const* in = nullptr;
         for (Fire const& f : fires)
             if (f.dist < f.reach && (!in || f.dist / f.reach < in->dist / in->reach))
@@ -284,13 +292,13 @@ void PbpFire_Update(uint32_t /*diff*/)
             continue;
         }
 
-        const PbpHangoutFire hangout = PbpHangout_OutOfFire(bot, x, y, z);
-        if (hangout == PbpHangoutFire::OnItsWay)
+        const PbpHangoutMove hangout = PbpHangout_MoveTo(bot, x, y, z);
+        if (hangout == PbpHangoutMove::OnItsWay)
             continue;   // passing by on its way to a spot: it is not stopping here
         const bool again = last != g_lastStep.end() && now - last->second < kAgain;
         g_lastStep[guid] = now;
         ++g_stats.stepped;
-        if (hangout == PbpHangoutFire::Moved)
+        if (hangout == PbpHangoutMove::Moved)
             ++g_stats.moved;
         else
         {
@@ -310,7 +318,7 @@ void PbpFire_Update(uint32_t /*diff*/)
             LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} steps out of {} ({}) at {} {:.1f} {:.1f} {:.1f}{}.",
                      bot->GetName(), in->go->GetName(), in->go->GetEntry(), bot->GetMapId(), bot->GetPositionX(),
                      bot->GetPositionY(), bot->GetPositionZ(),
-                     hangout == PbpHangoutFire::Moved ? ", to a new place at its hangout"
+                     hangout == PbpHangoutMove::Moved ? ", to a new place at its hangout"
                                                        : (again ? ", and goes and does something else" : ""));
     }
 }
