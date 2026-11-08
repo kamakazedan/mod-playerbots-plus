@@ -243,8 +243,8 @@ int main(int argc, char** argv)
             else
                 std::printf("   not the code's default: %s\n", text.c_str());
         }
-        True("conf spots", spots == 18 && good == 18);
-        True("conf spots are the code's", same == 18);
+        True("conf spots", spots == 19 && good == 19);
+        True("conf spots are the code's", same == 19);
     }
 
     // ---- hunters' pet names and companions: what the conf ships is the code's --------

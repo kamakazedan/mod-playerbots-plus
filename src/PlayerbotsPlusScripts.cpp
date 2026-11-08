@@ -161,8 +161,13 @@ namespace
                                      p.summoned);
 
             PbpDuelsStats const d = PbpDuels_GetStats();
-            handler->PSendSysMessage("Duels outside the cities: {} - {} challenges, {} walking over now, {} given up.",
-                                     onOff(pbp::g_DuelsEnable), d.challenged, d.walking, d.gaveUp);
+            std::string spots;
+            for (std::string const& key : pbp::g_DuelsSpots)
+                spots += (spots.empty() ? "" : ", ") + key;
+            handler->PSendSysMessage("Duels at the gates ({}): {} - {} challenges ({} to a real player), {} fought "
+                                     "without leaving the crowd, {} duelling now, {} walking over now, {} given up.",
+                                     spots.empty() ? std::string("nowhere") : spots, onOff(pbp::g_DuelsEnable),
+                                     d.challenged, d.asked, h.duels, h.duelling, d.walking, d.gaveUp);
 
             handler->SendSysMessage("Select a random bot and type .pbp visit to send it to the auction house now.");
             return true;

@@ -77,14 +77,29 @@ namespace pbp
     float       g_CompanionsRange            = 80.0f;
 
     bool        g_DuelsEnable                = true;
-    uint32_t    g_DuelsCheckSeconds          = 20;
-    uint32_t    g_DuelsChance                = 40;
-    float       g_DuelsRange                 = 60.0f;
-    float       g_DuelsPairRange             = 25.0f;
+    std::vector<std::string> g_DuelsSpots;
+    uint32_t    g_DuelsCheckSeconds          = 15;
+    uint32_t    g_DuelsChance                = 60;
+    float       g_DuelsWatchRange            = 150.0f;
     uint32_t    g_DuelsLevelGap              = 5;
     uint32_t    g_DuelsMinLevel              = 10;
-    uint32_t    g_DuelsBotCooldownMinutes    = 20;
+    uint32_t    g_DuelsBotCooldownMinutes    = 4;
     uint32_t    g_DuelsMaxAtOnce             = 2;
+    uint32_t    g_DuelsChallengePlayerChance  = 0;
+    uint32_t    g_DuelsChallengePlayerMinutes = 10;
+
+    bool DuelSpot(std::string const& key)
+    {
+        if (!g_DuelsEnable)
+            return false;
+        for (std::string const& spot : g_DuelsSpots)
+            if (spot.size() == key.size() &&
+                std::equal(spot.begin(), spot.end(), key.begin(), [](char a, char b)
+                           { return std::tolower(static_cast<unsigned char>(a)) ==
+                                    std::tolower(static_cast<unsigned char>(b)); }))
+                return true;
+        return false;
+    }
 }
 
 namespace
@@ -178,12 +193,13 @@ namespace
     const std::pair<const char*, const char*> kDefaultHangoutSpots[] = {
         { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind" },
         { "StormwindBank",      "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind" },
+        { "StormwindGates",     "0 -9100.0 380.0 93.8 22 14 outside the gates of Stormwind" },
         { "IronforgeCommons",   "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge" },
         { "OrgrimmarValley",    "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar" },
         { "OrgrimmarBank",      "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar" },
         { "OrgrimmarDrag",      "1 1768.0 -4320.9 6.6 16 8 the Drag in Orgrimmar" },
         { "OrgrimmarHonor",     "1 2076.4 -4824.2 23.7 18 8 the Valley of Honor in Orgrimmar" },
-        { "OrgrimmarGates",     "1 1320.0 -4400.0 27.0 22 8 outside the gates of Orgrimmar" },
+        { "OrgrimmarGates",     "1 1320.0 -4400.0 27.0 22 14 outside the gates of Orgrimmar" },
         { "OrgrimmarZeppelins", "1 1342.0 -4645.0 53.6 10 5 the zeppelin tower outside Orgrimmar" },
         { "UndercityTrade",     "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity" },
         { "ThunderBluffBank",   "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff" },
@@ -412,6 +428,10 @@ namespace
         "33154:10:1|46707:20:1|23083:10:1|49912:15:1|49665:1:1|49693:1:1|54847:1:1|13582:1:1|13583:1:1|"
         "13584:1:1|25535:1:1|39286:1:1|49343:1:1";
 
+    // Where people duel: just outside the main gates of Orgrimmar and
+    // Stormwind, as on any realm.
+    constexpr char const* kDefaultDuelSpots = "OrgrimmarGates|StormwindGates";
+
     // "graboid" -> "Graboid": a pet name the way the game keeps one. Empty
     // for one the game would not take: letters only, 2 to 12 of them.
     std::string PetName(std::string name)
@@ -498,14 +518,27 @@ namespace
                       "item, item:level or item:level:weight).", badCompanions);
 
         g_DuelsEnable             = B("PlayerbotsPlus.Duels.Enable", true);
-        g_DuelsCheckSeconds       = std::clamp<uint32_t>(U("PlayerbotsPlus.Duels.CheckSeconds", 20), 5, 600);
-        g_DuelsChance             = std::min<uint32_t>(100, U("PlayerbotsPlus.Duels.Chance", 40));
-        g_DuelsRange              = std::clamp(F("PlayerbotsPlus.Duels.Range", 60.0f), 10.0f, 150.0f);
-        g_DuelsPairRange          = std::clamp(F("PlayerbotsPlus.Duels.PairRange", 25.0f), 5.0f, 60.0f);
+        g_DuelsSpots              = PbpSplit(sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Duels.Spots",
+                                                                                kDefaultDuelSpots), '|');
+        g_DuelsCheckSeconds       = std::clamp<uint32_t>(U("PlayerbotsPlus.Duels.CheckSeconds", 15), 5, 600);
+        g_DuelsChance             = std::min<uint32_t>(100, U("PlayerbotsPlus.Duels.Chance", 60));
+        g_DuelsWatchRange         = std::clamp(F("PlayerbotsPlus.Duels.WatchRange", 150.0f), 20.0f, 500.0f);
         g_DuelsLevelGap           = std::min<uint32_t>(79, U("PlayerbotsPlus.Duels.LevelGap", 5));
         g_DuelsMinLevel           = std::clamp<uint32_t>(U("PlayerbotsPlus.Duels.MinLevel", 10), 1, 80);
-        g_DuelsBotCooldownMinutes = U("PlayerbotsPlus.Duels.BotCooldownMinutes", 20);
+        g_DuelsBotCooldownMinutes = U("PlayerbotsPlus.Duels.BotCooldownMinutes", 4);
         g_DuelsMaxAtOnce          = std::clamp<uint32_t>(U("PlayerbotsPlus.Duels.MaxAtOnce", 2), 1, 10);
+        g_DuelsChallengePlayerChance  = std::min<uint32_t>(100, U("PlayerbotsPlus.Duels.ChallengePlayerChance", 0));
+        g_DuelsChallengePlayerMinutes = std::max<uint32_t>(1, U("PlayerbotsPlus.Duels.ChallengePlayerMinutes", 10));
+
+        // Each one has to be a hangout spot: that is where the bots gather.
+        std::string unknown;
+        for (std::string const& key : g_DuelsSpots)
+            if (std::none_of(g_HangoutSpots.begin(), g_HangoutSpots.end(),
+                             [&key](PbpHangoutSpot const& s) { return Lower(s.key) == Lower(key); }))
+                unknown += (unknown.empty() ? "" : ", ") + key;
+        if (!unknown.empty())
+            LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Duels.Spots: no hangout spot called {} "
+                      "(PlayerbotsPlus.Hangout.Spot.<Name>).", unknown);
     }
 }
 
@@ -597,9 +630,13 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     size_t names = 0;
     for (auto const& [family, list] : pbp::g_PetNames)
         names += list.size();
+    std::string duelSpots;
+    for (std::string const& key : pbp::g_DuelsSpots)
+        duelSpots += (duelSpots.empty() ? "" : ", ") + key;
     LOG_INFO(where,
-             "[Playerbots Plus] Hunters naming their pets {} ({} names), companions {} ({} in the list), duels "
-             "outside the cities {}.",
+             "[Playerbots Plus] Hunters naming their pets {} ({} names), companions {} ({} in the list), duels {} "
+             "(at {}).",
              pbp::g_PetNamesEnable ? "on" : "off", names, pbp::g_CompanionsEnable ? "on" : "off",
-             pbp::g_Companions.size(), pbp::g_DuelsEnable ? "on" : "off");
+             pbp::g_Companions.size(), pbp::g_DuelsEnable ? "on" : "off",
+             duelSpots.empty() ? std::string("nowhere") : duelSpots);
 }

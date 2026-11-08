@@ -16,7 +16,7 @@ their own words.
 | [Getting back up](#getting-back-up) | Release and run back when nobody in the group can resurrect them |
 | [Raid marks](#raid-marks) | Crowd-control their own mark and sap the star |
 | [Hunters' pets and companions](#hunters-pets-and-companions) | Name their hunter pets the way players do, and keep companions of their side and level |
-| [Duels outside the cities](#duels-outside-the-cities) | Duel each other near you, outside the gates |
+| [Duels at the city gates](#duels-at-the-city-gates) | Gather outside the gates of Orgrimmar and Stormwind and duel each other there |
 | [Muted bot lines](#muted-bot-lines) | Playerbots' stock whispers, like "Using [Hearthstone]", are dropped |
 
 Each one can be switched off on its own. Every setting is documented in
@@ -76,10 +76,11 @@ Commons, the Valley of Strength, outside the bank in Dalaran. Playerbots never
 sends a bot anywhere in particular, so idle bots in a city just wander from
 NPC to NPC. With hangouts, they gather where players do.
 
-- **Where:** 18 spots in the capitals, Shattrath and Dalaran come set up,
+- **Where:** 19 spots in the capitals, Shattrath and Dalaran come set up,
   six of them in and around Orgrimmar: the Valley of Strength, outside the
   bank, the Drag, the Valley of Honor, outside the gates and the zeppelin
-  tower. You can add your own, or change how many bots each one holds.
+  tower. Outside the gates of Stormwind is one too. You can add your own, or
+  change how many bots each one holds.
 - **Who:** idle random bots near a spot, of its zone and floor. A bot that is
   grouped, queued, questing, gathering, fighting or flying is left alone, and
   so is one a real player has targeted.
@@ -92,7 +93,8 @@ NPC to NPC. With hangouts, they gather where players do.
   hearth in, and walks over. While nobody is, it's put down at the spot, and
   it goes back to where it came from when it's done, if nobody would see.
 - **Letting go:** an invite, a trade, a duel, a queue or a fight lets a bot go
-  at once. So does switching hangouts off.
+  at once, except a duel at the gates, which is what that crowd is there for.
+  Switching hangouts off lets everyone go.
 
 Nothing happens while no real player is online. Every place a bot stands is
 checked to be on the spot's own floor, in sight of its middle and reachable on
@@ -208,24 +210,32 @@ following it, and talks about it when someone does.
 
 Settings: `PlayerbotsPlus.Pets.*`, `PlayerbotsPlus.Companions.*`.
 
-## Duels outside the cities
+## Duels at the city gates
 
-Players with nothing on stand outside the gates and duel each other to
-practise. Playerbots only starts a duel through its old RPG strategy, which a
-realm on the new one never runs, so bots never did. Now, near you, wherever
-duels are allowed (not in a capital, a dungeon or a battleground):
+On a real realm people duel in one place: just outside the main gate of
+Orgrimmar or Stormwind. There's a crowd standing about, a pair or two going at
+it at a time, and the rest watching and waiting for a go. Playerbots only
+starts a duel through its old RPG strategy, which a realm on the new one never
+runs, so bots never did. Now they do it there, and nowhere else:
 
-- **Who:** two idle random bots of the same side and about the same level,
-  in good health.
-- **Idle means:** hanging out at a spot, or with nothing on in playerbots'
-  own terms. A bot that is questing, grinding, travelling, grouped or
-  fighting is left alone.
-- **How:** one walks over to the other and challenges it, playerbots accepts,
-  and they fight it out. With mod-ollama-chat they say gg.
-- **How often:** two at a time near you at most, and a bot doesn't duel again
-  for 20 minutes.
+- **Where:** the hangout spots outside the gates of Orgrimmar and Stormwind
+  (`Duels.Spots`). They fill like any other spot, also with bots from just
+  inside the city, and a bot fetched from elsewhere while you're about
+  arrives at the city's inn and walks out through the gate.
+- **When:** while you're within 150 yards of a spot, a duel starts there every
+  half a minute or so, two at a time at most.
+- **Who:** two of the crowd of the same side and within 5 levels, with their
+  health and mana up and not AFK. A bot doesn't duel again for 4 minutes.
+- **How:** one walks over and challenges the other, playerbots accepts, and
+  they fight it out. With mod-ollama-chat they say gg. Then both get their
+  breath back, eating or drinking if they like, and go back to their places.
+- **You:** set `Duels.ChallengePlayerChance` and now and then one of them
+  challenges you while you're standing about at the gates, at most once
+  every 10 minutes. It's off by default.
 
-The spot outside Orgrimmar's gates gives them somewhere to idle.
+To add a spot, add a hangout spot just outside a gate and put its name in
+`Duels.Spots`. A spot inside a city is refused, because the game allows no
+duels there.
 
 Settings: `PlayerbotsPlus.Duels.*`.
 

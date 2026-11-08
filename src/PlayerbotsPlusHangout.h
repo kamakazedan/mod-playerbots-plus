@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 class Player;
 
@@ -45,7 +46,11 @@ class Player;
 // world tick), the way a parked player does nothing: otherwise playerbots
 // stands a sitting bot up and takes its AFK off on its very next tick. An
 // invite (group, guild, arena team), a trade, a duel, a queue or a fight lets
-// it go at once. When its time is up it stands and goes about its business,
+// it go at once -- except a duel at the gates of a city (Duels.Spots, see
+// PlayerbotsPlusDuels.h), which is what the crowd there is for: its AI fights
+// it out, gets its breath back, and it goes back to its place. A spot like
+// that also takes in people from just inside the city (bots fetched from
+// elsewhere arrive at the city's inn and walk out through the gate). When its time is up it stands and goes about its business,
 // and does not hang out again for Hangout.CooldownMinutes. Switching it off
 // lets everyone go at once; if this stopped running altogether, the hold
 // would run out within five seconds.
@@ -71,9 +76,14 @@ void PbpHangout_ComeBack(Player* bot);
 bool PbpHangout_UsingBench();
 
 // Settled at a spot: where ("the Trade District in Stormwind"), how ("sitting
-// on a bench"), whether it is AFK right now, and whether it came back from
-// being AFK in the last few minutes. False when it is not settled at one.
+// on a bench", "standing about, watching the duels"), whether it is AFK right
+// now, and whether it came back from being AFK in the last few minutes. False
+// when it is not settled at one (on its way, or in a duel).
 bool PbpHangout_Get(Player* bot, std::string& spot, std::string& doing, bool& away, bool& justBack);
+
+// Who is at a spot right now: the bots settled there, and how many of those
+// that came from it are in a duel.
+void PbpHangout_At(const std::string& spotKey, std::vector<Player*>& settled, uint32_t& duelling);
 
 struct PbpHangoutStats
 {
@@ -85,8 +95,10 @@ struct PbpHangoutStats
     uint64_t cameBack  = 0;   // AFK, then talked to
     uint64_t broughtIn = 0;   // fetched from elsewhere (Hangout.BringIn)
     uint64_t sentBack  = 0;   // ...and gone back there when done
+    uint64_t duels     = 0;   // duels fought at the gates without leaving the crowd
     uint32_t hanging   = 0;   // there now
     uint32_t away      = 0;   // ...of whom AFK
+    uint32_t duelling  = 0;   // ...of whom in a duel or just out of one
     uint32_t onTheWay  = 0;
     uint32_t spots     = 0;
     uint32_t withInn   = 0;   // spots with an inn their fetched bots arrive at (of those looked at so far)

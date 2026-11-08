@@ -71,7 +71,8 @@ namespace
         Arriving,   // fetched from elsewhere: teleported in, not landed yet
         Travel,     // playerbots' "go camp" is taking it there
         Approach,   // the last few steps, to its own place in the crowd
-        Settled
+        Settled,
+        Duelling    // at the gates: in a duel, or getting its breath back after one, its own AI running
     };
 
     struct Visit
@@ -102,7 +103,9 @@ namespace
         Clock::time_point cameBack{};         // was AFK, then talked to
         Clock::time_point landedAt{};         // fetched: when it was first seen in the city
         Clock::time_point nextTry{};          // ...and when it next looks for room
+        Clock::time_point duelOver{};         // its duel ended (Duelling)
         bool              broughtIn = false;  // fetched from elsewhere (Hangout.BringIn)...
+        bool              viaInn    = false;  // ...in at an inn, to walk over from
         uint32_t          fromMap   = 0;      // ...from here
         float             fromX = 0.0f, fromY = 0.0f, fromZ = 0.0f, fromO = 0.0f;
     };
@@ -134,6 +137,7 @@ namespace
     {
         uint32_t         map = 0;
         float            x = 0.0f, y = 0.0f;   // the spot they were found for
+        bool             anyZone = false;      // ...a duel spot, which takes the city's inn through the gate
         bool             known = false;
         std::vector<Inn> inns;                 // nearest first
     };
@@ -221,20 +225,23 @@ namespace
     }
 
     // The inns within Hangout.ArrivalRange of a spot, in its zone, nearest
-    // first. Empty until the spot's map is up.
+    // first -- for a spot outside a city's gates (Duels.Spots), the city's
+    // too: people come out through the gate. Empty until the spot's map is up.
     const std::vector<Inn>& InnsFor(const PbpHangoutSpot& s, uint32_t zone)
     {
+        const bool anyZone = DuelSpot(s.key);
         SpotInns& known = g_spotInns[s.key];
-        if (known.known && known.map == s.map && known.x == s.x && known.y == s.y)
+        if (known.known && known.map == s.map && known.x == s.x && known.y == s.y && known.anyZone == anyZone)
             return known.inns;
         known = SpotInns{};
         Map* base = sMapMgr->FindBaseMap(s.map);
         if (!base || !zone)
             return known.inns;   // looked for again once it is up
-        known.map   = s.map;
-        known.x     = s.x;
-        known.y     = s.y;
-        known.known = true;
+        known.map     = s.map;
+        known.x       = s.x;
+        known.y       = s.y;
+        known.anyZone = anyZone;
+        known.known   = true;
         if (g_HangoutArrivalRange <= 0.0f)
             return known.inns;
         for (auto const& [spawnId, data] : sObjectMgr->GetAllCreatureData())
@@ -247,7 +254,7 @@ namespace
             CreatureTemplate const* info = sObjectMgr->GetCreatureTemplate(data.id);
             if (!info || !((info->npcflag | data.npcflag) & UNIT_NPC_FLAG_INNKEEPER))
                 continue;
-            if (base->GetZoneId(PHASEMASK_NORMAL, data.posX, data.posY, data.posZ) != zone)
+            if (!anyZone && base->GetZoneId(PHASEMASK_NORMAL, data.posX, data.posY, data.posZ) != zone)
                 continue;
             Inn inn;
             inn.x       = data.posX;
@@ -297,6 +304,21 @@ namespace
                 p->GetExactDistSq(x, y, z) < range * range)
                 return true;
         return false;
+    }
+
+    // Someone would see a bot appear at this spot: in its zone, or near
+    // enough over the zone line (the gates, from inside the city).
+    bool Watched(const PbpHangoutSpot& s, uint32_t zone)
+    {
+        return g_watched.count(WatchKey(s.map, zone)) || RealPlayerNear(s.map, s.x, s.y, s.z, 250.0f);
+    }
+
+    // In the spot's zone -- or, for one outside a city's gates, near it from
+    // inside the city.
+    bool InSpotsZone(Player* bot, const PbpHangoutSpot& s, uint32_t zone)
+    {
+        return bot->GetZoneId() == zone ||
+               (DuelSpot(s.key) && bot->GetExactDist2d(s.x, s.y) <= std::max(g_HangoutArrivalRange, 150.0f) + 50.0f);
     }
 
     // Two bots on one spot of ground would stand inside each other.
@@ -417,6 +439,15 @@ namespace
             case Posture::Sit:     return "sitting on the ground";
             default:               return "standing about";
         }
+    }
+
+    // At the gates, whatever it is doing, it is there for the duels.
+    std::string DoingAt(const Visit& v, Player* bot)
+    {
+        std::string doing = Doing(v, bot);
+        if (DuelSpot(v.spotKey))
+            doing += ", watching the duels";
+        return doing;
     }
 
     // In a queue (a dungeon, a battleground): a proposal or an invite could
@@ -585,6 +616,7 @@ namespace
         v.phase     = Phase::Arriving;
         v.started   = now;
         v.broughtIn = true;
+        v.viaInn    = watched;
         v.fromMap   = bot->GetMapId();
         v.fromX     = bot->GetPositionX();
         v.fromY     = bot->GetPositionY();
@@ -615,7 +647,7 @@ namespace
     bool Arrive(Player* bot, PlayerbotAI* ai, Visit& v, PbpHangoutSpot const& s, const Clock::time_point now)
     {
         const uint32_t zone = ZoneOf(s);
-        if (bot->GetMapId() != v.map || !zone || bot->GetZoneId() != zone || !StillFree(bot, v))
+        if (bot->GetMapId() != v.map || !zone || !InSpotsZone(bot, s, zone) || !StillFree(bot, v))
         {
             ++g_stats.gaveUp;
             Let(bot, ai, v, false, now);
@@ -638,8 +670,9 @@ namespace
                          v.spotName);
             return false;
         }
-        if (g_watched.count(WatchKey(v.map, zone)))
+        if (v.viaInn)
         {
+            // In at the inn: it walks over from there, like anyone who has just hearthed in.
             if (bot->IsSitState())
                 bot->SetStandState(UNIT_STAND_STATE_STAND);
             ai->rpgInfo.ChangeToGoCamp(WorldPosition(v.map, v.x, v.y, v.z));
@@ -676,7 +709,7 @@ namespace
             auto next = g_spotNextFetch.find(s->key);
             if (next != g_spotNextFetch.end() && now < next->second)
                 continue;
-            (g_watched.count(WatchKey(s->map, zone)) ? wanting : others).emplace_back(s, zone);
+            (Watched(*s, zone) ? wanting : others).emplace_back(s, zone);
         }
         wanting.insert(wanting.end(), others.begin(), others.end());
 
@@ -684,7 +717,7 @@ namespace
         {
             if (!budget || fetchable.empty())
                 break;
-            const bool watched = g_watched.count(WatchKey(s->map, zone)) != 0;
+            const bool watched = Watched(*s, zone);
             if (watched && InnsFor(*s, zone).empty())
                 continue;   // no inn to come in at: only while nobody is there
             if (watched)
@@ -769,7 +802,7 @@ namespace
             float bestDist = g_HangoutRecruitRange;
             for (const auto& [s, zone] : open)
             {
-                if (s->map != bot->GetMapId() || zone != bot->GetZoneId() ||
+                if (s->map != bot->GetMapId() || (zone != bot->GetZoneId() && !DuelSpot(s->key)) ||
                     std::fabs(bot->GetPositionZ() - s->z) > kMaxClimb)
                     continue;
                 const float d = bot->GetExactDist2d(s->x, s->y);
@@ -936,20 +969,29 @@ namespace
         }
 
         ai->rpgInfo.startT = getMSTime();
-        const uint32_t lo = g_HangoutStayMinutesMin * 60, hi = std::max(lo, g_HangoutStayMinutesMax * 60);
         v.phase     = Phase::Settled;
         v.settledAt = now;
-        v.until     = now + std::chrono::seconds(std::uniform_int_distribution<uint32_t>(lo, hi)(Rng()));
         v.nextLook  = now + std::chrono::seconds(g_HangoutCheckSeconds);
+        if (v.until != Clock::time_point{})
+            return;   // back from a duel: the rest of its time here
+        const uint32_t lo = g_HangoutStayMinutesMin * 60, hi = std::max(lo, g_HangoutStayMinutesMax * 60);
+        v.until = now + std::chrono::seconds(std::uniform_int_distribution<uint32_t>(lo, hi)(Rng()));
         ++g_stats.settled;
         if (g_PbpDebug)
             LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} hangs out at {}, {}{}.", bot->GetName(), v.spotName,
-                     Doing(v, bot), v.wantsAfk ? ", going AFK" : "");
+                     DoingAt(v, bot), v.wantsAfk ? ", going AFK" : "");
     }
+
+    void StartDuel(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now);
 
     // The last steps, its AI held. False: something else came up.
     bool Approach(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
+        if (bot->duel && bot->IsAlive() && DuelSpot(v.spotKey))
+        {
+            StartDuel(bot, ai, v, now);   // challenged on its way to its place at the gates
+            return true;
+        }
         if (!StillFree(bot, v) || !std::holds_alternative<NewRpgInfo::Rest>(ai->rpgInfo.data))
         {
             ++g_stats.cutShort;
@@ -968,11 +1010,102 @@ namespace
         return true;
     }
 
+    // A duel at the gates (Duels.Spots) is what it came for: its own AI
+    // answers the challenge and fights it out, and it stays one of the crowd.
+    void StartDuel(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (v.afkSet && bot->isAFK())
+            bot->ToggleAFK();
+        v.afkSet  = false;
+        v.holding = false;
+        if (bot->IsSitState())
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
+        if (v.posture == Posture::Bench)
+        {
+            v.posture = Posture::Stand;   // its seat is somebody else's by the time it is back
+            v.bench   = ObjectGuid::Empty;
+        }
+        v.phase    = Phase::Duelling;
+        v.duelOver = Clock::time_point{};
+        ai->SetNextCheckDelay(0);
+        ++g_stats.duels;
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} has a duel at {}.", bot->GetName(), v.spotName);
+    }
+
+    // In a duel at the gates, or just out of one: its own AI fights it, then
+    // eats or drinks if it likes, and once it has its breath back (or a
+    // minute on) it goes back to its place in the crowd for the rest of its
+    // time there. False: it is done here.
+    bool Duel(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        // Something else its AI has to answer, or somewhere else altogether.
+        if (!bot->IsAlive() || bot->GetGroup() || bot->GetGroupInvite() || bot->GetTradeData() ||
+            bot->GetGuildIdInvited() || bot->GetArenaTeamIdInvited() || Queued(bot) || bot->GetMapId() != v.map ||
+            bot->IsInFlight() || bot->GetVehicle())
+        {
+            ++g_stats.cutShort;
+            Let(bot, ai, v, false, now);
+            return false;
+        }
+        ai->rpgInfo.startT = getMSTime();   // still "resting" here, as far as playerbots' own plans go
+        if (bot->duel)
+        {
+            v.duelOver = Clock::time_point{};
+            return true;
+        }
+        if (v.duelOver == Clock::time_point{})
+            v.duelOver = now;
+        const auto since = now - v.duelOver;
+        if (bot->IsInCombat())
+        {
+            if (since < std::chrono::seconds(10))
+                return true;   // the duel's own fight, winding down
+            ++g_stats.cutShort;   // a real fight: playerbots' business
+            Let(bot, ai, v, false, now);
+            return false;
+        }
+        if (bot->GetExactDist2d(v.cx, v.cy) > v.radius + 60.0f)
+        {
+            ++g_stats.cutShort;   // chased off somewhere: done here
+            Let(bot, ai, v, false, now);
+            return false;
+        }
+        // Sat eating or drinking, or still hurt: a minute at most.
+        const bool hurt = bot->GetHealthPct() < 80.0f ||
+                          (bot->getPowerType() == POWER_MANA && bot->GetPowerPct(POWER_MANA) < 60.0f);
+        if ((hurt || bot->IsSitState()) && since < std::chrono::seconds(60))
+            return true;
+        if (v.until != Clock::time_point{} && now >= v.until)
+        {
+            ++g_stats.movedOn;
+            Let(bot, ai, v, true, now);
+            if (v.broughtIn)
+                SendBack(bot, ai, v);
+            return false;
+        }
+        // Back to its place, to stand, sit or get back on its mount there.
+        if (bot->IsSitState())
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
+        if (v.posture == Posture::Mounted && !CanRide(bot, ai))
+            v.posture = Posture::Stand;
+        ai->SetNextCheckDelay(kHoldMs);
+        v.phase         = Phase::Approach;
+        v.approachStart = now;
+        bot->GetMotionMaster()->MovePoint(kPointId, v.x, v.y, v.z);
+        return true;
+    }
+
     // Every world tick once it is there: its AI held, so playerbots does not
     // stand it up, take its AFK off, or put it back on its horse. Let go at
     // once for anything its AI has to answer. False: it is done here.
     bool Hold(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
+        if (bot->duel && bot->IsAlive() && DuelSpot(v.spotKey))
+        {
+            StartDuel(bot, ai, v, now);
+            return true;
+        }
         if (Wanted(bot))
         {
             ++g_stats.cutShort;
@@ -1103,6 +1236,8 @@ void PbpHangout_Update(uint32_t /*diff*/)
             keep = Travel(bot, ai, v, now);
         else if (v.phase == Phase::Approach)
             keep = Approach(bot, ai, v, now);
+        else if (v.phase == Phase::Duelling)
+            keep = Duel(bot, ai, v, now);
         else
         {
             keep = Hold(bot, ai, v, now);
@@ -1175,7 +1310,7 @@ bool PbpHangout_Get(Player* bot, std::string& spot, std::string& doing, bool& aw
         return false;
     const Visit& v = it->second;
     spot     = v.spotName;
-    doing    = Doing(v, bot);
+    doing    = DoingAt(v, bot);
     away     = v.afkSet && bot->isAFK();
     justBack = v.cameBack != Clock::time_point{} && Clock::now() - v.cameBack < std::chrono::minutes(3);
     return true;
@@ -1196,8 +1331,34 @@ PbpHangoutStats PbpHangout_GetStats()
             if (v.afkSet)
                 ++s.away;
         }
+        else if (v.phase == Phase::Duelling)
+        {
+            ++s.hanging;
+            ++s.duelling;
+        }
         else
             ++s.onTheWay;
     }
     return s;
+}
+
+void PbpHangout_At(const std::string& spotKey, std::vector<Player*>& settled, uint32_t& duelling)
+{
+    settled.clear();
+    duelling = 0;
+    for (const auto& [guid, v] : g_visits)
+    {
+        if (v.spotKey != spotKey || (v.phase != Phase::Settled && v.phase != Phase::Duelling))
+            continue;
+        Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+        if (!bot || !bot->IsInWorld())
+            continue;
+        if (v.phase == Phase::Duelling)
+        {
+            if (bot->duel)
+                ++duelling;
+        }
+        else
+            settled.push_back(bot);
+    }
 }

@@ -7,8 +7,8 @@
 #   Random bots doing what real players do, without an LLM: trading on the
 #   auction house, hanging out where players do in the cities, getting
 #   unstuck, getting back up after dying, using raid marks the way groups
-#   do, naming their hunter pets, keeping companions and duelling outside
-#   the cities; and the stock lines playerbots whispers that nobody needs,
+#   do, naming their hunter pets, keeping companions and duelling at the
+#   city gates; and the stock lines playerbots whispers that nobody needs,
 #   muted.
 #   Works with mod-playerbots. mod-ollama-chat, when it is in the same build,
 #   has the bots talk about all of it in their own words; without it, they
@@ -294,7 +294,9 @@ PlayerbotsPlus.Market.Price.RelistDiscountPct = 15
 #   nothing -- otherwise playerbots stands a sitting bot up and takes its AFK
 #   off on its very next tick. An invite (group, guild, arena team), a trade,
 #   a duel, a queue or a fight lets it go at once, as does being moved off
-#   the spot. When its time is up it stands and goes about its business.
+#   the spot -- except a duel at a spot outside the gates (see DUELS AT THE
+#   CITY GATES), which is what that crowd is there for. When its time is up
+#   it stands and goes about its business.
 #   Switching hangouts or the module off lets everyone go at once; if the
 #   module stopped running altogether, the hold would run out by itself
 #   within five seconds. Nothing happens while no real player is online.
@@ -412,18 +414,20 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        many as you like, one key each; capacity 0 turns one off. With no
 #        Spot keys at all, these are the defaults. Orgrimmar has the most:
 #        the Valley of Strength and the bank, the Drag, the Valley of Honor,
-#        and outside the city the gates (where people duel, see DUELS
-#        OUTSIDE THE CITIES) and the zeppelin tower.
+#        and outside the city the gates and the zeppelin tower. Outside the
+#        gates of Orgrimmar and of Stormwind is where people duel (see DUELS
+#        AT THE CITY GATES).
 #        Maps: 0 Eastern Kingdoms, 1 Kalimdor, 530 Outland and the Blood
 #        Elf and Draenei lands, 571 Northrend.
 PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindGates = "0 -9100.0 380.0 93.8 22 14 outside the gates of Stormwind"
 PlayerbotsPlus.Hangout.Spot.IronforgeCommons = "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarValley = "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarBank = "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarDrag = "1 1768.0 -4320.9 6.6 16 8 the Drag in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarHonor = "1 2076.4 -4824.2 23.7 18 8 the Valley of Honor in Orgrimmar"
-PlayerbotsPlus.Hangout.Spot.OrgrimmarGates = "1 1320.0 -4400.0 27.0 22 8 outside the gates of Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarGates = "1 1320.0 -4400.0 27.0 22 14 outside the gates of Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarZeppelins = "1 1342.0 -4645.0 53.6 10 5 the zeppelin tower outside Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.UndercityTrade = "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity"
 PlayerbotsPlus.Hangout.Spot.ThunderBluffBank = "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff"
@@ -782,55 +786,75 @@ PlayerbotsPlus.Companions.Both = "11110:10:4|11026:10:4|11027:10:4|23015:10:3|11
 
 ###############################################################################
 #
-#   DUELS OUTSIDE THE CITIES
+#   DUELS AT THE CITY GATES
 #
-#   Players with nothing on stand outside the gates and duel each other to
-#   practise. Playerbots only starts one through its old RPG strategy, which
-#   a realm on the new one (Playerbots.EnableNewRpgStrategy = 1) never runs,
-#   so bots never did.
+#   On a real realm people duel in one place: just outside the main gate of
+#   Orgrimmar or Stormwind, a crowd standing about, a pair or two going at it
+#   at a time, the rest watching and waiting for a go. Not out in the world.
+#   Playerbots only starts a duel through its old RPG strategy, which a realm
+#   on the new one (Playerbots.EnableNewRpgStrategy = 1) never runs, so bots
+#   never did.
 #
-#   Near each real player who is somewhere duels are allowed (not in a
-#   capital, a dungeon or a battleground), two idle random bots of the same
-#   side and about the same level duel each other now and then: ones
-#   hanging out at a spot, or with nothing on in playerbots' own terms -- not
-#   questing, grinding, travelling, grouped, fighting or hurt. One walks over
-#   to the other and challenges it; playerbots accepts and fights it out.
-#   With mod-ollama-chat they say so ("gg") the way it does for any duel.
-#   Outside Orgrimmar's gates there is a hangout spot for them to idle at.
+#   Each spot in Duels.Spots is a city hangout outside a gate (see CITY
+#   HANGOUTS: OrgrimmarGates and StormwindGates), and it fills with bots like
+#   the others -- also from just inside the city, and the ones fetched from
+#   elsewhere while someone is about arrive at the city's inn and walk out
+#   through the gate. While a real player is within WatchRange of one, two of
+#   the crowd there of the same side and about the same level duel now and
+#   then: one walks over and challenges the other the way the Duel button
+#   does, and playerbots accepts and fights it out. With mod-ollama-chat they
+#   say so ("gg") the way it does for any duel. Then both get their breath
+#   back (eating or drinking if they like) and go back to their places for
+#   the rest of their time there. Nowhere else does a bot start a duel.
+#
+#   A spot has to be somewhere the game allows duels, which is not inside a
+#   city: one that is not is said in the log and left alone.
 #
 ###############################################################################
 
 #    PlayerbotsPlus.Duels.Enable
+#    PlayerbotsPlus.Duels.Spots
+#        The hangout spots (PlayerbotsPlus.Hangout.Spot.<Name>) where people
+#        duel, separated by |. To add one, add a hangout spot just outside a
+#        gate and put its name here.
+#        Default: 1, "OrgrimmarGates|StormwindGates"
+PlayerbotsPlus.Duels.Enable = 1
+PlayerbotsPlus.Duels.Spots = "OrgrimmarGates|StormwindGates"
+
 #    PlayerbotsPlus.Duels.CheckSeconds
 #    PlayerbotsPlus.Duels.Chance
-#        Every CheckSeconds, near each real player, Chance of the time a pair
-#        that fits starts a duel.
-#        Default: 1, 20, 40
-PlayerbotsPlus.Duels.Enable = 1
-PlayerbotsPlus.Duels.CheckSeconds = 20
-PlayerbotsPlus.Duels.Chance = 40
+#    PlayerbotsPlus.Duels.WatchRange
+#    PlayerbotsPlus.Duels.MaxAtOnce
+#        Every CheckSeconds, at each spot with a real player within WatchRange
+#        yards of its middle, Chance of the time a duel starts, while fewer
+#        than MaxAtOnce are going on there.
+#        Default: 15, 60, 150, 2
+PlayerbotsPlus.Duels.CheckSeconds = 15
+PlayerbotsPlus.Duels.Chance = 60
+PlayerbotsPlus.Duels.WatchRange = 150
+PlayerbotsPlus.Duels.MaxAtOnce = 2
 
-#    PlayerbotsPlus.Duels.Range
-#    PlayerbotsPlus.Duels.PairRange
 #    PlayerbotsPlus.Duels.LevelGap
 #    PlayerbotsPlus.Duels.MinLevel
-#        The two are within Range yards of the real player and PairRange of
-#        each other (the closer one walks over; two settled at a spot only
-#        duel from where they stand), no more than LevelGap levels apart,
-#        and at least MinLevel.
-#        Default: 60, 25, 5, 10
-PlayerbotsPlus.Duels.Range = 60
-PlayerbotsPlus.Duels.PairRange = 25
+#    PlayerbotsPlus.Duels.BotCooldownMinutes
+#        The two are no more than LevelGap levels apart and at least MinLevel,
+#        with their health and mana up, and neither AFK. A bot does not
+#        duel again for BotCooldownMinutes after a challenge.
+#        Default: 5, 10, 4
 PlayerbotsPlus.Duels.LevelGap = 5
 PlayerbotsPlus.Duels.MinLevel = 10
+PlayerbotsPlus.Duels.BotCooldownMinutes = 4
 
-#    PlayerbotsPlus.Duels.BotCooldownMinutes
-#    PlayerbotsPlus.Duels.MaxAtOnce
-#        A bot does not duel again for BotCooldownMinutes, and no more than
-#        MaxAtOnce duels go on near any one real player.
-#        Default: 20, 2
-PlayerbotsPlus.Duels.BotCooldownMinutes = 20
-PlayerbotsPlus.Duels.MaxAtOnce = 2
+#    PlayerbotsPlus.Duels.ChallengePlayerChance
+#    PlayerbotsPlus.Duels.ChallengePlayerMinutes
+#        The chance, on a check that starts a duel, that one of the crowd of
+#        your side and about your level challenges you instead, if you are
+#        standing about at the spot (still, on foot, not AFK, health up), as
+#        people at the gates do. Nobody is asked twice in
+#        ChallengePlayerMinutes. 0 never.
+#        Default: 0, 10
+PlayerbotsPlus.Duels.ChallengePlayerChance = 0
+PlayerbotsPlus.Duels.ChallengePlayerMinutes = 10
 
 ###############################################################################
 #

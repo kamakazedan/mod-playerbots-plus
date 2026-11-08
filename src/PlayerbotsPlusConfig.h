@@ -154,16 +154,21 @@ namespace pbp
     extern uint32_t    g_CompanionsCheckSeconds;
     extern float       g_CompanionsRange;             // from a real player
 
-    // Duels outside the cities (PlayerbotsPlusDuels)
+    // Duels at the city gates (PlayerbotsPlusDuels)
     extern bool        g_DuelsEnable;
+    extern std::vector<std::string> g_DuelsSpots;  // hangout spots where people duel: "OrgrimmarGates"
     extern uint32_t    g_DuelsCheckSeconds;
-    extern uint32_t    g_DuelsChance;             // a check near a real player starts one
-    extern float       g_DuelsRange;              // bots this close to a real player
-    extern float       g_DuelsPairRange;          // ...and to each other: one walks over to the other
+    extern uint32_t    g_DuelsChance;             // a check at a spot starts one
+    extern float       g_DuelsWatchRange;         // ...while a real player is this close to its middle
     extern uint32_t    g_DuelsLevelGap;
     extern uint32_t    g_DuelsMinLevel;
     extern uint32_t    g_DuelsBotCooldownMinutes;
-    extern uint32_t    g_DuelsMaxAtOnce;          // near any one real player
+    extern uint32_t    g_DuelsMaxAtOnce;          // at one spot
+    extern uint32_t    g_DuelsChallengePlayerChance;   // a check challenges a real player standing there
+    extern uint32_t    g_DuelsChallengePlayerMinutes;  // ...and not them again for this long
+
+    // A hangout spot people duel at (Duels.Spots), with duels on.
+    bool DuelSpot(std::string const& key);
 }
 
 // Reads the conf into g_Pbp and the pbp:: settings. `reload`: .reload config
