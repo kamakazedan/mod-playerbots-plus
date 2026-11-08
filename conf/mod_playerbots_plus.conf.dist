@@ -751,8 +751,9 @@ PlayerbotsPlus.Pets.Names.SpiritBeast = "Ghost|Spirit|Casper|Phantom|Spectre|Boo
 #        six by 78. Only ever what its side can have and what is had at its
 #        level. A companion is learned the way its item teaches it, and out
 #        of earshot of everyone real: a first companion earns Can I Keep
-#        Him?, which the game tells everyone in /say range. Bots nobody sees
-#        get nothing.
+#        Him?, which the game tells everyone in /say range -- and the bot's
+#        guild, so a bot with none yet also waits while anyone real is
+#        online in its guild. Bots nobody sees get nothing.
 #        Default: 1, 70, 15, 4
 PlayerbotsPlus.Companions.Enable = 1
 PlayerbotsPlus.Companions.OwnChance = 70

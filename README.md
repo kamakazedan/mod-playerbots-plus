@@ -205,8 +205,10 @@ trotting along. Random bots near you do too:
   had, so a level 20 has a pet seller's cat or a Deadmines macaw, not
   something from Dalaran. A bot never has out one it couldn't have yet.
 - **Out of earshot:** a bot's first companion earns it Can I Keep Him?,
-  and the game announces that to everyone in /say range, so bots learn
-  theirs when no real player is close enough to see it.
+  and the game announces that to everyone in /say range and to the bot's
+  guild, so bots learn theirs when no real player is close enough to see
+  it, and a bot with none yet waits until nobody real is online in its
+  guild.
 - **Holidays:** Winter Veil's snowman and reindeer, Hallow's End's
   squashling, Brewfest's wolpertinger and the rest come out far more while
   their holiday is on, and about half the bots that own any pick one up.

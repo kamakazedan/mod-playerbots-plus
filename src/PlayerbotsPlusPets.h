@@ -44,6 +44,7 @@ struct PbpPetsStats
     uint64_t summoned    = 0;   // companions brought out
     uint64_t switched    = 0;   // ...swapped for another
     uint64_t putAway     = 0;   // ...and put away
+    uint32_t guildWait   = 0;   // bots near someone that wait for their first while their guild has someone real on
     uint32_t companions  = 0;   // in the list that could be read
     uint32_t badEntries  = 0;   // ...and ones that could not
 };

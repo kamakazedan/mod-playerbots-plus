@@ -464,6 +464,19 @@ namespace
         return false;
     }
 
+    // ...and its guild, wherever they are: the game tells the guild too. A bot
+    // with no companion yet waits while anyone real is online in its guild
+    // (`watched`); one that has one earned the achievement long ago.
+    bool GuildWouldHear(Player* bot, std::unordered_set<uint32_t> const& watched)
+    {
+        if (!bot->GetGuildId() || !watched.count(bot->GetGuildId()))
+            return false;
+        for (Companion const& c : g_catalog)
+            if (bot->HasSpell(c.spell))
+                return false;
+        return true;
+    }
+
     // Nothing on in playerbots' own terms, or hanging out somewhere.
     bool NothingOn(Player* bot)
     {
@@ -562,7 +575,14 @@ namespace
         for (size_t k = 1; k < kHolidays; ++k)
             g_season[k] = HolidayOn(uint8_t(k));
 
+        // The guilds with someone real online: told of a member's achievement.
+        std::unordered_set<uint32_t> watched;
+        for (auto const& [guid, p] : ObjectAccessor::GetPlayers())
+            if (p && p->IsInWorld() && p->GetGuildId() && !PbpIsBotPlayer(p))
+                watched.insert(p->GetGuildId());
+
         std::unordered_set<uint64_t> looked;
+        uint32_t guildWait = 0;
         for (auto const& [guid, real] : ObjectAccessor::GetPlayers())
         {
             if (!real || !real->IsInWorld() || PbpIsBotPlayer(real))
@@ -582,12 +602,18 @@ namespace
                 s.seen = now;
                 if (!s.taught && !Overheard(bot))
                 {
-                    s.taught = true;
-                    Teach(bot);
+                    if (GuildWouldHear(bot, watched))
+                        ++guildWait;
+                    else
+                    {
+                        s.taught = true;
+                        Teach(bot);
+                    }
                 }
                 Tend(bot, s, now);
             }
         }
+        g_stats.guildWait = guildWait;
 
         if (now >= g_nextSweep)
         {
