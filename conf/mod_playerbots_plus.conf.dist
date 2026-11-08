@@ -749,8 +749,10 @@ PlayerbotsPlus.Pets.Names.SpiritBeast = "Ghost|Spirit|Casper|Phantom|Spectre|Boo
 #        the pet sellers' wares), and CollectorChance of the owners collect
 #        them, the rare ones too, more as they level: two at first, up to
 #        six by 78. Only ever what its side can have and what is had at its
-#        level. A companion is learned the way its item teaches it. Bots
-#        nobody sees get nothing.
+#        level. A companion is learned the way its item teaches it, and out
+#        of earshot of everyone real: a first companion earns Can I Keep
+#        Him?, which the game tells everyone in /say range. Bots nobody sees
+#        get nothing.
 #        Default: 1, 70, 15, 4
 PlayerbotsPlus.Companions.Enable = 1
 PlayerbotsPlus.Companions.OwnChance = 70

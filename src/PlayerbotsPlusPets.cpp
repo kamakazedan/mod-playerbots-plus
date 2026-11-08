@@ -447,6 +447,23 @@ namespace
         }
     }
 
+    // Its first companion earns it Can I Keep Him?, and the game tells
+    // everyone in /say range. A crowd of bots learning theirs in front of
+    // someone is a crowd of achievements: a bot learns its companions out of
+    // earshot of everyone real instead.
+    bool Overheard(Player* bot)
+    {
+        const float range = sWorld->getFloatConfig(CONFIG_LISTEN_RANGE_SAY) + 15.0f;
+        std::list<Player*> near;
+        Acore::AnyPlayerInObjectRangeCheck check(bot, range, false, true);
+        Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(bot, near, check);
+        Cell::VisitObjects(bot, searcher, range);
+        for (Player* p : near)
+            if (p != bot && !PbpIsBotPlayer(p))
+                return true;
+        return false;
+    }
+
     // Nothing on in playerbots' own terms, or hanging out somewhere.
     bool NothingOn(Player* bot)
     {
@@ -563,7 +580,7 @@ namespace
                     continue;
                 BotPets& s = g_bots[bot->GetGUID().GetRawValue()];
                 s.seen = now;
-                if (!s.taught)
+                if (!s.taught && !Overheard(bot))
                 {
                     s.taught = true;
                     Teach(bot);
