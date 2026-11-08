@@ -748,7 +748,8 @@ PlayerbotsPlus.Pets.Names.SpiritBeast = "Ghost|Spirit|Casper|Phantom|Spectre|Boo
 #        session. Most own a common one or two (weight CommonWeight or more:
 #        the pet sellers' wares), and CollectorChance of the owners collect
 #        them, the rare ones too, more as they level: two at first, up to
-#        six by 78. A companion is learned the way its item teaches it. Bots
+#        six by 78. Only ever what its side can have and what is had at its
+#        level. A companion is learned the way its item teaches it. Bots
 #        nobody sees get nothing.
 #        Default: 1, 70, 15, 4
 PlayerbotsPlus.Companions.Enable = 1
@@ -757,15 +758,30 @@ PlayerbotsPlus.Companions.CollectorChance = 15
 PlayerbotsPlus.Companions.CommonWeight = 4
 
 #    PlayerbotsPlus.Companions.OutChance
+#    PlayerbotsPlus.Companions.SwitchChance
+#    PlayerbotsPlus.Companions.HolidayBoost
+#        About OutChance of the bots near you have a companion out (of those
+#        that own one, OutChance / OwnChance: 43% with the defaults). It is
+#        decided again every 20 to 40 minutes, and one that is not to have it
+#        out any more puts it away. A bot only ever has out one it could have
+#        at its level. Once in each stretch with nothing on (hanging out, or
+#        idle in playerbots' own terms), SwitchChance of those with one out
+#        swap it for another they own, a minute to five in. A holiday's own
+#        companions (the :holiday ones below) come out HolidayBoost times as
+#        often as the others while it is on, and a quarter as often when it
+#        is not; and while it is on, about half of the bots that own any
+#        have picked one of them up.
+#        Default: 30, 33, 8
+PlayerbotsPlus.Companions.OutChance = 30
+PlayerbotsPlus.Companions.SwitchChance = 33
+PlayerbotsPlus.Companions.HolidayBoost = 8
+
 #    PlayerbotsPlus.Companions.CheckSeconds
 #    PlayerbotsPlus.Companions.Range
-#        A bot that owns some has one out, OutChance of the time (decided
-#        again every half hour or so), once it is within Range yards of a
-#        real player: on foot, not in a fight, not sat on a bench. Never in
-#        a dungeon, raid, battleground or arena. Looked at every
-#        CheckSeconds.
-#        Default: 60, 10, 80
-PlayerbotsPlus.Companions.OutChance = 60
+#        Bots within Range yards of a real player are looked at every
+#        CheckSeconds: on foot or mounted, not in a fight, not sat down. Never
+#        in a dungeon, raid, battleground or arena.
+#        Default: 10, 80
 PlayerbotsPlus.Companions.CheckSeconds = 10
 PlayerbotsPlus.Companions.Range = 80
 
@@ -773,16 +789,22 @@ PlayerbotsPlus.Companions.Range = 80
 #    PlayerbotsPlus.Companions.Horde
 #    PlayerbotsPlus.Companions.Both
 #        The companions, by who can get them, separated by |: the item that
-#        teaches one, then a minimum level and a weight, "item:level:weight"
-#        (level 1 and weight 10 when left out). The level is where it comes
-#        from (Booty Bay's parrots at 30, Dalaran's pet shop at 72); the
-#        weight how common it is: 8-10 the pet sellers' wares, 4-6 the easy
-#        drops and quest rewards, 1-3 the rare ones, the holidays' and the
-#        promotional ones. An item that is not a companion's is left out,
-#        and the server log says how many.
-PlayerbotsPlus.Companions.Alliance = "8485|8486|8487|8488|8489:1:8|8497:1:8|8500:1:8|8501:1:8|29901:1:8|29903:1:8|29904:1:8|23002:10:2|49662:1:1|44998:78:2|44965:78:2|44970:78:2|44974:78:2|44984:78:2|45002:78:2|46820:78:1"
-PlayerbotsPlus.Companions.Horde = "10360|10361|10392|10393:1:8|10394:1:8|29953:1:8|29956:1:8|29957:1:8|23007:10:2|49663:1:1|45022:78:2|44971:78:2|44973:78:2|44980:78:2|44982:78:2|45606:78:2|46821:78:1"
-PlayerbotsPlus.Companions.Both = "11110:10:4|11026:10:4|11027:10:4|23015:10:3|11023:25:6|8495:30:6|8496:30:6|8490:65:4|29363:65:4|29364:65:4|29902:65:4|29958:65:4|44822:72:4|46398:72:4|48120:72:3|54436:72:2|4401:15:2|8492:18:2|8491:20:2|8499:25:2|10822:30:2|8498:45:2|10398:45:3|11474:45:2|34535:55:2|20769:55:2|29960:62:2|44983:74:2|32233:20:2|19450:20:2|48114:17:1|48124:20:1|48118:30:1|48112:35:1|48122:50:1|48126:60:1|48116:76:1|8494:40:1|11825:41:1|11826:41:1|18964:40:1|15996:53:1|21277:55:1|27445:65:1|34478:64:1|38628:70:1|35504:70:1|33993:70:1|38658:70:1|33816:70:1|33818:70:1|35349:70:1|35350:70:1|39973:72:1|43698:74:1|44723:76:1|46544:72:1|46545:72:1|39896:76:1|39899:76:1|39898:76:1|44721:76:1|44738:75:1|33154:10:1|46707:20:1|23083:10:1|49912:15:1|49665:1:1|49693:1:1|54847:1:1|13582:1:1|13583:1:1|13584:1:1|25535:1:1|39286:1:1|49343:1:1"
+#        teaches one, then a minimum level, a weight and a holiday,
+#        "item:level:weight:holiday" (level 1 and weight 10 when left out;
+#        no holiday). The level is where it is had: the pet sellers' wares at
+#        10 (a few silver to spare), Booty Bay's parrots at 30, the
+#        Stormspire's at 65, Dalaran's pet shop at 70, a drop where it drops
+#        (the Deadmines' macaw at 18, the Wetlands' whelps at 22,
+#        Winterspring's at 55), the Argent Tournament's at 80. The weight is
+#        how common it is: 8-10 the pet sellers' wares, 4 the easy ones, 1-3
+#        the rare ones, the holidays' and the promotional ones. The holiday
+#        is the one it comes from: winterveil, hallowsend, midsummer,
+#        loveisintheair, noblegarden, childrensweek, brewfest,
+#        pilgrimsbounty, lunarfestival or darkmoon (the Faire). An item that
+#        is not a companion's is left out, and the server log says how many.
+PlayerbotsPlus.Companions.Alliance = "8485:10|8486:10|8487:10|8488:10|8489:10:8|8497:8:8|8500:10:8|8501:10:8|29901:10:8|29903:10:8|29904:10:8|49662:1:1|44998:80:2|44965:80:2|44970:80:2|44974:80:2|44984:80:2|45002:80:2|46820:80:1"
+PlayerbotsPlus.Companions.Horde = "10360:10|10361:10|10392:10|10393:10:8|10394:10:8|29953:10:8|29956:10:8|29957:10:8|49663:1:1|45022:80:2|44971:80:2|44973:80:2|44980:80:2|44982:80:2|45606:80:2|46821:80:1"
+PlayerbotsPlus.Companions.Both = "11026:10:4:darkmoon|11027:10:4:darkmoon|11110:12:2|11023:25:4|8495:30:4|8496:30:4|8490:65:4|29363:65:4|29364:65:4|29902:65:4|29958:65:4|44822:70:4|46398:70:4|48120:70:3|39973:70:2|54436:70:2|4401:15:2|11825:41:1|11826:41:1|15996:53:1|21277:55:1|48114:17:1|8492:18:2|48118:18:1|8499:22:2|10822:25:2|8491:25:2|48124:28:1|48112:35:1|8494:40:1|18964:40:1|10398:45:2|11474:45:2|8498:45:2|19450:45:2:darkmoon|48122:50:1|20769:50:2|34535:55:2|48126:60:1|29960:62:2|34478:64:1|27445:65:1|33816:70:1|33818:70:1|38628:70:1|35504:70:1|33993:70:1|38658:70:1|35349:74:1|35350:74:1|43698:74:1|44983:74:2|44723:74:1|44738:75:1|39896:76:1|39899:76:1|39898:76:1|44721:76:1|48116:76:1|49912:15:1|23002:10:2:childrensweek|23007:10:2:childrensweek|23015:10:2:childrensweek|32616:60:1:childrensweek|32617:60:1:childrensweek|32622:60:1:childrensweek|46544:70:1:childrensweek|46545:70:1:childrensweek|21301:10:2:winterveil|21305:10:2:winterveil|21308:10:2:winterveil|21309:10:2:winterveil|34425:10:1:winterveil|33154:10:2:hallowsend|23083:10:1:midsummer|34955:10:2:midsummer|53641:75:1:midsummer|22235:10:2:loveisintheair|50446:78:1:loveisintheair|44794:10:2:noblegarden|44810:10:2:pilgrimsbounty|32233:10:2:brewfest|46707:10:1:brewfest|49665:1:1|49693:1:1|54847:1:1|13582:1:1|13583:1:1|13584:1:1|25535:1:1|39286:1:1|49343:1:1"
 
 ###############################################################################
 #

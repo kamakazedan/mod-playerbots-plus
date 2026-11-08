@@ -72,7 +72,9 @@ namespace pbp
     uint32_t    g_CompanionsOwnChance        = 70;
     uint32_t    g_CompanionsCollectorChance  = 15;
     uint32_t    g_CompanionsCommonWeight     = 4;
-    uint32_t    g_CompanionsOutChance        = 60;
+    uint32_t    g_CompanionsOutChance        = 30;
+    uint32_t    g_CompanionsSwitchChance     = 33;
+    uint32_t    g_CompanionsHolidayBoost     = 8;
     uint32_t    g_CompanionsCheckSeconds     = 10;
     float       g_CompanionsRange            = 80.0f;
 
@@ -411,22 +413,36 @@ namespace
     // Companions by side, "item:minimum level:weight" (weight 10 and level 1
     // when left out): the pet sellers' wares commonest, then drops, quest
     // rewards, holidays and the rare and promotional ones.
+    // The pet sellers' wares (Elwynn's cats, Darnassus' owls, the Exodar's
+    // moths; Orgrimmar's snakes, the Undercity's roach, Thunder Bluff's
+    // prairie dog, Eversong's dragonhawks) at 10, when a few silver to spare
+    // is likely; the Argent Tournament's at 80.
     constexpr char const* kDefaultCompanionsAlliance =
-        "8485|8486|8487|8488|8489:1:8|8497:1:8|8500:1:8|8501:1:8|29901:1:8|29903:1:8|29904:1:8|23002:10:2|"
-        "49662:1:1|44998:78:2|44965:78:2|44970:78:2|44974:78:2|44984:78:2|45002:78:2|46820:78:1";
+        "8485:10|8486:10|8487:10|8488:10|8489:10:8|8497:8:8|8500:10:8|8501:10:8|29901:10:8|29903:10:8|"
+        "29904:10:8|49662:1:1|44998:80:2|44965:80:2|44970:80:2|44974:80:2|44984:80:2|45002:80:2|46820:80:1";
     constexpr char const* kDefaultCompanionsHorde =
-        "10360|10361|10392|10393:1:8|10394:1:8|29953:1:8|29956:1:8|29957:1:8|23007:10:2|49663:1:1|45022:78:2|"
-        "44971:78:2|44973:78:2|44980:78:2|44982:78:2|45606:78:2|46821:78:1";
+        "10360:10|10361:10|10392:10|10393:10:8|10394:10:8|29953:10:8|29956:10:8|29957:10:8|49663:1:1|"
+        "45022:80:2|44971:80:2|44973:80:2|44980:80:2|44982:80:2|45606:80:2|46821:80:1";
+    // Each at the level where it is had: the Darkmoon Faire's frogs, Booty
+    // Bay's parrots at 30, the Stormspire's at 65, Dalaran's pet shop at 70;
+    // engineers' toys; drops where they drop (the Deadmines' macaw at 18,
+    // Wetlands whelps at 22, Winterspring's at 55); the holidays' own, tagged
+    // with the holiday; and the store and collector's edition ones, anywhere.
     constexpr char const* kDefaultCompanionsBoth =
-        "11110:10:4|11026:10:4|11027:10:4|23015:10:3|11023:25:6|8495:30:6|8496:30:6|8490:65:4|29363:65:4|"
-        "29364:65:4|29902:65:4|29958:65:4|44822:72:4|46398:72:4|48120:72:3|54436:72:2|4401:15:2|8492:18:2|"
-        "8491:20:2|8499:25:2|10822:30:2|8498:45:2|10398:45:3|11474:45:2|34535:55:2|20769:55:2|29960:62:2|"
-        "44983:74:2|32233:20:2|19450:20:2|48114:17:1|48124:20:1|48118:30:1|48112:35:1|48122:50:1|48126:60:1|"
-        "48116:76:1|8494:40:1|11825:41:1|11826:41:1|18964:40:1|15996:53:1|21277:55:1|27445:65:1|34478:64:1|"
-        "38628:70:1|35504:70:1|33993:70:1|38658:70:1|33816:70:1|33818:70:1|35349:70:1|35350:70:1|39973:72:1|"
-        "43698:74:1|44723:76:1|46544:72:1|46545:72:1|39896:76:1|39899:76:1|39898:76:1|44721:76:1|44738:75:1|"
-        "33154:10:1|46707:20:1|23083:10:1|49912:15:1|49665:1:1|49693:1:1|54847:1:1|13582:1:1|13583:1:1|"
-        "13584:1:1|25535:1:1|39286:1:1|49343:1:1";
+        "11026:10:4:darkmoon|11027:10:4:darkmoon|11110:12:2|11023:25:4|8495:30:4|8496:30:4|8490:65:4|"
+        "29363:65:4|29364:65:4|29902:65:4|29958:65:4|44822:70:4|46398:70:4|48120:70:3|39973:70:2|54436:70:2|"
+        "4401:15:2|11825:41:1|11826:41:1|15996:53:1|21277:55:1|48114:17:1|8492:18:2|48118:18:1|8499:22:2|"
+        "10822:25:2|8491:25:2|48124:28:1|48112:35:1|8494:40:1|18964:40:1|10398:45:2|11474:45:2|8498:45:2|"
+        "19450:45:2:darkmoon|48122:50:1|20769:50:2|34535:55:2|48126:60:1|29960:62:2|34478:64:1|27445:65:1|"
+        "33816:70:1|33818:70:1|38628:70:1|35504:70:1|33993:70:1|38658:70:1|35349:74:1|35350:74:1|43698:74:1|"
+        "44983:74:2|44723:74:1|44738:75:1|39896:76:1|39899:76:1|39898:76:1|44721:76:1|48116:76:1|49912:15:1|"
+        "23002:10:2:childrensweek|23007:10:2:childrensweek|23015:10:2:childrensweek|32616:60:1:childrensweek|"
+        "32617:60:1:childrensweek|32622:60:1:childrensweek|46544:70:1:childrensweek|46545:70:1:childrensweek|"
+        "21301:10:2:winterveil|21305:10:2:winterveil|21308:10:2:winterveil|21309:10:2:winterveil|"
+        "34425:10:1:winterveil|33154:10:2:hallowsend|23083:10:1:midsummer|34955:10:2:midsummer|"
+        "53641:75:1:midsummer|22235:10:2:loveisintheair|50446:78:1:loveisintheair|44794:10:2:noblegarden|"
+        "44810:10:2:pilgrimsbounty|32233:10:2:brewfest|46707:10:1:brewfest|49665:1:1|49693:1:1|54847:1:1|"
+        "13582:1:1|13583:1:1|13584:1:1|25535:1:1|39286:1:1|49343:1:1";
 
     // Where people duel: just outside the main gates of Orgrimmar and
     // Stormwind, as on any realm.
@@ -488,7 +504,9 @@ namespace
         g_CompanionsOwnChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Companions.OwnChance", 70));
         g_CompanionsCollectorChance = std::min<uint32_t>(100, U("PlayerbotsPlus.Companions.CollectorChance", 15));
         g_CompanionsCommonWeight    = U("PlayerbotsPlus.Companions.CommonWeight", 4);
-        g_CompanionsOutChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Companions.OutChance", 60));
+        g_CompanionsOutChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Companions.OutChance", 30));
+        g_CompanionsSwitchChance    = std::min<uint32_t>(100, U("PlayerbotsPlus.Companions.SwitchChance", 33));
+        g_CompanionsHolidayBoost    = std::clamp<uint32_t>(U("PlayerbotsPlus.Companions.HolidayBoost", 8), 1, 100);
         g_CompanionsCheckSeconds    = std::clamp<uint32_t>(U("PlayerbotsPlus.Companions.CheckSeconds", 10), 2, 300);
         g_CompanionsRange           = std::clamp(F("PlayerbotsPlus.Companions.Range", 80.0f), 10.0f, 200.0f);
         g_Companions.clear();
@@ -500,9 +518,11 @@ namespace
                 const std::vector<std::string> f = PbpSplit(part, ':');
                 PbpCompanionEntry e;
                 e.side = side;
-                if (f.empty() || f.size() > 3 || !ToUInt(f[0], e.item) || !e.item ||
+                if (f.size() > 3)
+                    e.holiday = PbpHolidayKey(f[3]);
+                if (f.empty() || f.size() > 4 || !ToUInt(f[0], e.item) || !e.item ||
                     (f.size() > 1 && !ToUInt(f[1], e.minLevel)) || (f.size() > 2 && !ToUInt(f[2], e.weight)) ||
-                    !e.weight)
+                    !e.weight || (f.size() > 3 && !e.holiday))
                 {
                     badCompanions += (badCompanions.empty() ? "" : ", ") + part;
                     continue;
@@ -515,7 +535,7 @@ namespace
         addCompanions("PlayerbotsPlus.Companions.Both", kDefaultCompanionsBoth, 0);
         if (!badCompanions.empty())
             LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Companions: could not read {} (want "
-                      "item, item:level or item:level:weight).", badCompanions);
+                      "item, item:level, item:level:weight or item:level:weight:holiday).", badCompanions);
 
         g_DuelsEnable             = B("PlayerbotsPlus.Duels.Enable", true);
         g_DuelsSpots              = PbpSplit(sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Duels.Spots",

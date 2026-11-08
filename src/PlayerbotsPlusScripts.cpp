@@ -155,10 +155,11 @@ namespace
 
             PbpPetsStats const p = PbpPets_GetStats();
             handler->PSendSysMessage("Hunters' pets: {} - {} given a name, {} left as they were tamed. Companions: "
-                                     "{} - {} on the lists ({} left out), {} learned, {} brought out.",
+                                     "{} - {} on the lists ({} left out), {} learned, {} brought out, {} swapped for "
+                                     "another, {} put away.",
                                      onOff(pbp::g_PetNamesEnable), p.named, p.keptName,
                                      onOff(pbp::g_CompanionsEnable), p.companions, p.badEntries, p.learned,
-                                     p.summoned);
+                                     p.summoned, p.switched, p.putAway);
 
             PbpDuelsStats const d = PbpDuels_GetStats();
             std::string spots;

@@ -254,11 +254,24 @@ int main(int argc, char** argv)
             const std::string key   = std::string("PlayerbotsPlus.Companions.") + side;
             const std::string value = ConfValue(conf, key);
             EqS(key + " is the code's", value, SourceLiteral(config, std::string("kDefaultCompanions") + side));
-            // item, item:level or item:level:weight
+            // item, item:level, item:level:weight or item:level:weight:holiday
             bool readable = !value.empty();
             for (std::string const& part : PbpSplit(value, '|'))
-                readable = readable && std::regex_match(part, std::regex("[0-9]+(:[0-9]+(:[1-9][0-9]*)?)?"));
+            {
+                std::smatch m;
+                readable = readable &&
+                           std::regex_match(part, m, std::regex("[0-9]+(:[0-9]+(:[1-9][0-9]*(:([a-z]+))?)?)?")) &&
+                           (!m[4].matched || PbpHolidayKey(m[4].str()) != 0);
+            }
             True(key + " reads", readable);
+        }
+
+        // The holidays a companion can have: known ones, case ignored, in
+        // the order the game's are matched to.
+        {
+            True("holiday keys", PbpHolidayKeys().size() == 10 && PbpHolidayKey("winterveil") == 1 &&
+                                     PbpHolidayKey("Brewfest") == 7 && PbpHolidayKey("darkmoon") == 10 &&
+                                     PbpHolidayKey("christmas") == 0 && PbpHolidayKey("") == 0);
         }
 
         // Every Names line in the conf is one of the code's, word for word,

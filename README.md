@@ -193,16 +193,25 @@ Porkchop, a worm called Graboid. A random bot's hunter does the same:
   with.
 - Your own bots' pets are left alone.
 
-**Companions.** Most players carry a companion or two and have one trotting
-along. Random bots near you do too:
+**Companions.** Most players carry a companion or two, and some have one
+trotting along. Random bots near you do too:
 
 - **What they own:** most own a common one or two, bought from their side's
   pet sellers: Orgrimmar's snakes, Silvermoon's dragonhawks, Elwynn's cats,
   the Exodar's moths. A few collect them, more as they level: Booty Bay's
   parrots, drops like the Sprite Darter, the Argent Tournament's pets, and
   now and then a rare or promotional one.
-- **Having one out:** a bot that owns some usually has one out near you, on
-  foot and out of a fight.
+- **Only what fits their level:** each companion has the level where it's
+  had, so a level 20 has a pet seller's cat or a Deadmines macaw, not
+  something from Dalaran. A bot never has out one it couldn't have yet.
+- **Holidays:** Winter Veil's snowman and reindeer, Hallow's End's
+  squashling, Brewfest's wolpertinger and the rest come out far more while
+  their holiday is on, and about half the bots that own any pick one up.
+  Out of season they're rare.
+- **Having one out:** about 30% of the bots near you have one out, decided
+  again every half hour or so. One that's done with it puts it away.
+- **Swapping:** in a stretch with nothing on, about a third of those with
+  one out swap it for another they own, once.
 - **Never** in a dungeon, raid, battleground or arena.
 
 With mod-ollama-chat, a bot knows what its pet is called and what is

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <iterator>
 #include <sstream>
 
 bool PbpGlobMatch(std::string const& pattern, std::string const& text)
@@ -81,6 +82,30 @@ bool PbpSplitErrorLine(std::string const& line, std::vector<std::string>& names,
     }
     text = line.substr(mark + kMark.size());
     return true;
+}
+
+namespace
+{
+    // In this order: PlayerbotsPlusPets.cpp matches the game's holidays to it.
+    char const* const kHolidayKeys[] = { "winterveil",   "hallowsend", "midsummer",      "loveisintheair",
+                                         "noblegarden",  "childrensweek", "brewfest",    "pilgrimsbounty",
+                                         "lunarfestival", "darkmoon" };
+}
+
+uint8_t PbpHolidayKey(std::string const& key)
+{
+    std::string lower = key;
+    for (char& c : lower)
+        c = char(std::tolower(static_cast<unsigned char>(c)));
+    for (size_t i = 0; i < std::size(kHolidayKeys); ++i)
+        if (lower == kHolidayKeys[i])
+            return uint8_t(i + 1);
+    return 0;
+}
+
+std::vector<std::string> PbpHolidayKeys()
+{
+    return std::vector<std::string>(std::begin(kHolidayKeys), std::end(kHolidayKeys));
 }
 
 bool PbpParseSpotLine(std::string const& text, PbpSpotLine& out)

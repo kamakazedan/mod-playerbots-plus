@@ -14,13 +14,19 @@
 // when a player renames one (the same checks, the same one rename, the name
 // saved). Some never bother: Pets.NameChance of them do.
 //
-// Companions. Players carry a few non-combat pets and have one trotting
+// Companions. Players carry a few non-combat pets and some have one trotting
 // along: a cat from the Elwynn pet seller, a snake from Orgrimmar, a parrot
-// from Booty Bay, something rare that took a week to drop. A random bot near
-// a real player learns some of PlayerbotsPlus.Companions.Alliance / .Horde /
-// .Both, as suits its side and level (most own a common one or two, a few
-// collect the rare ones), and now and then has one out. Bots nobody can see
-// get nothing, and nothing is ever summoned in a dungeon or a battleground.
+// from Booty Bay, something rare that took a week to drop, a snowman at
+// Winter Veil. A random bot near a real player learns some of
+// PlayerbotsPlus.Companions.Alliance / .Horde / .Both: only what suits its
+// side and what is had at its level (most own a common one or two, a few
+// collect the rare ones; in a holiday, its own are on offer). About
+// Companions.OutChance of the bots near someone have one out, decided again
+// every half hour or so, and one that has not puts its companion away. A
+// holiday's own come out far more in their season. Once in a stretch with
+// nothing on, Companions.SwitchChance of those with one out swap it for
+// another they own. Bots nobody can see get nothing, and nothing is ever
+// summoned in a dungeon or a battleground.
 //
 // World thread only: the world tick.
 // --------------------------------------------------------------------------
@@ -36,6 +42,8 @@ struct PbpPetsStats
     uint64_t keptName    = 0;   // ...and left as they were tamed, by choice
     uint64_t learned     = 0;   // companions learned
     uint64_t summoned    = 0;   // companions brought out
+    uint64_t switched    = 0;   // ...swapped for another
+    uint64_t putAway     = 0;   // ...and put away
     uint32_t companions  = 0;   // in the list that could be read
     uint32_t badEntries  = 0;   // ...and ones that could not
 };

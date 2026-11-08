@@ -37,4 +37,11 @@ struct PbpSpotLine
 };
 bool PbpParseSpotLine(std::string const& text, PbpSpotLine& out);
 
+// The holidays a companion can belong to, as the conf names them
+// ("winterveil", "brewfest"): 1 and up for one of them, in a fixed order the
+// game's holiday ids are matched to (PlayerbotsPlusPets.cpp); 0 for anything
+// else. Case is ignored.
+uint8_t PbpHolidayKey(std::string const& key);
+std::vector<std::string> PbpHolidayKeys();
+
 #endif // PLAYERBOTS_PLUS_TEXT_H

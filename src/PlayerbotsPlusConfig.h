@@ -144,13 +144,16 @@ namespace pbp
         uint32_t minLevel = 1;    // where it comes from is not somewhere a lower level goes
         uint32_t weight   = 10;   // how common it is
         uint8_t  side     = 0;    // 0 both sides, 1 the Alliance, 2 the Horde
+        uint8_t  holiday  = 0;    // PbpHolidayKey of the holiday it comes from, 0 none
     };
     extern bool        g_CompanionsEnable;
     extern std::vector<PbpCompanionEntry> g_Companions;
     extern uint32_t    g_CompanionsOwnChance;         // of the random bots: own any at all
     extern uint32_t    g_CompanionsCollectorChance;   // of those: collect them, the rare ones too
     extern uint32_t    g_CompanionsCommonWeight;      // this weight and up is one anybody might have
-    extern uint32_t    g_CompanionsOutChance;         // has one out when somebody is about
+    extern uint32_t    g_CompanionsOutChance;         // of all the bots near someone: have one out
+    extern uint32_t    g_CompanionsSwitchChance;      // of those: swap it for another once in a stretch idle
+    extern uint32_t    g_CompanionsHolidayBoost;      // a holiday's own, in season: this many times as likely
     extern uint32_t    g_CompanionsCheckSeconds;
     extern float       g_CompanionsRange;             // from a real player
 
