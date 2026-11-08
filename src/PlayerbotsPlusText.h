@@ -37,6 +37,13 @@ struct PbpSpotLine
 };
 bool PbpParseSpotLine(std::string const& text, PbpSpotLine& out);
 
+// The city a hangout spot is in, from its name: what follows its last " in ",
+// else its last " of ", else "outside ", without a "the " in front ("outside
+// the bank in Thunder Bluff" -> "Thunder Bluff", "the main hall of the
+// Exodar" -> "Exodar", "the zeppelin tower outside Orgrimmar" ->
+// "Orgrimmar"). The whole name when none of those is in it.
+std::string PbpCityOf(std::string const& spotName);
+
 // The holidays a companion can belong to, as the conf names them
 // ("winterveil", "brewfest"): 1 and up for one of them, in a fixed order the
 // game's holiday ids are matched to (PlayerbotsPlusPets.cpp); 0 for anything

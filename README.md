@@ -13,6 +13,7 @@ their own words.
 | [The auction house](#the-auction-house) | Sell what they have no use for and buy upgrades, under their own names |
 | [City hangouts](#city-hangouts) | Gather where players do in the capitals: on a bench, mounted, or AFK |
 | [Stuck on a mount](#stuck-on-a-mount) | Stop getting on and off their mount at a herb they can't pick, and move on |
+| [Out of the fire](#out-of-the-fire) | Step out of a campfire or brazier that's burning them, instead of standing in it |
 | [Getting back up](#getting-back-up) | Release and run back when nobody in the group can resurrect them |
 | [Raid marks](#raid-marks) | Crowd-control their own mark and sap the star |
 | [Hunters' pets and companions](#hunters-pets-and-companions) | Name their hunter pets the way players do, and keep companions of their side and level |
@@ -97,8 +98,9 @@ NPC to NPC. With hangouts, they gather where players do.
   Switching hangouts off lets everyone go.
 
 Nothing happens while no real player is online. Every place a bot stands is
-checked to be on the spot's own floor, in sight of its middle and reachable on
-foot, so never under the city or on a roof.
+checked to be on the spot's own floor, in sight of its middle, reachable on
+foot and out of any fire, so never under the city, on a roof or in a brazier.
+`.pbp status` shows how full each city is.
 
 Settings: `PlayerbotsPlus.Hangout.*`.
 
@@ -122,6 +124,23 @@ and without fighting in between, takes the hint.
   and anyone else at the same thing.
 
 Settings: `PlayerbotsPlus.Stuck.*`.
+
+## Out of the fire
+
+A campfire, a bonfire or a brazier by a city's guards is a trap the game
+fires at whoever stands in it. Playerbots only steps out of one in a fight,
+and only for a bot with a real player as its master, so a random bot that
+stops by a guard to talk, or sits down to rest by a campfire, burns on the
+spot for as long as it stays there.
+
+- A random bot burned by one, out of any fight and not in a group, walks out
+  of it: away from the middle to just past its edge, onto ground it can walk
+  to, and not into the next fire.
+- One hanging out at a city spot takes that as its new place there.
+- One burned again within a minute is also sent off to do something else, so
+  it doesn't walk straight back to the guard it was talking to.
+
+Settings: `PlayerbotsPlus.Fire.*`.
 
 ## Getting back up
 
@@ -332,7 +351,7 @@ Copy `conf/mod_playerbots_plus.conf.dist` to your module config folder as
 
 | Command | What it does |
 |---|---|
-| `.pbp status` | What it's doing: the auction house, hangouts, stuck bots, revives, marks, pets, companions, duels and muted lines |
+| `.pbp status` | What it's doing: the auction house, hangouts (and how full each city is), stuck bots, fires, revives, marks, pets, companions, duels and muted lines |
 | `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |
 

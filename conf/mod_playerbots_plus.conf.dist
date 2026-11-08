@@ -6,10 +6,10 @@
 #
 #   Random bots doing what real players do, without an LLM: trading on the
 #   auction house, hanging out where players do in the cities, getting
-#   unstuck, getting back up after dying, using raid marks the way groups
-#   do, naming their hunter pets, keeping companions and duelling at the
-#   city gates; and the stock lines playerbots whispers that nobody needs,
-#   muted.
+#   unstuck, stepping out of fires, getting back up after dying, using raid
+#   marks the way groups do, naming their hunter pets, keeping companions
+#   and duelling at the city gates; and the stock lines playerbots whispers
+#   that nobody needs, muted.
 #   Works with mod-playerbots. mod-ollama-chat, when it is in the same build,
 #   has the bots talk about all of it in their own words; without it, they
 #   just do it.
@@ -30,7 +30,8 @@ PlayerbotsPlus.Enable = 1
 #    PlayerbotsPlus.Debug
 #        More of what the bots do, in the server log at INFO
 #        (module.playerbotsplus): each one heading over to a hangout, settling
-#        and leaving; a rogue's sap step by step; a dead bot released.
+#        and leaving; a bot stepping out of a fire; a rogue's sap step by
+#        step; a dead bot released.
 #        Default: 0
 PlayerbotsPlus.Debug = 0
 
@@ -354,18 +355,23 @@ PlayerbotsPlus.Hangout.RecruitRange = 300
 #    PlayerbotsPlus.Hangout.BringInPerMinute
 #    PlayerbotsPlus.Hangout.BringInMinLevel
 #    PlayerbotsPlus.Hangout.ArrivalRange
+#    PlayerbotsPlus.Hangout.InnArrivalSeconds
 #        Fetching bots from elsewhere for spots short of them (see above): on
 #        or off; how full (percent of each spot's room) it keeps them; how
 #        many bots a minute it may fetch, all spots together (at most 120);
-#        the lowest level it fetches; and how far from a spot (yards) an inn
-#        may be for its bots to arrive at while someone is in the city. A spot
-#        can still fill all the way up with bots already in town.
-#        Default: 1, 75, 15, 10, 400
+#        the lowest level it fetches; how far from a spot (yards) an inn may
+#        be for its bots to arrive at while someone is in the city; and, while
+#        someone is, how many seconds apart they come in at that city's inns
+#        (1 to 60), so it is people drifting in, not a crowd appearing at
+#        once. A spot can still fill all the way up with bots already in
+#        town.
+#        Default: 1, 75, 15, 10, 400, 5
 PlayerbotsPlus.Hangout.BringIn = 1
 PlayerbotsPlus.Hangout.BringInFill = 75
 PlayerbotsPlus.Hangout.BringInPerMinute = 15
 PlayerbotsPlus.Hangout.BringInMinLevel = 10
 PlayerbotsPlus.Hangout.ArrivalRange = 400
+PlayerbotsPlus.Hangout.InnArrivalSeconds = 5
 
 #    PlayerbotsPlus.Hangout.StayMinutesMin
 #    PlayerbotsPlus.Hangout.StayMinutesMax
@@ -508,6 +514,39 @@ PlayerbotsPlus.Stuck.IgnoreMinutes = 10
 #        every bot its mount. At most 120.
 #        Default: 10
 PlayerbotsPlus.Stuck.WalkMinutes = 10
+
+###############################################################################
+#
+#   OUT OF THE FIRE
+#
+#   A campfire, a bonfire or a brazier by a city's guards is a trap the game
+#   fires at whoever stands in it: a few points of fire damage every few
+#   seconds. Playerbots only steps out of one in a fight, and only for a bot
+#   with a real player as its master, so a random bot that stops by a guard
+#   to talk, or sits down to rest by a campfire, burns on the spot for as
+#   long as it stays there.
+#
+#   A random bot burned by one -- out of any fight, not in a group, with no
+#   real player as its master -- walks out of it: away from the middle,
+#   Margin yards or so past its edge (as far as the game's own trap reaches,
+#   or its spell's area if that is wider), onto ground it can walk to, in
+#   sight, and not into the next fire. One hanging out at a city spot takes
+#   that as its new place, and no hangout ever puts anyone in a fire. One
+#   burned again within a minute is also sent off to do something else, so
+#   it does not walk straight back to the guard it was talking to. With
+#   PlayerbotsPlus.Debug on, each one is logged.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Fire.Enable
+#        Default: 1
+PlayerbotsPlus.Fire.Enable = 1
+
+#    PlayerbotsPlus.Fire.Margin
+#        How far past the edge of a fire's reach (yards) a bot steps out to,
+#        give or take a yard and a half. 0.5 to 5.
+#        Default: 1.5
+PlayerbotsPlus.Fire.Margin = 1.5
 
 ###############################################################################
 #

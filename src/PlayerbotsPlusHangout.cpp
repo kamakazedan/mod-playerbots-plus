@@ -1,5 +1,7 @@
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusFire.h"
+#include "PlayerbotsPlusText.h"
 #include "PlayerbotsPlusUtil.h"
 
 #include "CellImpl.h"
@@ -354,6 +356,9 @@ namespace
                                       VMAP::ModelIgnoreFlags::Nothing))
                 continue;
             if (Taken(s.key, x, y, 2.5f))
+                continue;
+            // Not in a campfire or a brazier: nobody stands in one for half an hour.
+            if (PbpFire_Burns(bot, x, y, z, 1.0f))
                 continue;
 
             ++paths;
@@ -743,7 +748,8 @@ namespace
                     // Someone in the city sees them come in at its inns: not a
                     // stream of them, one every so often, whichever spot.
                     if (watched)
-                        g_cityNextFetch[WatchKey(s->map, zone)] = now + std::chrono::seconds(8);
+                        g_cityNextFetch[WatchKey(s->map, zone)] =
+                            now + std::chrono::seconds(g_HangoutInnArrivalSeconds);
                     break;
                 }
             }
@@ -1340,6 +1346,72 @@ PbpHangoutStats PbpHangout_GetStats()
             ++s.onTheWay;
     }
     return s;
+}
+
+PbpHangoutFire PbpHangout_OutOfFire(Player* bot, float x, float y, float z)
+{
+    if (!bot || g_visits.empty())
+        return PbpHangoutFire::NotHere;
+    auto it = g_visits.find(bot->GetGUID().GetRawValue());
+    if (it == g_visits.end())
+        return PbpHangoutFire::NotHere;
+    Visit& v = it->second;
+    if (v.phase == Phase::Duelling)
+        return PbpHangoutFire::NotHere;
+    if (v.phase == Phase::Arriving || v.phase == Phase::Travel)
+        return PbpHangoutFire::OnItsWay;
+    PlayerbotAI* ai = AiOf(bot);
+    if (!ai)
+        return PbpHangoutFire::NotHere;
+
+    // Its place from now on. Back at the keyboard to get out of the fire,
+    // and away again once it is there, if it was (Hold).
+    v.x = x;
+    v.y = y;
+    v.z = z;
+    if (v.afkSet && bot->isAFK())
+        bot->ToggleAFK();
+    v.afkSet  = false;
+    v.holding = false;
+    if (bot->IsSitState())
+        bot->SetStandState(UNIT_STAND_STATE_STAND);
+    if (v.posture == Posture::Bench)
+    {
+        v.posture = Posture::Sit;   // the bench is in it: on the ground nearby instead
+        v.bench   = ObjectGuid::Empty;
+    }
+    v.phase         = Phase::Approach;
+    v.approachStart = Clock::now();
+    ai->SetNextCheckDelay(kHoldMs);
+    bot->GetMotionMaster()->MovePoint(kPointId, x, y, z);
+    return PbpHangoutFire::Moved;
+}
+
+std::vector<PbpHangoutCity> PbpHangout_Cities()
+{
+    std::vector<PbpHangoutCity> cities;
+    std::unordered_map<std::string, size_t> byName;
+    std::unordered_map<std::string, size_t> bySpot;
+    for (PbpHangoutSpot const& s : g_HangoutSpots)
+    {
+        const std::string city = PbpCityOf(s.name.empty() ? s.key : s.name);
+        auto [at, fresh] = byName.emplace(city, cities.size());
+        if (fresh)
+            cities.push_back({ city, 0, 0, 0 });
+        cities[at->second].room += s.capacity;
+        bySpot[s.key] = at->second;
+    }
+    for (const auto& [guid, v] : g_visits)
+    {
+        auto at = bySpot.find(v.spotKey);
+        if (at == bySpot.end())
+            continue;
+        if (v.phase == Phase::Settled || v.phase == Phase::Duelling)
+            ++cities[at->second].there;
+        else
+            ++cities[at->second].onTheWay;
+    }
+    return cities;
 }
 
 void PbpHangout_At(const std::string& spotKey, std::vector<Player*>& settled, uint32_t& duelling)

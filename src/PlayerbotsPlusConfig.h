@@ -103,6 +103,7 @@ namespace pbp
     extern uint32_t    g_HangoutBringInPerMinute;
     extern uint32_t    g_HangoutBringInMinLevel;
     extern float       g_HangoutArrivalRange;
+    extern uint32_t    g_HangoutInnArrivalSeconds;   // one arrival at a city's inns per this, while someone is there
 
     // Stuck on a mount (PlayerbotsPlusStuck)
     extern bool        g_StuckEnable;
@@ -111,6 +112,10 @@ namespace pbp
     extern float       g_StuckRadius;
     extern uint32_t    g_StuckIgnoreMinutes;
     extern uint32_t    g_StuckWalkMinutes;
+
+    // Out of the fire (PlayerbotsPlusFire)
+    extern bool        g_FireEnable;
+    extern float       g_FireMargin;
 
     // Getting back up (PlayerbotsPlusRevive)
     extern bool        g_ReviveEnable;

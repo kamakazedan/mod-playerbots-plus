@@ -38,6 +38,7 @@ namespace pbp
     uint32_t    g_HangoutBringInPerMinute = 15;
     uint32_t    g_HangoutBringInMinLevel  = 10;
     float       g_HangoutArrivalRange     = 400.0f;
+    uint32_t    g_HangoutInnArrivalSeconds = 5;
 
     bool        g_StuckEnable             = true;
     uint32_t    g_StuckMountCount         = 4;
@@ -45,6 +46,8 @@ namespace pbp
     float       g_StuckRadius             = 6.0f;
     uint32_t    g_StuckIgnoreMinutes      = 10;
     uint32_t    g_StuckWalkMinutes        = 10;
+    bool        g_FireEnable              = true;
+    float       g_FireMargin              = 1.5f;
 
     bool        g_ReviveEnable              = true;
     uint32_t    g_ReviveReleaseDelaySeconds = 5;
@@ -248,6 +251,7 @@ namespace
         g_HangoutBringInPerMinute = std::min<uint32_t>(120, U("PlayerbotsPlus.Hangout.BringInPerMinute", 15));
         g_HangoutBringInMinLevel  = std::clamp<uint32_t>(U("PlayerbotsPlus.Hangout.BringInMinLevel", 10), 1, 80);
         g_HangoutArrivalRange     = std::clamp(F("PlayerbotsPlus.Hangout.ArrivalRange", 400.0f), 0.0f, 1000.0f);
+        g_HangoutInnArrivalSeconds = std::clamp<uint32_t>(U("PlayerbotsPlus.Hangout.InnArrivalSeconds", 5), 1, 60);
 
         g_HangoutSpots.clear();
         std::string bad;
@@ -291,6 +295,9 @@ namespace
         g_StuckRadius        = std::max(1.0f, F("PlayerbotsPlus.Stuck.Radius", 6.0f));
         g_StuckIgnoreMinutes = std::max<uint32_t>(1, U("PlayerbotsPlus.Stuck.IgnoreMinutes", 10));
         g_StuckWalkMinutes   = std::min<uint32_t>(120, U("PlayerbotsPlus.Stuck.WalkMinutes", 10));
+
+        g_FireEnable = B("PlayerbotsPlus.Fire.Enable", true);
+        g_FireMargin = std::clamp(F("PlayerbotsPlus.Fire.Margin", 1.5f), 0.5f, 5.0f);
 
         g_ReviveEnable              = B("PlayerbotsPlus.Revive.Enable", true);
         g_ReviveReleaseDelaySeconds = U("PlayerbotsPlus.Revive.ReleaseDelaySeconds", 5);
@@ -641,9 +648,9 @@ void PlayerbotsPlus_LoadConfig(bool reload)
         places += spot.capacity;
     LOG_INFO(where,
              "[Playerbots Plus] City hangouts {} ({} spots, room for {}; fetched from elsewhere {}), stuck mounts {}, "
-             "getting back up {}, raid marks {} (sapping the star {}).",
+             "out of fires {}, getting back up {}, raid marks {} (sapping the star {}).",
              pbp::g_HangoutEnable ? "on" : "off", pbp::g_HangoutSpots.size(), places,
-             pbp::g_HangoutBringIn ? "on" : "off", pbp::g_StuckEnable ? "on" : "off",
+             pbp::g_HangoutBringIn ? "on" : "off", pbp::g_StuckEnable ? "on" : "off", pbp::g_FireEnable ? "on" : "off",
              pbp::g_ReviveEnable ? "on" : "off", pbp::g_MarksEnable ? "on" : "off",
              pbp::g_MarksSapStar ? "on" : "off");
 

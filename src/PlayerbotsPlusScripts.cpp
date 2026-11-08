@@ -1,5 +1,6 @@
 #include "PlayerbotsPlusConfig.h"
 #include "PlayerbotsPlusDuels.h"
+#include "PlayerbotsPlusFire.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlusMarketPrice.h"
@@ -40,9 +41,11 @@ namespace
         void OnUpdate(uint32 diff) override
         {
             // These two also run with the module switched off: they let go
-            // whoever they are holding (sat down, AFK, kept on foot).
+            // whoever they are holding (sat down, AFK, kept on foot). The
+            // fires' notes are taken either way, so none pile up.
             PbpHangout_Update(diff);
             PbpStuck_Update(diff);
+            PbpFire_Update(diff);
             if (!g_Pbp.enable)
                 return;
             PbpMarket_Update(diff);
@@ -131,6 +134,12 @@ namespace
                                      onOff(pbp::g_HangoutEnable), h.hanging, h.away, h.onTheWay, h.spots, h.withInn,
                                      h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.movedOn, h.cutShort,
                                      h.cameBack);
+            std::string cities;
+            for (PbpHangoutCity const& c : PbpHangout_Cities())
+                if (c.there || c.onTheWay)
+                    cities += fmt::format("{}{} {} of {}{}", cities.empty() ? "" : ", ", c.name, c.there, c.room,
+                                          c.onTheWay ? fmt::format(" ({} on the way)", c.onTheWay) : std::string());
+            handler->PSendSysMessage("Hanging out by city: {}.", cities.empty() ? std::string("nobody yet") : cities);
 
             PbpStuckStats const k = PbpStuck_GetStats();
             handler->PSendSysMessage("Stuck on a mount: {} - {} mounts noted, {} bots stuck ({} kept off what they "
@@ -138,6 +147,12 @@ namespace
                                      "foot now.",
                                      onOff(pbp::g_StuckEnable), k.mounts, k.stuck, k.hinted, k.nothing, k.walked,
                                      k.holding, k.walking);
+
+            PbpFireStats const f = PbpFire_GetStats();
+            handler->PSendSysMessage("Out of the fire: {} - {} bots burned standing in a fire, {} walked out ({} of "
+                                     "them hanging out, given a new place; {} burned again within a minute and sent "
+                                     "off to do something else), {} with nowhere to step to.",
+                                     onOff(pbp::g_FireEnable), f.burns, f.stepped, f.moved, f.sentOn, f.nowhere);
 
             PbpReviveStats const r = PbpRevive_GetStats();
             handler->PSendSysMessage("Getting back up: {} - {} released, {} ran back in, {} stopped waiting for a "
@@ -217,5 +232,6 @@ void Addmod_playerbots_plusScripts()
     new PlayerbotsPlusAuctionScript();
     new PlayerbotsPlusCommandScript();
     new PbpStuckScript();
+    new PbpFireScript();
     new PbpMuteScript();
 }

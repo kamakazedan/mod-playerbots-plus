@@ -276,6 +276,41 @@ int main(int argc, char** argv)
         True("conf spots are the code's", same == 19);
     }
 
+    // ---- the city a spot is in ----------------------------------------------------------
+    {
+        EqS("city after in", PbpCityOf("the Trade District in Stormwind"), "Stormwind");
+        EqS("city of two words", PbpCityOf("outside the bank in Thunder Bluff"), "Thunder Bluff");
+        EqS("city after of", PbpCityOf("outside the gates of Orgrimmar"), "Orgrimmar");
+        EqS("city after outside", PbpCityOf("the zeppelin tower outside Orgrimmar"), "Orgrimmar");
+        EqS("city without the", PbpCityOf("the main hall of the Exodar"), "Exodar");
+        EqS("the last in", PbpCityOf("the Valley of Honor in Orgrimmar"), "Orgrimmar");
+        EqS("the Undercity", PbpCityOf("the Trade Quarter in the Undercity"), "Undercity");
+        EqS("an apostrophe", PbpCityOf("Krasus' Landing in Dalaran"), "Dalaran");
+        EqS("no marker", PbpCityOf("Goldshire"), "Goldshire");
+        EqS("nothing after it", PbpCityOf("something in "), "something in ");
+
+        // Every spot the conf ships is in a city by that name.
+        const std::vector<std::string> known = { "Stormwind", "Ironforge", "Orgrimmar", "Undercity", "Thunder Bluff",
+                                                 "Darnassus", "Exodar", "Silvermoon", "Shattrath", "Dalaran" };
+        std::istringstream in(conf);
+        std::string text;
+        int spots = 0, named = 0;
+        while (std::getline(in, text))
+        {
+            if (text.rfind("PlayerbotsPlus.Hangout.Spot.", 0) != 0)
+                continue;
+            ++spots;
+            const size_t q1 = text.find('"'), q2 = text.rfind('"');
+            PbpSpotLine s;
+            if (q1 != std::string::npos && q2 > q1 && PbpParseSpotLine(text.substr(q1 + 1, q2 - q1 - 1), s) &&
+                std::find(known.begin(), known.end(), PbpCityOf(s.name)) != known.end())
+                ++named;
+            else
+                std::printf("   no city: %s\n", text.c_str());
+        }
+        True("every conf spot has its city", spots > 0 && named == spots);
+    }
+
     // ---- hunters' pet names and companions: what the conf ships is the code's --------
     {
         for (char const* side : { "Alliance", "Horde", "Both" })

@@ -19,10 +19,13 @@ it is safe to touch a bot's `Player`, its inventory, its mail and its
 playerbots AI. Do not add threads. Do not call into this module from a map
 thread or a packet hook.
 
-Two hooks are the exception, and they touch nothing of the world:
+Three hooks are the exception, and they touch nothing of the world:
 
 - `PbpStuckScript::OnAuraApply` runs on map threads. It only notes the mount
   under a mutex; the world tick looks at the notes.
+- `PbpFireScript::OnDamage` runs on map threads. It only notes who was burned
+  by damage nobody dealt (a trap of the world's own) under a mutex; the world
+  tick finds the fire and walks the bot out of it.
 - `PbpMuteScript::CanPacketSend` runs on whatever thread sends the packet. It
   reads only a snapshot (patterns and bot guids) published from the world
   thread, and `PlayerbotsPlus::OwnLine` is a thread-local counter.

@@ -127,3 +127,20 @@ bool PbpParseSpotLine(std::string const& text, PbpSpotLine& out)
     out = std::move(line);
     return true;
 }
+
+std::string PbpCityOf(std::string const& spotName)
+{
+    std::string city = spotName;
+    for (std::string const& mark : { std::string(" in "), std::string(" of "), std::string("outside ") })
+    {
+        const size_t at = spotName.rfind(mark);
+        if (at != std::string::npos && at + mark.size() < spotName.size())
+        {
+            city = spotName.substr(at + mark.size());
+            break;
+        }
+    }
+    if (city.size() > 4 && (city.rfind("the ", 0) == 0 || city.rfind("The ", 0) == 0))
+        city = city.substr(4);
+    return city;
+}
