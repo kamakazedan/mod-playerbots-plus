@@ -1,4 +1,5 @@
 #include "PlayerbotsPlus.h"
+#include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusMute.h"
 #include "PlayerbotsPlusUtil.h"
@@ -48,6 +49,16 @@ namespace PlayerbotsPlus
     bool UsingBench()
     {
         return PbpHangout_UsingBench();
+    }
+
+    bool CanGoDuel(Player* a, Player* b, std::string& where)
+    {
+        return PbpDuels_CanGo(a, b, where);
+    }
+
+    bool GoDuel(Player* a, Player* b)
+    {
+        return PbpDuels_Go(a, b);
     }
 
     void AddBotEventListener(BotEventListener listener)

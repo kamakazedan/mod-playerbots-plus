@@ -107,6 +107,7 @@ namespace
         Clock::time_point landedAt{};         // fetched: when it was first seen in the city
         Clock::time_point nextTry{};          // ...and when it next looks for room
         Clock::time_point duelOver{};         // its duel ended (Duelling)
+        bool              forDuel   = false;  // sent out to the gates to fight someone (PbpHangout_SendToDuel)
         bool              broughtIn = false;  // fetched from elsewhere (Hangout.BringIn)...
         bool              viaInn    = false;  // ...in at an inn, to walk over from
         uint32_t          fromMap   = 0;      // ...from here
@@ -993,7 +994,8 @@ namespace
     {
         ai->rpgInfo.ChangeToRest();
         ai->SetNextCheckDelay(kHoldMs);
-        GameObject* bench = Roll(g_HangoutBenchChance) ? FindBench(bot, v) : nullptr;
+        // Come out to fight someone: on its feet, at the keyboard, ready.
+        GameObject* bench = !v.forDuel && Roll(g_HangoutBenchChance) ? FindBench(bot, v) : nullptr;
         if (bench)
         {
             v.posture = Posture::Bench;
@@ -1002,13 +1004,13 @@ namespace
             v.by      = bench->GetPositionY();
             v.bz      = bench->GetPositionZ();
         }
-        else if (CanRide(bot, ai) && Roll(g_HangoutMountedChance))
+        else if (!v.forDuel && CanRide(bot, ai) && Roll(g_HangoutMountedChance))
             v.posture = Posture::Mounted;
-        else if (Roll(g_HangoutSitChance))
+        else if (!v.forDuel && Roll(g_HangoutSitChance))
             v.posture = Posture::Sit;
         else
             v.posture = Posture::Stand;
-        v.wantsAfk      = Roll(g_HangoutAfkChance);
+        v.wantsAfk      = !v.forDuel && Roll(g_HangoutAfkChance);
         v.phase         = Phase::Approach;
         v.approachStart = now;
         if (v.posture == Posture::Bench)
@@ -1428,6 +1430,85 @@ PbpHangoutStats PbpHangout_GetStats()
             ++s.onTheWay;
     }
     return s;
+}
+
+bool PbpHangout_SendToDuel(Player* bot, const std::string& spotKey)
+{
+    if (!bot || !g_Pbp.enable || !g_HangoutEnable)
+        return false;
+    PbpHangoutSpot const* s = SpotByKey(spotKey);
+    PlayerbotAI* ai = AiOf(bot);
+    // (Playerbots' "go camp", which walks it there, is part of its "new rpg".)
+    if (!s || !ai || !ai->IsBotAI() || ai->GetMaster() || !sRandomPlayerbotMgr.IsRandomBot(bot) ||
+        !ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT) || Wanted(bot) || !bot->IsInWorld() ||
+        bot->IsBeingTeleported() || bot->GetMapId() != s->map || bot->IsInFlight() || bot->GetVehicle())
+        return false;
+    const auto now = Clock::now();
+    const uint64_t raw = bot->GetGUID().GetRawValue();
+    if (auto it = g_visits.find(raw); it != g_visits.end())
+    {
+        if (it->second.phase == Phase::Arriving || it->second.phase == Phase::Duelling)
+            return false;   // landing, or in a duel already
+        // Done with how it was there: up on its feet and back at the keyboard.
+        Let(bot, ai, it->second, false, now);
+        g_visits.erase(it);
+    }
+    g_cooldown.erase(raw);
+    if (!Send(bot, ai, *s, now))
+        return false;
+    g_visits[raw].forDuel = true;
+    if (g_PbpDebug)
+        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} heads out to {} for a duel.", bot->GetName(), s->name);
+    return true;
+}
+
+void PbpHangout_MakeRoom(const std::string& spotKey, uint32_t count, const std::vector<uint64_t>& keep)
+{
+    PbpHangoutSpot const* s = SpotByKey(spotKey);
+    if (!s || !count)
+        return;
+    const auto kept = [&keep](uint64_t guid) { return std::find(keep.begin(), keep.end(), guid) != keep.end(); };
+    uint32_t there = 0;
+    std::vector<uint64_t> settled;
+    for (const auto& [guid, v] : g_visits)
+    {
+        if (v.spotKey != spotKey || kept(guid))
+            continue;
+        ++there;
+        if (v.phase == Phase::Settled && !v.forDuel)
+            settled.push_back(guid);
+    }
+    if (there + count <= s->capacity)
+        return;
+    uint32_t over = there + count - s->capacity;
+    std::shuffle(settled.begin(), settled.end(), Rng());
+    const auto now = Clock::now();
+    for (uint64_t guid : settled)
+    {
+        if (!over)
+            break;
+        auto it = g_visits.find(guid);
+        Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+        if (it == g_visits.end() || !bot || !bot->IsInWorld())
+            continue;   // gone: the tick tidies it up
+        PlayerbotAI* ai = AiOf(bot);
+        ++g_stats.movedOn;
+        Let(bot, ai, it->second, true, now);
+        const bool back = it->second.broughtIn && SendBack(bot, ai, it->second);
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} heads off from {} to make room for a duel{}.",
+                     bot->GetName(), it->second.spotName, back ? ", back where it came from" : "");
+        g_visits.erase(it);
+        --over;
+    }
+}
+
+bool PbpHangout_SettledAt(Player* bot, const std::string& spotKey)
+{
+    if (!bot || g_visits.empty())
+        return false;
+    auto it = g_visits.find(bot->GetGUID().GetRawValue());
+    return it != g_visits.end() && it->second.spotKey == spotKey && it->second.phase == Phase::Settled;
 }
 
 PbpHangoutMove PbpHangout_MoveTo(Player* bot, float x, float y, float z)

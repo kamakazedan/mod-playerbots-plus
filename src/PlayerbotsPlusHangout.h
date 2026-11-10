@@ -96,6 +96,23 @@ enum class PbpHangoutMove : uint8_t
 };
 PbpHangoutMove PbpHangout_MoveTo(Player* bot, float x, float y, float z);
 
+// Sends `bot` out to the duel spot `spotKey` to fight someone there
+// (PlayerbotsPlusDuels): whatever it was doing -- a visit to another spot,
+// or to this one -- ends, and it walks over now and stands there, not sat,
+// mounted or AFK. False when it cannot: not a bot that may hang out, wanted,
+// not on the spot's map, or nowhere to stand there just now.
+bool PbpHangout_SendToDuel(Player* bot, const std::string& spotKey);
+
+// Room at a spot for `count` more: if the crowd there (none of `keep`
+// counted) would be over its room with them, that many of those settled
+// there -- not in a duel, not on their way to one -- go about their
+// business.
+void PbpHangout_MakeRoom(const std::string& spotKey, uint32_t count, const std::vector<uint64_t>& keep);
+
+// Settled at `spotKey` right now: standing about there, not on its way, not
+// in a duel.
+bool PbpHangout_SettledAt(Player* bot, const std::string& spotKey);
+
 // How full each city is: its spots taken together, by the city their names
 // end with ("outside the bank in Thunder Bluff" -> "Thunder Bluff").
 struct PbpHangoutCity

@@ -288,6 +288,14 @@ runs, so bots never did. Now they do it there, and nowhere else:
 - **You:** set `Duels.ChallengePlayerChance` and now and then one of them
   challenges you while you're standing about at the gates, at most once
   every 10 minutes. It's off by default.
+- **Talked into one:** with mod-ollama-chat, two bots chatting in the city
+  may talk themselves into a duel. Only two of a side within 5 levels, near
+  enough to walk out to the gates (as far as the gates take their crowd
+  from, `Hangout.ArrivalRange`), are ever offered it. When they've said
+  their piece, both walk out to the gates, and once both are there one
+  challenges the other as soon as there's room for another duel. If the
+  crowd there is full, two of it head off to make room for them.
+  (`PlayerbotsPlus::CanGoDuel` and `GoDuel` in `PlayerbotsPlus.h`.)
 
 To add a spot, add a hangout spot just outside a gate and put its name in
 `Duels.Spots`. A spot inside a city is refused, because the game allows no
@@ -327,7 +335,9 @@ Settings: `PlayerbotsPlus.Mute.*`.
   - A bot that was stuck on its mount knows it, and may laugh it off.
   - A rogue that can't sap the star says why in party.
   - A hunter knows its pet's name, and any bot knows what companion is
-    following it, when someone asks or coos over it. Duels get a gg.
+    following it, when someone asks or coos over it. Duels get a gg, and two
+    bots chatting in the city may talk themselves into one and walk out to
+    the gates to fight it out.
   - It says much of the rest in its own words too: "Staying", "Following",
     hello when it joins a group, a quest objective done. Mute playerbots' own
     lines for those with the longer list in the conf's `MUTED BOT LINES`

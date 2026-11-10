@@ -944,6 +944,15 @@ PlayerbotsPlus.Companions.Both = "11026:10:4:darkmoon|11027:10:4:darkmoon|11110:
 #   A spot has to be somewhere the game allows duels, which is not inside a
 #   city: one that is not is said in the log and left alone.
 #
+#   With mod-ollama-chat, two bots chatting in the city may also talk
+#   themselves into a duel -- only two of a side, of MinLevel or more and
+#   within LevelGap of each other, near enough to walk out to a spot (as far
+#   as one outside the gates takes its crowd from, Hangout.ArrivalRange) are
+#   ever offered it. When they have said their piece both walk out to the
+#   spot, and once both are there one challenges the other as soon as the
+#   spot has room for another duel (MaxAtOnce), watched or not. If the crowd
+#   there is at its room, two of it head off to make room for them.
+#
 ###############################################################################
 
 #    PlayerbotsPlus.Duels.Enable

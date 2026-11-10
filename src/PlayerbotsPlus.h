@@ -28,8 +28,8 @@
 
 class Player;
 
-// 1: the market. 2: hangouts, bot events and OwnLine.
-#define PLAYERBOTS_PLUS_API_VERSION 2
+// 1: the market. 2: hangouts, bot events and OwnLine. 3: duels talked into.
+#define PLAYERBOTS_PLUS_API_VERSION 3
 
 namespace PlayerbotsPlus
 {
@@ -84,6 +84,22 @@ namespace PlayerbotsPlus
     // True while a hanging-out bot is sitting down on a bench on this thread,
     // so "someone used an object" does not count as news. Any thread.
     bool UsingBench();
+
+    // ---- Duels at the city gates (PlayerbotsPlus.Duels.*)
+
+    // Whether two bots could go out to the gates and duel there, now: two of
+    // playerbots' random bots of a side, both of Duels.MinLevel or more and
+    // within Duels.LevelGap of each other, on their own and free, near a duel
+    // spot (Duels.Spots) they could walk out to. `where`, for a prompt: the
+    // spot's name ("outside the gates of Stormwind"). A chat module that has
+    // two bots talk themselves into a duel asks this first.
+    bool CanGoDuel(Player* a, Player* b, std::string& where);
+
+    // ...and once they have: both walk out to the spot, and when both are
+    // there one challenges the other, and they fight it out like the crowd
+    // there does. If the crowd is at its room, two of it head off to make
+    // room. False when they cannot go after all.
+    bool GoDuel(Player* a, Player* b);
 
     // ---- What bots did, for a chat module to have them say
 

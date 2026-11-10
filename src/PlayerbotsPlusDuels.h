@@ -2,6 +2,9 @@
 #define PLAYERBOTS_PLUS_DUELS_H
 
 #include <cstdint>
+#include <string>
+
+class Player;
 
 // --------------------------------------------------------------------------
 // Duels at the city gates.
@@ -28,10 +31,27 @@
 // a real player standing about there, as people at the gates do; each one
 // at most once in Duels.ChallengePlayerMinutes.
 //
+// Two bots that talk themselves into a duel somewhere in the city (the chat
+// module, through PlayerbotsPlus::GoDuel) walk out to the gates and fight it
+// out there: once both are at the spot, one challenges the other, as soon as
+// the spot has room for one more duel (Duels.MaxAtOnce). If the crowd there
+// is at its room, two of it head off to make room for them.
+//
 // World thread only: the world tick.
 // --------------------------------------------------------------------------
 
 void PbpDuels_Update(uint32_t diff);
+
+// Whether two bots could go out to a duel spot and duel there, now: two of
+// playerbots' random bots of a side, both of Duels.MinLevel or more and
+// within Duels.LevelGap of each other, on their own and free, not just out
+// of a duel, on the map of a duel spot and near enough to walk out to it (as
+// far as a spot outside the gates takes its crowd from). `where`: the spot's
+// name ("outside the gates of Stormwind").
+bool PbpDuels_CanGo(Player* a, Player* b, std::string& where);
+
+// They go (see above). False when they cannot after all.
+bool PbpDuels_Go(Player* a, Player* b);
 
 struct PbpDuelsStats
 {
@@ -39,6 +59,10 @@ struct PbpDuelsStats
     uint64_t asked      = 0;   // ...of those, to a real player
     uint64_t gaveUp     = 0;   // never got to it: one moved off, a fight, too far
     uint32_t walking    = 0;   // on the way to the one it challenges, now
+    uint64_t pacts      = 0;   // pairs that talked themselves into a duel, sent out to the gates
+    uint64_t pactsHeld  = 0;   // ...that got there and had it out
+    uint64_t pactsLost  = 0;   // ...that never did: one went off, or did not get there in time
+    uint32_t pactsNow   = 0;   // on their way, or waiting for room, now
 };
 PbpDuelsStats PbpDuels_GetStats();
 

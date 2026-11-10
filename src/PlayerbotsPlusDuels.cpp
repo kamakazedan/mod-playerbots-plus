@@ -11,8 +11,11 @@
 #include "Player.h"
 #include "SpellAuraDefines.h"
 
+#include "PlayerbotAI.h"
+#include "PlayerbotMgr.h"
 #include "RandomPlayerbotMgr.h"
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <unordered_map>
@@ -41,6 +44,17 @@ namespace
         Clock::time_point nextStep{};
     };
     std::vector<Walk> g_walks;
+
+    // Two that talked themselves into a duel (PlayerbotsPlus::GoDuel), on
+    // their way out to the spot, or waiting there for room.
+    struct Pact
+    {
+        uint64_t          a = 0;
+        uint64_t          b = 0;
+        std::string       spotKey;
+        Clock::time_point until{};
+    };
+    std::vector<Pact> g_pacts;
     std::unordered_map<uint64_t, Clock::time_point> g_cooldown;   // a bot duels again from then
     std::unordered_map<uint64_t, Clock::time_point> g_asked;      // a real player is challenged again from then
     std::unordered_set<std::string> g_noDuels;                    // spots the game allows no duels at: said once
@@ -73,6 +87,14 @@ namespace
         return false;
     }
 
+    bool Pledged(uint64_t guid)
+    {
+        for (Pact const& p : g_pacts)
+            if (p.a == guid || p.b == guid)
+                return true;
+        return false;
+    }
+
     uint32_t WalksAt(std::string const& spotKey)
     {
         uint32_t n = 0;
@@ -94,9 +116,9 @@ namespace
                !p->GetGroupInvite() && !p->IsInFlight() && !p->GetVehicle();
     }
 
-    // One of the crowd at the gates that could duel now: not AFK, its health
-    // and mana up, not just out of one.
-    bool Free(Player* bot, Clock::time_point now)
+    // Ready to fight: not AFK, its health and mana up, where the game allows
+    // a duel.
+    bool Fit(Player* bot)
     {
         if (!Unbusy(bot) || bot->GetGroup() || bot->isAFK() || bot->GetLevel() < g_DuelsMinLevel ||
             !sRandomPlayerbotMgr.IsRandomBot(bot))
@@ -105,11 +127,18 @@ namespace
             return false;
         if (bot->getPowerType() == POWER_MANA && bot->GetPowerPct(POWER_MANA) < 80.0f)
             return false;
-        if (!DuelsAllowedIn(bot->GetAreaId()))
+        return DuelsAllowedIn(bot->GetAreaId());
+    }
+
+    // One of the crowd at the gates that could duel now: fit, not just out
+    // of one, and not come out to fight someone in particular.
+    bool Free(Player* bot, Clock::time_point now)
+    {
+        if (!Fit(bot))
             return false;
         const uint64_t guid = bot->GetGUID().GetRawValue();
         auto cd = g_cooldown.find(guid);
-        return (cd == g_cooldown.end() || now >= cd->second) && !Walking(guid);
+        return (cd == g_cooldown.end() || now >= cd->second) && !Walking(guid) && !Pledged(guid);
     }
 
     // Off a mount and up off the ground: a duel starts on foot.
@@ -206,6 +235,69 @@ namespace
             it = done ? g_walks.erase(it) : std::next(it);
         }
         g_stats.walking = uint32_t(g_walks.size());
+    }
+
+    // Twice a second: the pairs that talked themselves into a duel. Once
+    // both are standing at the spot, and it has room for one more duel, one
+    // goes over to the other and challenges it.
+    void KeepPacts(Clock::time_point now)
+    {
+        for (auto it = g_pacts.begin(); it != g_pacts.end();)
+        {
+            Player* a = ObjectAccessor::FindConnectedPlayer(ObjectGuid(it->a));
+            Player* b = ObjectAccessor::FindConnectedPlayer(ObjectGuid(it->b));
+            bool done = false;
+            if (!a || !b || now >= it->until)
+            {
+                ++g_stats.pactsLost;
+                done = true;
+                if (g_PbpDebug)
+                    LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Duels: a pair never got to fight at {}.",
+                             it->spotKey);
+            }
+            else if (PbpHangout_SettledAt(a, it->spotKey) && PbpHangout_SettledAt(b, it->spotKey) && Fit(a) &&
+                     Fit(b))
+            {
+                std::vector<Player*> crowd;
+                uint32_t duelling = 0;
+                PbpHangout_At(it->spotKey, crowd, duelling);
+                if ((duelling + 1) / 2 + WalksAt(it->spotKey) < g_DuelsMaxAtOnce)
+                {
+                    if (Roll(50))
+                        std::swap(a, b);   // either one goes over
+                    Start(a, b, false, it->spotKey, now);
+                    ++g_stats.pactsHeld;
+                    done = true;
+                }
+            }
+            it = done ? g_pacts.erase(it) : std::next(it);
+        }
+        g_stats.pactsNow = uint32_t(g_pacts.size());
+    }
+
+    // A duel spot on `p`'s map near enough to walk out to: as far as one
+    // outside the gates takes its crowd from (Hangout.ArrivalRange). The
+    // nearest; null when there is none, or the game allows no duels there.
+    PbpHangoutSpot const* DuelSpotNear(Player* p)
+    {
+        const float reach = std::max(g_HangoutArrivalRange, 150.0f) + 50.0f;
+        PbpHangoutSpot const* best = nullptr;
+        float bestDist = reach;
+        for (PbpHangoutSpot const& s : g_HangoutSpots)
+        {
+            // (Its ground has to be loaded to find them a place there: the
+            // crowd at the gates keeps it so.)
+            if (!s.capacity || s.map != p->GetMapId() || !DuelSpot(s.key) || g_noDuels.count(s.key) ||
+                !p->GetMap()->IsGridLoaded(s.x, s.y))
+                continue;
+            const float d = p->GetExactDist2d(s.x, s.y);
+            if (d <= bestDist)
+            {
+                bestDist = d;
+                best = &s;
+            }
+        }
+        return best;
     }
 
     // Someone standing about at the gates, not busy, and not asked lately:
@@ -315,15 +407,72 @@ namespace
 
 void PbpDuels_Update(uint32_t /*diff*/)
 {
-    if (!g_DuelsEnable || !g_HangoutEnable)
+    if (!g_Pbp.enable || !g_DuelsEnable || !g_HangoutEnable)
     {
         g_walks.clear();   // whoever was walking over stays where it got to
-        g_stats.walking = 0;
+        g_pacts.clear();   // ...and whoever was going out to the gates hangs out there
+        g_stats.walking  = 0;
+        g_stats.pactsNow = 0;
         return;
     }
     const Clock::time_point now = Clock::now();
+    if (now >= g_nextStep)
+        KeepPacts(now);   // (before the walks: one it starts is walked from the next step)
     StepWalks(now);
     LookForDuels(now);
+}
+
+bool PbpDuels_CanGo(Player* a, Player* b, std::string& where)
+{
+    if (!g_Pbp.enable || !g_DuelsEnable || !g_HangoutEnable || !a || !b || a == b)
+        return false;
+    const Clock::time_point now = Clock::now();
+    for (Player* p : { a, b })
+    {
+        PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(p);
+        if (!ai || !ai->IsBotAI() || ai->GetMaster() || !sRandomPlayerbotMgr.IsRandomBot(p) ||
+            !ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT))
+            return false;
+        if (!Unbusy(p) || p->GetGroup() || p->isAFK() || p->GetLevel() < g_DuelsMinLevel || p->IsBeingTeleported())
+            return false;
+        const uint64_t guid = p->GetGUID().GetRawValue();
+        auto cd = g_cooldown.find(guid);
+        if ((cd != g_cooldown.end() && now < cd->second) || Walking(guid) || Pledged(guid))
+            return false;
+    }
+    if (a->GetTeamId() != b->GetTeamId() || a->GetMapId() != b->GetMapId() || Gap(a, b) > g_DuelsLevelGap)
+        return false;
+    PbpHangoutSpot const* spot = DuelSpotNear(a);
+    if (!spot || DuelSpotNear(b) != spot)
+        return false;
+    where = spot->name.empty() ? spot->key : spot->name;
+    return true;
+}
+
+bool PbpDuels_Go(Player* a, Player* b)
+{
+    std::string where;
+    if (!PbpDuels_CanGo(a, b, where))
+        return false;
+    PbpHangoutSpot const* spot = DuelSpotNear(a);
+    if (!spot)
+        return false;
+    const std::string key = spot->key;   // (the spot list is the conf's: kept by value past the sends)
+    const uint64_t ga = a->GetGUID().GetRawValue(), gb = b->GetGUID().GetRawValue();
+    if (!PbpHangout_SendToDuel(a, key) || !PbpHangout_SendToDuel(b, key))
+        return false;   // (one sent goes and hangs out there all the same)
+    PbpHangout_MakeRoom(key, 2, { ga, gb });
+    Pact pact;
+    pact.a       = ga;
+    pact.b       = gb;
+    pact.spotKey = key;
+    pact.until   = Clock::now() + std::chrono::seconds(g_HangoutTravelSeconds + 120);
+    g_pacts.push_back(std::move(pact));
+    ++g_stats.pacts;
+    g_stats.pactsNow = uint32_t(g_pacts.size());
+    LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Duels: {} (level {}) and {} (level {}) head out to {} to "
+             "duel.", a->GetName(), a->GetLevel(), b->GetName(), b->GetLevel(), where);
+    return true;
 }
 
 PbpDuelsStats PbpDuels_GetStats()

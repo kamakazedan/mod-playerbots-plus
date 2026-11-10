@@ -189,9 +189,12 @@ namespace
             for (std::string const& key : pbp::g_DuelsSpots)
                 spots += (spots.empty() ? "" : ", ") + key;
             handler->PSendSysMessage("Duels at the gates ({}): {} - {} challenges ({} to a real player), {} fought "
-                                     "without leaving the crowd, {} duelling now, {} walking over now, {} given up.",
+                                     "without leaving the crowd, {} duelling now, {} walking over now, {} given up; "
+                                     "{} pairs talked into one went out to the gates ({} fought it out, {} never "
+                                     "did, {} on their way now).",
                                      spots.empty() ? std::string("nowhere") : spots, onOff(pbp::g_DuelsEnable),
-                                     d.challenged, d.asked, h.duels, h.duelling, d.walking, d.gaveUp);
+                                     d.challenged, d.asked, h.duels, h.duelling, d.walking, d.gaveUp, d.pacts,
+                                     d.pactsHeld, d.pactsLost, d.pactsNow);
 
             handler->SendSysMessage("Select a random bot and type .pbp visit to send it to the auction house now.");
             return true;
