@@ -128,7 +128,12 @@ struct PbpHangoutStats
 {
     uint64_t sent      = 0;   // set off for a spot
     uint64_t settled   = 0;   // got there and settled
-    uint64_t gaveUp    = 0;   // never got there
+    uint64_t gaveUp    = 0;   // never got there:
+    uint64_t lostNoRoom    = 0;   // ...fetched, and no place found for it at the spot
+    uint64_t lostSlow      = 0;   // ...on the way longer than Hangout.TravelSeconds
+    uint64_t lostBusy      = 0;   // ...playerbots gave it something else to do on the way
+    uint64_t lostElsewhere = 0;   // ...wanted, grouped, off the map or out of the city on the way
+    uint64_t lostLanding   = 0;   // ...fetched, and never landed
     uint64_t movedOn   = 0;   // time up, off again
     uint64_t cutShort  = 0;   // a group, a fight, moved away...
     uint64_t cameBack  = 0;   // AFK, then talked to

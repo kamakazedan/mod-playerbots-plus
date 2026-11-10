@@ -426,10 +426,14 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        name what bots call it ("the Trade District in Stormwind"). Add as
 #        many as you like, one key each; capacity 0 turns one off. With no
 #        Spot keys at all, these are the defaults. Orgrimmar has the most:
-#        the Valley of Strength and the bank, the Drag, the Valley of Honor,
+#        the Valley of Strength -- in front of the inn and the auction house,
+#        the bank, the open middle of it and just inside the gates (the
+#        middle and the gates' z are a little above the ground, so a place
+#        may be found up the slopes too) -- the Drag, the Valley of Honor,
 #        and outside the city the gates and the zeppelin tower. Outside the
 #        gates of Orgrimmar and of Stormwind is where people duel (see DUELS
-#        AT THE CITY GATES).
+#        AT THE CITY GATES). A city's spots fill evenly, the emptiest first,
+#        and never with anyone standing in a fire (a bonfire included).
 #        Maps: 0 Eastern Kingdoms, 1 Kalimdor, 530 Outland and the Blood
 #        Elf and Draenei lands, 571 Northrend.
 PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind"
@@ -438,6 +442,8 @@ PlayerbotsPlus.Hangout.Spot.StormwindGates = "0 -9100.0 380.0 93.8 22 14 outside
 PlayerbotsPlus.Hangout.Spot.IronforgeCommons = "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarValley = "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarBank = "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarCourtyard = "1 1578.0 -4412.0 8.5 30 18 the middle of the Valley of Strength in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarGateway = "1 1527.0 -4408.0 18.0 22 10 just inside the gates of Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarDrag = "1 1768.0 -4320.9 6.6 16 8 the Drag in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarHonor = "1 2076.4 -4824.2 23.7 18 8 the Valley of Honor in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarGates = "1 1320.0 -4400.0 27.0 22 14 outside the gates of Orgrimmar"
@@ -542,6 +548,14 @@ PlayerbotsPlus.Stuck.WalkMinutes = 10
 #   burned again within a minute is also sent off to do something else, so
 #   it does not walk straight back to the guard it was talking to. With
 #   PlayerbotsPlus.Debug on, each one is logged.
+#
+#   Most fires burn nobody -- Orgrimmar's bonfires are only something to cook
+#   at -- and nobody stands in them all the same. Every couple of seconds a
+#   bot standing still in a fire anyone can see is one, where a real player
+#   could see it (Space.Range), walks out of it the same way: a cooking fire
+#   (campfire, bonfire, brazier, stove), or something named like a fire, as
+#   far as its model reaches at the size it is shown. Nothing puts anyone in
+#   one of those either.
 #
 ###############################################################################
 

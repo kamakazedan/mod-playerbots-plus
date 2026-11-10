@@ -13,7 +13,7 @@ their own words.
 | [The auction house](#the-auction-house) | Sell what they have no use for and buy upgrades, under their own names |
 | [City hangouts](#city-hangouts) | Gather where players do in the capitals: on a bench, mounted, or AFK |
 | [Stuck on a mount](#stuck-on-a-mount) | Stop getting on and off their mount at a herb they can't pick, and move on |
-| [Out of the fire](#out-of-the-fire) | Step out of a campfire or brazier that's burning them, instead of standing in it |
+| [Out of the fire](#out-of-the-fire) | Step out of a campfire, bonfire or brazier, burning or not, instead of standing in it |
 | [Room to stand](#room-to-stand) | Step aside when they've stopped inside someone, instead of piling up on one spot |
 | [Getting back up](#getting-back-up) | Release and run back when nobody in the group can resurrect them |
 | [Raid marks](#raid-marks) | Crowd-control their own mark and sap the star |
@@ -78,11 +78,13 @@ Commons, the Valley of Strength, outside the bank in Dalaran. Playerbots never
 sends a bot anywhere in particular, so idle bots in a city just wander from
 NPC to NPC. With hangouts, they gather where players do.
 
-- **Where:** 19 spots in the capitals, Shattrath and Dalaran come set up,
-  six of them in and around Orgrimmar: the Valley of Strength, outside the
-  bank, the Drag, the Valley of Honor, outside the gates and the zeppelin
-  tower. Outside the gates of Stormwind is one too. You can add your own, or
-  change how many bots each one holds.
+- **Where:** 21 spots in the capitals, Shattrath and Dalaran come set up,
+  eight of them in and around Orgrimmar: in the Valley of Strength in front
+  of the inn and the auction house, outside the bank, the open middle of it
+  and just inside the gates, then the Drag, the Valley of Honor, outside the
+  gates and the zeppelin tower. Outside the gates of Stormwind is one too.
+  You can add your own, or change how many bots each one holds. A city's
+  spots fill evenly, the emptiest first.
 - **Who:** idle random bots near a spot, of its zone and floor. A bot that is
   grouped, queued, questing, gathering, fighting or flying is left alone, and
   so is one a real player has targeted.
@@ -145,6 +147,11 @@ spot for as long as it stays there.
 - One hanging out at a city spot takes that as its new place there.
 - One burned again within a minute is also sent off to do something else, so
   it doesn't walk straight back to the guard it was talking to.
+- Most fires burn nobody at all: Orgrimmar's bonfires are only something to
+  cook at. A bot standing in a fire anyone can see is one -- a campfire, a
+  bonfire, a brazier, a stove, as far as its model reaches -- walks out of it
+  the same way whenever a real player is about, and nothing puts anyone in
+  one of those either.
 
 Settings: `PlayerbotsPlus.Fire.*`.
 

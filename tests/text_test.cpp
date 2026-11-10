@@ -272,8 +272,8 @@ int main(int argc, char** argv)
             else
                 std::printf("   not the code's default: %s\n", text.c_str());
         }
-        True("conf spots", spots == 19 && good == 19);
-        True("conf spots are the code's", same == 19);
+        True("conf spots", spots == 21 && good == 21);
+        True("conf spots are the code's", same == 21);
     }
 
     // ---- the city a spot is in ----------------------------------------------------------

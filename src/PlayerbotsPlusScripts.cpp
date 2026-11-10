@@ -132,10 +132,12 @@ namespace
             PbpHangoutStats const h = PbpHangout_GetStats();
             handler->PSendSysMessage("City hangouts: {} - {} hanging out ({} AFK), {} on their way, {} spots ({} with "
                                      "an inn to arrive at). Sent {}, fetched from elsewhere {} ({} gone back), "
-                                     "settled {}, never got there {}, moved on {}, cut short {}, back from AFK {}.",
+                                     "settled {}, never got there {} ({} no room at the spot, {} too slow, {} given "
+                                     "something else to do, {} went elsewhere, {} never landed), moved on {}, cut "
+                                     "short {}, back from AFK {}.",
                                      onOff(pbp::g_HangoutEnable), h.hanging, h.away, h.onTheWay, h.spots, h.withInn,
-                                     h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.movedOn, h.cutShort,
-                                     h.cameBack);
+                                     h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.lostNoRoom, h.lostSlow,
+                                     h.lostBusy, h.lostElsewhere, h.lostLanding, h.movedOn, h.cutShort, h.cameBack);
             std::string cities;
             for (PbpHangoutCity const& c : PbpHangout_Cities())
                 if (c.there || c.onTheWay)
@@ -151,10 +153,12 @@ namespace
                                      k.holding, k.walking);
 
             PbpFireStats const f = PbpFire_GetStats();
-            handler->PSendSysMessage("Out of the fire: {} - {} bots burned standing in a fire, {} walked out ({} of "
-                                     "them hanging out, given a new place; {} burned again within a minute and sent "
-                                     "off to do something else), {} with nowhere to step to.",
-                                     onOff(pbp::g_FireEnable), f.burns, f.stepped, f.moved, f.sentOn, f.nowhere);
+            handler->PSendSysMessage("Out of the fire: {} - {} bots burned standing in a fire, {} found standing in "
+                                     "one that burns nobody (a bonfire), {} walked out ({} of them hanging out, given "
+                                     "a new place; {} in one again within a minute and sent off to do something "
+                                     "else), {} with nowhere to step to.",
+                                     onOff(pbp::g_FireEnable), f.burns, f.seen, f.stepped, f.moved, f.sentOn,
+                                     f.nowhere);
 
             PbpSpaceStats const sp = PbpSpace_GetStats();
             handler->PSendSysMessage("Room to stand: {} - {} bots found standing in someone, {} stepped aside ({} of "

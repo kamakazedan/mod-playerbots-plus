@@ -210,6 +210,8 @@ namespace
         { "IronforgeCommons",   "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge" },
         { "OrgrimmarValley",    "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar" },
         { "OrgrimmarBank",      "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar" },
+        { "OrgrimmarCourtyard", "1 1578.0 -4412.0 8.5 30 18 the middle of the Valley of Strength in Orgrimmar" },
+        { "OrgrimmarGateway",   "1 1527.0 -4408.0 18.0 22 10 just inside the gates of Orgrimmar" },
         { "OrgrimmarDrag",      "1 1768.0 -4320.9 6.6 16 8 the Drag in Orgrimmar" },
         { "OrgrimmarHonor",     "1 2076.4 -4824.2 23.7 18 8 the Valley of Honor in Orgrimmar" },
         { "OrgrimmarGates",     "1 1320.0 -4400.0 27.0 22 14 outside the gates of Orgrimmar" },

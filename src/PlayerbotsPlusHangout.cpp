@@ -326,10 +326,13 @@ namespace
     }
 
     // Two bots on one spot of ground would stand inside each other.
-    bool Taken(const std::string& spotKey, float x, float y, float minDist)
+    // Someone's place already, at any spot: two spots side by side (the
+    // middle of the Valley of Strength and the bank) do not give two bots
+    // one place.
+    bool Taken(uint32_t map, float x, float y, float minDist)
     {
         for (const auto& [guid, v] : g_visits)
-            if (v.spotKey == spotKey && std::hypot(v.x - x, v.y - y) < minDist)
+            if (v.map == map && std::hypot(v.x - x, v.y - y) < minDist)
                 return true;
         return false;
     }
@@ -349,8 +352,10 @@ namespace
             groundZ = s.z;
         PositionFullTerrainStatus middle;
         map->GetFullTerrainStatusForPosition(phaseMask, s.x, s.y, groundZ, bot->GetCollisionHeight(), middle);
+        // Plenty of quick looks (most land on a roof, in a shop, out of
+        // sight of the middle), and a few paths worked out for the best.
         int paths = 0;
-        for (int tries = 0; tries < 24 && paths < 6; ++tries)
+        for (int tries = 0; tries < 48 && paths < 8; ++tries)
         {
             const float angle = Frand(0.0f, kTwoPi);
             const float dist  = s.radius * std::sqrt(Frand(0.0f, 1.0f));
@@ -364,7 +369,7 @@ namespace
             if (!map->isInLineOfSight(s.x, s.y, s.z + 2.0f, x, y, z + 2.0f, phaseMask, LINEOFSIGHT_ALL_CHECKS,
                                       VMAP::ModelIgnoreFlags::Nothing))
                 continue;
-            if (Taken(s.key, x, y, 2.5f))
+            if (Taken(s.map, x, y, 2.5f))
                 continue;
             if (middle.outdoors)
             {
@@ -718,6 +723,7 @@ namespace
         if (bot->GetMapId() != v.map || !zone || !InSpotsZone(bot, s, zone) || !StillFree(bot, v))
         {
             ++g_stats.gaveUp;
+            ++g_stats.lostElsewhere;
             Let(bot, ai, v, false, now);
             return false;
         }
@@ -742,7 +748,8 @@ namespace
             if (now - v.landedAt < std::chrono::seconds(6))
                 return true;   // everywhere taken just now: another look in a moment
             ++g_stats.gaveUp;
-            g_spotNextFetch[v.spotKey] = now + std::chrono::minutes(2);   // nowhere to put them: not for a while
+            ++g_stats.lostNoRoom;
+            g_spotNextFetch[v.spotKey] = now + std::chrono::seconds(45);   // nowhere to put them: not for a while
             Let(bot, ai, v, false, now);
             if (!SendBack(bot, ai, v))
             {
@@ -799,6 +806,20 @@ namespace
                 continue;
             (Watched(*s, zone) ? wanting : others).emplace_back(s, zone);
         }
+        // The emptiest first: a city whose inn lets one in at a time fills
+        // all its spots evenly, not whichever the conf happened to list
+        // first (the order its keys come back in is no order at all).
+        auto emptiest = [&there](std::vector<std::pair<PbpHangoutSpot const*, uint32_t>>& list)
+        {
+            std::shuffle(list.begin(), list.end(), Rng());
+            std::stable_sort(list.begin(), list.end(), [&there](auto const& a, auto const& b)
+            {
+                return float(there[a.first->key]) / float(std::max<uint32_t>(1, a.first->capacity)) <
+                       float(there[b.first->key]) / float(std::max<uint32_t>(1, b.first->capacity));
+            });
+        };
+        emptiest(wanting);
+        emptiest(others);
         wanting.insert(wanting.end(), others.begin(), others.end());
 
         for (const auto& [s, zone] : wanting)
@@ -953,6 +974,7 @@ namespace
         if (!free || now - v.started > std::chrono::seconds(g_HangoutTravelSeconds))
         {
             ++g_stats.gaveUp;
+            ++(free ? g_stats.lostSlow : g_stats.lostElsewhere);
             Let(bot, ai, v, free, now);   // timed out: on with something else
             if (free && v.broughtIn)
                 SendBack(bot, ai, v);     // (fetched, and stuck on the way: back where it was, if nobody sees)
@@ -969,6 +991,7 @@ namespace
             if (!ours)
             {
                 ++g_stats.gaveUp;
+                ++g_stats.lostBusy;
                 Let(bot, ai, v, false, now);
                 return false;
             }
@@ -979,6 +1002,7 @@ namespace
         else
         {
             ++g_stats.gaveUp;   // something gave it other things to do
+            ++g_stats.lostBusy;
             Let(bot, ai, v, false, now);
             return false;
         }
@@ -1306,6 +1330,7 @@ void PbpHangout_Update(uint32_t /*diff*/)
         {
             // Never landed (or not where it was sent): nothing of this to undo.
             ++g_stats.gaveUp;
+            ++g_stats.lostLanding;
             g_cooldown[it->first] = now + std::chrono::minutes(g_HangoutCooldownMinutes);
             it = g_visits.erase(it);
             continue;

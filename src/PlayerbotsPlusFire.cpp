@@ -4,6 +4,7 @@
 #include "PlayerbotsPlusUtil.h"
 
 #include "CellImpl.h"
+#include "DBCStores.h"
 #include "GameObject.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
@@ -22,6 +23,7 @@
 #include "RandomPlayerbotMgr.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <list>
@@ -36,12 +38,16 @@ namespace
 {
     using Clock = std::chrono::steady_clock;
 
-    constexpr uint32_t kPointId   = 0x464952;   // MovePoint id for the step out of the fire
-    constexpr float    kTwoPi     = 6.2831853f;
-    constexpr float    kSearch    = 20.0f;      // how far round a place fires are looked for
-    constexpr float    kMaxRadius = 10.0f;      // wider than this is a boss's floor, not a campfire
-    constexpr auto     kOnItsWay  = std::chrono::seconds(3);    // burned once more as it leaves: let it
-    constexpr auto     kAgain     = std::chrono::seconds(60);   // burned again this soon: sent on its way
+    constexpr uint32_t kPointId     = 0x464952;   // MovePoint id for the step out of the fire
+    constexpr float    kTwoPi       = 6.2831853f;
+    constexpr float    kSearch      = 20.0f;      // how far round a place fires are looked for
+    constexpr float    kMaxRadius   = 10.0f;      // wider than this is a boss's floor, not a campfire
+    constexpr float    kMaxSight    = 6.0f;       // a fire to look at wider than this is a model's odd bounds
+    constexpr uint32_t kCookingFire = 4;          // the spell focus of campfires, bonfires, braziers, stoves
+    constexpr auto     kOnItsWay    = std::chrono::seconds(3);    // burned once more as it leaves: let it
+    constexpr auto     kAgain       = std::chrono::seconds(60);   // burned again this soon: sent on its way
+    constexpr auto     kSweepEvery  = std::chrono::seconds(2);    // a look for bots stood in a fire that does no harm
+    constexpr auto     kNowhereWait = std::chrono::seconds(10);   // nowhere to step out to: looked at again after this
 
     // Written by the hook on map threads, taken on the world tick.
     std::mutex            g_noteMutex;
@@ -50,6 +56,8 @@ namespace
 
     // World thread from here on.
     std::unordered_map<uint64_t, Clock::time_point> g_lastStep;   // bot -> walked out of a fire at
+    std::unordered_map<uint64_t, Clock::time_point> g_nowhere;    // bot -> nowhere to step to, until
+    std::unordered_map<uint32_t, bool> g_looksLikeFire;           // object entry -> a fire to look at
     PbpFireStats g_stats;
 
     std::mt19937& Rng()
@@ -128,13 +136,73 @@ namespace
         return radius + go->GetObjectSize() + size;
     }
 
+    // A fire anyone can see is one: a cooking fire (a campfire, a bonfire, a
+    // brazier, a stove: spell focus 4), or something named like a fire. Most
+    // of them do no harm -- Orgrimmar's bonfires burn nobody -- so nobody is
+    // ever noted standing in one, and bots stood in them all the same. By
+    // entry, worked out once.
+    bool LooksLikeFire(GameObject* go)
+    {
+        const uint32 entry = go->GetEntry();
+        if (auto it = g_looksLikeFire.find(entry); it != g_looksLikeFire.end())
+            return it->second;
+        bool fire = false;
+        if (GameObjectTemplate const* t = go->GetGOInfo())
+        {
+            if (t->type == GAMEOBJECT_TYPE_SPELL_FOCUS && t->spellFocus.focusId == kCookingFire)
+                fire = true;
+            else if (t->type == GAMEOBJECT_TYPE_SPELL_FOCUS || t->type == GAMEOBJECT_TYPE_GENERIC ||
+                     t->type == GAMEOBJECT_TYPE_QUESTGIVER || t->type == GAMEOBJECT_TYPE_GOOBER)
+            {
+                // Its name, word by word: "Bonfire", "Dwarven Fire", "Burning
+                // Embers" -- not "Firework Launcher", not "Pyrewood Village".
+                std::string word;
+                for (size_t i = 0; i <= t->name.size() && !fire; ++i)
+                {
+                    const char c = i < t->name.size() ? t->name[i] : ' ';
+                    if (std::isalpha(static_cast<unsigned char>(c)))
+                        word += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                    else
+                    {
+                        for (const char* w : { "bonfire", "campfire", "brazier", "firepit", "pyre", "fire", "blaze",
+                                               "embers", "flames" })
+                            fire = fire || word == w;
+                        word.clear();
+                    }
+                }
+            }
+        }
+        g_looksLikeFire.emplace(entry, fire);
+        return fire;
+    }
+
+    // How near its middle someone of `size` stands in a fire anyone can see:
+    // its model's footprint at the size it is shown, and theirs. 0 for
+    // anything else, or one with nothing to show.
+    float SightReach(GameObject* go, float size)
+    {
+        if (!go || !go->isSpawned() || !LooksLikeFire(go))
+            return 0.0f;
+        GameObjectDisplayInfoEntry const* shown = sGameObjectDisplayInfoStore.LookupEntry(go->GetDisplayId());
+        if (!shown)
+            return 0.0f;
+        float half = std::max({ std::fabs(shown->minX), std::fabs(shown->maxX), std::fabs(shown->minY),
+                                std::fabs(shown->maxY) });
+        if (half <= 0.0f)
+            half = 1.0f;   // a model with no bounds given: about a campfire's
+        return std::clamp(half * go->GetObjectScale(), 0.4f, kMaxSight) + size;
+    }
+
     struct Fire
     {
-        GameObject* go    = nullptr;
-        float       reach = 0.0f;   // for whoever it was looked for
-        float       dist  = 0.0f;   // from its middle to the place
+        GameObject* go       = nullptr;
+        float       reach    = 0.0f;    // for whoever it was looked for
+        float       dist     = 0.0f;    // from its middle to the place
+        bool        harmless = false;   // one to look at only: it burns nobody
     };
 
+    // The fires about a place: the ones that burn (Reach) and the ones that
+    // only look like it (SightReach), whichever reaches further.
     void FiresAround(Map* map, WorldObject const* phaseRef, float size, float x, float y, float z,
                      std::vector<Fire>& out)
     {
@@ -143,8 +211,29 @@ namespace
         Acore::GameObjectListSearcher<Acore::GameObjectInRangeCheck> searcher(phaseRef, near, check);
         Cell::VisitObjects(x, y, map, searcher, kSearch);
         for (GameObject* go : near)
-            if (const float reach = Reach(go, size); reach > 0.0f)
-                out.push_back({ go, reach, go->GetExactDist(x, y, z) });
+        {
+            const float burns = Reach(go, size);
+            const float looks = SightReach(go, size);
+            if (burns > 0.0f || looks > 0.0f)
+                out.push_back({ go, std::max(burns, looks), go->GetExactDist(x, y, z), burns <= 0.0f });
+        }
+    }
+
+    // The fire `bot` stands in, if any: the one it is nearest the middle of.
+    bool InFire(Player* bot, Fire& in)
+    {
+        std::vector<Fire> fires;
+        FiresAround(bot->GetMap(), bot, bot->GetObjectSize(), bot->GetPositionX(), bot->GetPositionY(),
+                    bot->GetPositionZ(), fires);
+        Fire const* best = nullptr;
+        for (Fire const& f : fires)
+            if (f.dist < f.reach && std::fabs(f.go->GetPositionZ() - bot->GetPositionZ()) < 4.0f &&
+                (!best || f.dist / f.reach < best->dist / best->reach))
+                best = &f;
+        if (!best)
+            return false;
+        in = *best;
+        return true;
     }
 
     // A random bot nothing else is steering: not in a fight or a duel, not
@@ -208,6 +297,98 @@ namespace
     }
 }
 
+namespace
+{
+    // Out of `in`, now: to a new place at its hangout, or a step of its own.
+    void StepOut(Player* bot, PlayerbotAI* ai, Fire const& in, const Clock::time_point now)
+    {
+        const uint64_t guid = bot->GetGUID().GetRawValue();
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        if (!PlaceOut(bot, in, x, y, z))
+        {
+            ++g_stats.nowhere;
+            g_nowhere[guid] = now + kNowhereWait;
+            if (g_PbpDebug)
+                LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} is in {} ({}) at {} {:.1f} {:.1f} {:.1f}, "
+                         "with nowhere to step out to.", bot->GetName(), in.go->GetName(), in.go->GetEntry(),
+                         bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
+            return;
+        }
+
+        const PbpHangoutMove hangout = PbpHangout_MoveTo(bot, x, y, z);
+        if (hangout == PbpHangoutMove::OnItsWay)
+            return;   // passing by on its way to a spot: it is not stopping here
+        auto last = g_lastStep.find(guid);
+        const bool again = last != g_lastStep.end() && now - last->second < kAgain;
+        g_lastStep[guid] = now;
+        ++g_stats.stepped;
+        if (hangout == PbpHangoutMove::Moved)
+            ++g_stats.moved;
+        else
+        {
+            // In it again this soon: whatever it is doing keeps it there (the
+            // guard it stops to talk to stands by the brazier). Something else.
+            if (again)
+            {
+                ai->rpgInfo.ChangeToIdle();
+                ++g_stats.sentOn;
+            }
+            if (bot->IsSitState())
+                bot->SetStandState(UNIT_STAND_STATE_STAND);
+            bot->GetMotionMaster()->MovePoint(kPointId, x, y, z);
+            ai->SetNextCheckDelay(2500);   // its own AI lets it get there first
+        }
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} steps out of {} ({}) at {} {:.1f} {:.1f} {:.1f}{}.",
+                     bot->GetName(), in.go->GetName(), in.go->GetEntry(), bot->GetMapId(), bot->GetPositionX(),
+                     bot->GetPositionY(), bot->GetPositionZ(),
+                     hangout == PbpHangoutMove::Moved ? ", to a new place at its hangout"
+                                                       : (again ? ", and goes and does something else" : ""));
+    }
+
+    // Every couple of seconds: bots standing still in a fire anyone can see
+    // is one, where someone could see them (Space.Range of a real player).
+    // Most fires burn nobody, so nothing notes it otherwise.
+    void Sweep(const Clock::time_point now)
+    {
+        std::vector<Player*> real;
+        for (auto const& [guid, p] : ObjectAccessor::GetPlayers())
+            if (p && p->IsInWorld() && PbpIsRealPlayer(p))
+                real.push_back(p);
+        if (real.empty())
+            return;
+        const float rangeSq = g_SpaceRange * g_SpaceRange;
+        for (auto const& [guid, bot] : ObjectAccessor::GetPlayers())
+        {
+            if (!bot || !bot->IsInWorld() || bot->isMoving() || PbpIsRealPlayer(bot))
+                continue;
+            bool seen = g_SpaceRange <= 0.0f;
+            for (Player* r : real)
+                if (!seen && r->GetMapId() == bot->GetMapId() &&
+                    r->GetExactDist2dSq(bot->GetPositionX(), bot->GetPositionY()) < rangeSq)
+                    seen = true;
+            if (!seen)
+                continue;
+            const uint64_t key = guid.GetRawValue();
+            if (auto last = g_lastStep.find(key); last != g_lastStep.end() && now - last->second < kOnItsWay)
+                continue;   // on its way out already
+            if (auto wait = g_nowhere.find(key); wait != g_nowhere.end() && now < wait->second)
+                continue;
+            PlayerbotAI* ai = PbpAiOf(bot);
+            if (!ai || !OursToMove(bot, ai))
+                continue;
+            Fire in;
+            if (!InFire(bot, in))
+                continue;
+            if (in.harmless)
+                ++g_stats.seen;
+            else
+                ++g_stats.burns;
+            StepOut(bot, ai, in, now);
+        }
+    }
+}
+
 void PbpFireScript::OnDamage(Unit* attacker, Unit* victim, uint32& /*damage*/)
 {
     // Damage nobody dealt: a trap of the world's own. Map threads: noted, nothing more.
@@ -246,15 +427,25 @@ void PbpFire_Update(uint32_t /*diff*/)
     }
 
     const auto now = Clock::now();
+    static Clock::time_point nextTidy{};
+    if (now >= nextTidy)
+    {
+        nextTidy = now + std::chrono::minutes(1);
+        for (auto it = g_lastStep.begin(); it != g_lastStep.end();)
+            it = now - it->second > kAgain ? g_lastStep.erase(it) : std::next(it);
+        for (auto it = g_nowhere.begin(); it != g_nowhere.end();)
+            it = now >= it->second ? g_nowhere.erase(it) : std::next(it);
+    }
+    if (!g_FireEnable || !g_Pbp.enable)
+        return;   // (taken all the same: nothing piles up while it is off)
     static Clock::time_point nextSweep{};
     if (now >= nextSweep)
     {
-        nextSweep = now + std::chrono::minutes(1);
-        for (auto it = g_lastStep.begin(); it != g_lastStep.end();)
-            it = now - it->second > kAgain ? g_lastStep.erase(it) : std::next(it);
+        nextSweep = now + kSweepEvery;
+        Sweep(now);
     }
-    if (burned.empty() || !g_FireEnable || !g_Pbp.enable)
-        return;   // (taken all the same: nothing piles up while it is off)
+    if (burned.empty())
+        return;
     std::sort(burned.begin(), burned.end());
     burned.erase(std::unique(burned.begin(), burned.end()), burned.end());
 
@@ -270,56 +461,11 @@ void PbpFire_Update(uint32_t /*diff*/)
             continue;   // already on its way out: the fire went off once more as it left
 
         // The fire it is in: the one it stands nearest the middle of.
-        std::vector<Fire> fires;
-        FiresAround(bot->GetMap(), bot, bot->GetObjectSize(), bot->GetPositionX(), bot->GetPositionY(),
-                    bot->GetPositionZ(), fires);
-        Fire const* in = nullptr;
-        for (Fire const& f : fires)
-            if (f.dist < f.reach && (!in || f.dist / f.reach < in->dist / in->reach))
-                in = &f;
-        if (!in)
+        Fire in;
+        if (!InFire(bot, in))
             continue;   // burned by something else, or out of it already
         ++g_stats.burns;
-
-        float x = 0.0f, y = 0.0f, z = 0.0f;
-        if (!PlaceOut(bot, *in, x, y, z))
-        {
-            ++g_stats.nowhere;
-            if (g_PbpDebug)
-                LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} is in {} ({}) at {} {:.1f} {:.1f} {:.1f}, "
-                         "with nowhere to step out to.", bot->GetName(), in->go->GetName(), in->go->GetEntry(),
-                         bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
-            continue;
-        }
-
-        const PbpHangoutMove hangout = PbpHangout_MoveTo(bot, x, y, z);
-        if (hangout == PbpHangoutMove::OnItsWay)
-            continue;   // passing by on its way to a spot: it is not stopping here
-        const bool again = last != g_lastStep.end() && now - last->second < kAgain;
-        g_lastStep[guid] = now;
-        ++g_stats.stepped;
-        if (hangout == PbpHangoutMove::Moved)
-            ++g_stats.moved;
-        else
-        {
-            // Burned again this soon: whatever it is doing keeps it there (the
-            // guard it stops to talk to stands by the brazier). Something else.
-            if (again)
-            {
-                ai->rpgInfo.ChangeToIdle();
-                ++g_stats.sentOn;
-            }
-            if (bot->IsSitState())
-                bot->SetStandState(UNIT_STAND_STATE_STAND);
-            bot->GetMotionMaster()->MovePoint(kPointId, x, y, z);
-            ai->SetNextCheckDelay(2500);   // its own AI lets it get there first
-        }
-        if (g_PbpDebug)
-            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} steps out of {} ({}) at {} {:.1f} {:.1f} {:.1f}{}.",
-                     bot->GetName(), in->go->GetName(), in->go->GetEntry(), bot->GetMapId(), bot->GetPositionX(),
-                     bot->GetPositionY(), bot->GetPositionZ(),
-                     hangout == PbpHangoutMove::Moved ? ", to a new place at its hangout"
-                                                       : (again ? ", and goes and does something else" : ""));
+        StepOut(bot, ai, in, now);
     }
 }
 

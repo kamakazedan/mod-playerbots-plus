@@ -33,8 +33,16 @@ class WorldObject;
 // (playerbots' own "idle", which picks something else to do), so it does not
 // walk straight back to the guard it was talking to.
 //
-// PbpFire_Burns says whether a place is in a fire, so a hangout never puts
-// anyone in one.
+// A fire that does no harm is still a fire: nobody stands in a campfire, and
+// most of them -- Orgrimmar's bonfires among them -- burn nobody, so nothing
+// above ever noticed bots standing in them. Every couple of seconds a bot
+// standing still where someone could see it (Space.Range of a real player)
+// in a fire anyone can see is one walks out of it the same way: a cooking
+// fire (campfire, bonfire, brazier, stove), or something named like a fire,
+// as far as its model reaches at the size it is shown.
+//
+// PbpFire_Burns says whether a place is in a fire of either kind, so a
+// hangout, a step aside or an arrival at an inn never puts anyone in one.
 //
 // World thread only, except the hook.
 // --------------------------------------------------------------------------
@@ -43,8 +51,9 @@ class WorldObject;
 void PbpFire_Update(uint32_t diff);
 
 // Whether someone the size of `who`, standing at x, y, z on its map, would be
-// in a fire (a damaging trap of the world's own), with `extra` yards to
-// spare. False for a place whose grid is not loaded: nothing is known there.
+// in a fire -- a damaging trap of the world's own, or a fire anyone can see
+// is one -- with `extra` yards to spare. False for a place whose grid is not
+// loaded: nothing is known there.
 bool PbpFire_Burns(WorldObject const* who, float x, float y, float z, float extra = 0.0f);
 
 // The same on `map`, for someone of `size` who may not be on it yet
@@ -54,6 +63,7 @@ bool PbpFire_BurnsAt(Map* map, WorldObject const* phaseRef, float size, float x,
 struct PbpFireStats
 {
     uint64_t burns   = 0;   // bots burned by a trap of the world's own
+    uint64_t seen    = 0;   // bots found standing in a fire that burns nobody (a bonfire)
     uint64_t stepped = 0;   // ...walked out of the fire
     uint64_t moved   = 0;   // ...of whom hanging out, given a new place at their spot
     uint64_t sentOn  = 0;   // ...of whom burned again within a minute, sent about their business
