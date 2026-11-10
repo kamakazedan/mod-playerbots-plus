@@ -97,6 +97,7 @@ namespace
             {
                 { "status", HandleStatus, SEC_GAMEMASTER,    Console::Yes },
                 { "visit",  HandleVisit,  SEC_GAMEMASTER,    Console::No  },
+                { "fires",  HandleFires,  SEC_GAMEMASTER,    Console::No  },
                 { "reload", HandleReload, SEC_ADMINISTRATOR, Console::Yes },
             };
             static ChatCommandTable commandTable =
@@ -223,6 +224,17 @@ namespace
         }
 
         // .pbp reload: re-read mod_playerbots_plus.conf.
+        // The fires about you, how near anyone may stand, and who is in one.
+        static bool HandleFires(ChatHandler* handler)
+        {
+            Player* me = handler->GetSession() ? handler->GetSession()->GetPlayer() : nullptr;
+            if (!me)
+                return false;
+            for (std::string const& line : PbpFire_Describe(me))
+                handler->PSendSysMessage("{}", line);
+            return true;
+        }
+
         static bool HandleReload(ChatHandler* handler)
         {
             if (!sConfigMgr->Reload())

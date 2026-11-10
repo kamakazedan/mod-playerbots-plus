@@ -23,6 +23,7 @@
 #include "RandomPlayerbotMgr.h"
 
 #include <algorithm>
+#include <fmt/format.h>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -47,6 +48,8 @@ namespace
     constexpr auto     kOnItsWay    = std::chrono::seconds(3);    // burned once more as it leaves: let it
     constexpr auto     kAgain       = std::chrono::seconds(60);   // burned again this soon: sent on its way
     constexpr auto     kSweepEvery  = std::chrono::seconds(2);    // a look for bots stood in a fire that does no harm
+    constexpr float    kComfort     = 0.5f;   // nobody stands right up against a fire, burning or not
+    constexpr float    kMounted     = 2.5f;   // a mount's head or tail, past its rider in the middle
     constexpr auto     kNowhereWait = std::chrono::seconds(10);   // nowhere to step out to: looked at again after this
 
     // Written by the hook on map threads, taken on the world tick.
@@ -201,10 +204,20 @@ namespace
         bool        harmless = false;   // one to look at only: it burns nobody
     };
 
-    // The fires about a place: the ones that burn (Reach) and the ones that
-    // only look like it (SightReach), whichever reaches further.
-    void FiresAround(Map* map, WorldObject const* phaseRef, float size, float x, float y, float z,
-                     std::vector<Fire>& out)
+    // How far past a fire's edge someone keeps clear of it as it looks:
+    // a little room, and a mount's length when they ride one -- a bot sat on
+    // its mammoth beside a bonfire had the beast's head in the flames.
+    float SightExtra(WorldObject const* who)
+    {
+        Unit const* unit = who ? who->ToUnit() : nullptr;
+        return kComfort + (unit && unit->IsMounted() ? kMounted : 0.0f);
+    }
+
+    // The fires about a place: the ones that burn (Reach, for someone of
+    // `size`) and the ones that only look like it (SightReach, with
+    // `sightExtra` more), whichever reaches further.
+    void FiresAround(Map* map, WorldObject const* phaseRef, float size, float sightExtra, float x, float y,
+                     float z, std::vector<Fire>& out)
     {
         std::list<GameObject*> near;
         Acore::GameObjectInRangeCheck check(x, y, z, kSearch);
@@ -213,7 +226,7 @@ namespace
         for (GameObject* go : near)
         {
             const float burns = Reach(go, size);
-            const float looks = SightReach(go, size);
+            const float looks = SightReach(go, size + sightExtra);
             if (burns > 0.0f || looks > 0.0f)
                 out.push_back({ go, std::max(burns, looks), go->GetExactDist(x, y, z), burns <= 0.0f });
         }
@@ -223,8 +236,8 @@ namespace
     bool InFire(Player* bot, Fire& in)
     {
         std::vector<Fire> fires;
-        FiresAround(bot->GetMap(), bot, bot->GetObjectSize(), bot->GetPositionX(), bot->GetPositionY(),
-                    bot->GetPositionZ(), fires);
+        FiresAround(bot->GetMap(), bot, bot->GetObjectSize(), SightExtra(bot), bot->GetPositionX(),
+                    bot->GetPositionY(), bot->GetPositionZ(), fires);
         Fire const* best = nullptr;
         for (Fire const& f : fires)
             if (f.dist < f.reach && std::fabs(f.go->GetPositionZ() - bot->GetPositionZ()) < 4.0f &&
@@ -263,18 +276,23 @@ namespace
         const float fx = in.go->GetPositionX(), fy = in.go->GetPositionY();
         const float away = std::hypot(bx - fx, by - fy) > 0.2f ? std::atan2(by - fy, bx - fx) : Frand(0.0f, kTwoPi);
         static const float kTurns[] = { 0.0f, 0.5f, -0.5f, 1.0f, -1.0f, 1.6f, -1.6f, 2.2f, -2.2f, 2.8f, -2.8f };
-        for (float turn : kTurns)
+        for (int i = 0; i < 2 * int(std::size(kTurns)); ++i)
         {
-            const float angle = away + turn;
-            const float dist  = in.reach + g_FireMargin + Frand(0.0f, 1.5f);   // from the fire's middle
-            const float x = fx + dist * std::cos(angle);
-            const float y = fy + dist * std::sin(angle);
+            // Every way round at the margin first, then every way a step or
+            // two further out.
+            const bool wider  = i >= int(std::size(kTurns));
+            const float angle = away + kTurns[i % std::size(kTurns)];
+            const float dist  = in.reach + g_FireMargin + (wider ? 2.5f : 0.0f) + Frand(0.0f, 1.5f);
+            float x = fx + dist * std::cos(angle);
+            float y = fy + dist * std::sin(angle);
             const float z = map->GetHeight(phase, x, y, bz + 3.0f, true, 8.0f);
             if (z <= INVALID_HEIGHT || std::fabs(z - bz) > 4.0f)
                 continue;
             if (map->IsInWater(phase, x, y, z, 2.0f))
                 continue;
-            if (!map->isInLineOfSight(bx, by, bz + 2.0f, x, y, z + 2.0f, phase, LINEOFSIGHT_ALL_CHECKS,
+            // In sight past walls and the like -- not past the fire's own
+            // model, which a bot stood inside it may well be in the way of.
+            if (!map->isInLineOfSight(bx, by, bz + 2.0f, x, y, z + 2.0f, phase, LINEOFSIGHT_CHECK_VMAP,
                                       VMAP::ModelIgnoreFlags::Nothing))
                 continue;
             if (PbpFire_Burns(bot, x, y, z, 0.5f))
@@ -285,12 +303,18 @@ namespace
             if (!(type & PATHFIND_NORMAL) ||
                 (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT | PATHFIND_NOT_USING_PATH)))
                 continue;
+            // (The ground about a bonfire is lumpy: the path's end and the
+            // ground's height can be a yard or so apart.)
             G3D::Vector3 const& end = path.GetActualEndPosition();
-            if (std::hypot(end.x - x, end.y - y) > 1.0f || std::fabs(end.z - z) > 0.5f)
+            if (std::hypot(end.x - x, end.y - y) > 2.0f || std::fabs(end.z - z) > 2.0f)
+                continue;
+            x = end.x;
+            y = end.y;
+            if (PbpFire_Burns(bot, x, y, end.z, 0.5f))
                 continue;
             outX = x;
             outY = y;
-            outZ = z;
+            outZ = end.z;
             return true;
         }
         return false;
@@ -399,23 +423,97 @@ void PbpFireScript::OnDamage(Unit* attacker, Unit* victim, uint32& /*damage*/)
         g_noted.push_back(victim->GetGUID().GetRawValue());
 }
 
+namespace
+{
+    bool InAny(Map* map, WorldObject const* phaseRef, float size, float sightExtra, float x, float y, float z,
+               float extra)
+    {
+        if (!map || !phaseRef)
+            return false;
+        std::vector<Fire> fires;
+        FiresAround(map, phaseRef, size, sightExtra, x, y, z, fires);
+        for (Fire const& f : fires)
+            if (f.dist < f.reach + extra)
+                return true;
+        return false;
+    }
+}
+
 bool PbpFire_BurnsAt(Map* map, WorldObject const* phaseRef, float size, float x, float y, float z, float extra)
 {
-    if (!map || !phaseRef)
-        return false;
-    std::vector<Fire> fires;
-    FiresAround(map, phaseRef, size, x, y, z, fires);
-    for (Fire const& f : fires)
-        if (f.dist < f.reach + extra)
-            return true;
-    return false;
+    return InAny(map, phaseRef, size, kComfort, x, y, z, extra);
 }
 
 bool PbpFire_Burns(WorldObject const* who, float x, float y, float z, float extra)
 {
     if (!who || !who->IsInWorld())
         return false;
-    return PbpFire_BurnsAt(who->GetMap(), who, who->GetObjectSize(), x, y, z, extra);
+    return InAny(who->GetMap(), who, who->GetObjectSize(), SightExtra(who), x, y, z, extra);
+}
+
+float PbpFire_MountRoom()
+{
+    return kMounted;
+}
+
+std::vector<std::string> PbpFire_Describe(Player* where)
+{
+    std::vector<std::string> out;
+    if (!where || !where->IsInWorld())
+        return out;
+    // The fires about them, burning or not, and how near anyone may stand.
+    std::list<GameObject*> near;
+    Acore::GameObjectInRangeCheck check(where->GetPositionX(), where->GetPositionY(), where->GetPositionZ(), 40.0f);
+    Acore::GameObjectListSearcher<Acore::GameObjectInRangeCheck> searcher(where, near, check);
+    Cell::VisitObjects(where, searcher, 40.0f);
+    std::list<Player*> people;
+    Acore::AnyPlayerInObjectRangeCheck nearPeople(where, 50.0f);
+    Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> peopleSearcher(where, people, nearPeople);
+    Cell::VisitObjects(where, peopleSearcher, 50.0f);
+    const auto now = Clock::now();
+    for (GameObject* go : near)
+    {
+        const float burns = Reach(go, 1.5f);
+        const float looks = SightReach(go, 1.5f + kComfort);
+        if (burns <= 0.0f && looks <= 0.0f)
+            continue;
+        GameObjectDisplayInfoEntry const* shown = sGameObjectDisplayInfoStore.LookupEntry(go->GetDisplayId());
+        out.push_back(fmt::format("{} ({}, type {}{}) {:.1f} yards off: anyone on foot keeps {:.1f} from its "
+                                  "middle, mounted {:.1f}{}{}",
+                                  go->GetName(), go->GetEntry(), uint32(go->GetGoType()),
+                                  burns > 0.0f ? ", burns" : "", where->GetExactDist(go),
+                                  std::max(burns, looks), std::max(burns, looks + kMounted),
+                                  shown ? fmt::format(" (model {:.1f}x{:.1f} at size {:.2f})",
+                                                      shown->maxX - shown->minX, shown->maxY - shown->minY,
+                                                      go->GetObjectScale())
+                                        : std::string(" (no model)"),
+                                  ""));
+        for (Player* p : people)
+        {
+            const float d = p->GetExactDist2d(go);
+            const float reach = std::max(Reach(go, p->GetObjectSize()),
+                                         SightReach(go, p->GetObjectSize() + SightExtra(p)));
+            if (d > reach + 3.0f || std::fabs(p->GetPositionZ() - go->GetPositionZ()) > 4.0f)
+                continue;
+            PlayerbotAI* ai = PbpAiOf(p);
+            const uint64_t key = p->GetGUID().GetRawValue();
+            std::string why;
+            if (PbpIsRealPlayer(p))
+                why = "a real player";
+            else if (!ai || !OursToMove(p, ai))
+                why = "not one to move (busy, grouped, a real player's, casting...)";
+            else if (p->isMoving())
+                why = "moving";
+            else if (auto w = g_nowhere.find(key); w != g_nowhere.end() && now < w->second)
+                why = "nowhere to step out to just now";
+            out.push_back(fmt::format("   {}{}: {:.1f} yards from the middle -- {}{}", p->GetName(),
+                                      p->IsMounted() ? " (mounted)" : "", d, d < reach ? "IN IT" : "clear",
+                                      d < reach && !why.empty() ? " (" + why + ")" : ""));
+        }
+    }
+    if (out.empty())
+        out.push_back("No fire within 40 yards.");
+    return out;
 }
 
 void PbpFire_Update(uint32_t /*diff*/)

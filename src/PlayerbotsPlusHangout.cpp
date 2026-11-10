@@ -379,7 +379,9 @@ namespace
                     continue;   // under a roof off an open square: a shop, the inn
             }
             // Not in a campfire or a brazier, nor in a vendor or the next person.
-            if (PbpFire_Burns(bot, x, y, z, 1.0f) || PbpSpace_Crowded(map, bot, x, y, z, 2.5f, bot))
+            // (Room for a mount too: whoever stands here may mount up.)
+            if (PbpFire_Burns(bot, x, y, z, 1.0f + PbpFire_MountRoom()) ||
+                PbpSpace_Crowded(map, bot, x, y, z, 2.5f, bot))
                 continue;
 
             ++paths;

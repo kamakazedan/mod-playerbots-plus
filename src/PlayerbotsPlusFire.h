@@ -4,8 +4,11 @@
 #include "ScriptMgr.h"
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 class Map;
+class Player;
 class Unit;
 class WorldObject;
 
@@ -33,6 +36,10 @@ class WorldObject;
 // (playerbots' own "idle", which picks something else to do), so it does not
 // walk straight back to the guard it was talking to.
 //
+// Someone keeps clear of a fire as it looks by a little more than its
+// model's footprint, and a mount's length more when they ride one: a bot
+// sat on its mammoth by a bonfire had the beast's head in the flames.
+//
 // A fire that does no harm is still a fire: nobody stands in a campfire, and
 // most of them -- Orgrimmar's bonfires among them -- burn nobody, so nothing
 // above ever noticed bots standing in them. Every couple of seconds a bot
@@ -59,6 +66,14 @@ bool PbpFire_Burns(WorldObject const* who, float x, float y, float z, float extr
 // The same on `map`, for someone of `size` who may not be on it yet
 // (`phaseRef` gives the phase).
 bool PbpFire_BurnsAt(Map* map, WorldObject const* phaseRef, float size, float x, float y, float z, float extra = 0.0f);
+
+// How much further from a fire someone keeps when they are mounted: their
+// mount's head or tail. For a place someone may mount up at later.
+float PbpFire_MountRoom();
+
+// For a GM (.pbp fires): the fires within 40 yards of `where`, how near
+// anyone may stand, and who is in one and why they stay.
+std::vector<std::string> PbpFire_Describe(Player* where);
 
 struct PbpFireStats
 {

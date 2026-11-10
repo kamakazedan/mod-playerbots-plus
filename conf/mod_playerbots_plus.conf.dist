@@ -554,8 +554,13 @@ PlayerbotsPlus.Stuck.WalkMinutes = 10
 #   bot standing still in a fire anyone can see is one, where a real player
 #   could see it (Space.Range), walks out of it the same way: a cooking fire
 #   (campfire, bonfire, brazier, stove), or something named like a fire, as
-#   far as its model reaches at the size it is shown. Nothing puts anyone in
-#   one of those either.
+#   far as its model reaches at the size it is shown, with half a yard to
+#   spare -- and a mount's length more for anyone riding one, whose mount's
+#   head would be in the flames. Nothing puts anyone in one of those either,
+#   and a hangout place leaves room for a mount.
+#
+#   .pbp fires (a GM, standing by one) lists the fires within 40 yards, how
+#   near anyone may stand, and who is in one and why they stay.
 #
 ###############################################################################
 

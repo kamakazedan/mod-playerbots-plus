@@ -149,9 +149,12 @@ spot for as long as it stays there.
   it doesn't walk straight back to the guard it was talking to.
 - Most fires burn nobody at all: Orgrimmar's bonfires are only something to
   cook at. A bot standing in a fire anyone can see is one -- a campfire, a
-  bonfire, a brazier, a stove, as far as its model reaches -- walks out of it
-  the same way whenever a real player is about, and nothing puts anyone in
+  bonfire, a brazier, a stove, as far as its model reaches, and further for
+  one on a mount, whose mount's head would be in the flames -- walks out of
+  it the same way whenever a real player is about, and nothing puts anyone in
   one of those either.
+- `.pbp fires` shows the fires around you, how near anyone may stand, and who
+  is in one and why.
 
 Settings: `PlayerbotsPlus.Fire.*`.
 
