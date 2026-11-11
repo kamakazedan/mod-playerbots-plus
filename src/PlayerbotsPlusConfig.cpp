@@ -204,8 +204,15 @@ namespace
     // Where people stand about in each capital: "map x y z radius capacity
     // name". Used when the conf has no PlayerbotsPlus.Hangout.Spot.* keys.
     const std::pair<const char*, const char*> kDefaultHangoutSpots[] = {
-        { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind" },
-        { "StormwindBank",      "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind" },
+        { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 16 the Trade District in Stormwind" },
+        { "StormwindAuction",   "0 -8815.2 652.9 94.9 14 12 outside the auction house in Stormwind" },
+        { "StormwindBank",      "0 -8914.0 621.5 99.6 14 10 the bank in Stormwind" },
+        { "StormwindValley",    "0 -8955.0 525.0 96.4 20 10 the Valley of Heroes in Stormwind" },
+        { "StormwindCathedral", "0 -8635.0 800.0 97.0 24 14 Cathedral Square in Stormwind" },
+        { "StormwindMageQuarter", "0 -9010.0 850.0 106.0 18 8 the Mage Quarter in Stormwind" },
+        { "StormwindDwarven",   "0 -8425.0 595.0 94.8 18 6 the Dwarven District in Stormwind" },
+        { "StormwindOldTown",   "0 -8675.0 445.0 99.5 16 6 Old Town in Stormwind" },
+        { "StormwindHarbor",    "0 -8565.5 1195.5 5.4 20 8 the harbor in Stormwind" },
         { "StormwindGates",     "0 -9100.0 380.0 93.8 22 14 outside the gates of Stormwind" },
         { "IronforgeCommons",   "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge" },
         { "OrgrimmarValley",    "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar" },
@@ -222,9 +229,11 @@ namespace
         { "ExodarHall",         "530 -3965.7 -11653.6 -138.8 18 8 the main hall of the Exodar" },
         { "SilvermoonExchange", "530 9744.0 -7466.1 13.5 22 10 the Royal Exchange in Silvermoon" },
         { "ShattrathTerrace",   "530 -1863.7 5430.0 -9.6 24 12 the Terrace of Light in Shattrath" },
-        { "DalaranBank",        "571 5958.1 617.3 650.6 18 12 outside the bank in Dalaran" },
-        { "DalaranKrasus",      "571 5813.4 453.4 658.8 16 8 Krasus' Landing in Dalaran" },
-        { "DalaranMerchants",   "571 5654.9 682.2 652.0 14 8 outside the Merchants' Bank in Dalaran" },
+        { "DalaranBank",        "571 5958.1 617.3 650.6 18 14 outside the bank in Dalaran" },
+        { "DalaranRuneweaver",  "571 5796.9 646.1 647.4 20 16 Runeweaver Square in Dalaran" },
+        { "DalaranFountain",    "571 5704.2 615.7 646.8 16 12 the fountain in the Eventide in Dalaran" },
+        { "DalaranKrasus",      "571 5813.4 453.4 658.8 16 10 Krasus' Landing in Dalaran" },
+        { "DalaranMerchants",   "571 5654.9 682.2 652.0 14 10 outside the Merchants' Bank in Dalaran" },
     };
 
     void LoadHangout()

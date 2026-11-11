@@ -10,7 +10,9 @@
 #include <cctype>
 #include <cstdio>
 #include <fstream>
+#include <map>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -246,11 +248,15 @@ int main(int argc, char** argv)
              PbpParseSpotLine("571 5813.4 453.4 658.8 16 8 Krasus' Landing in Dalaran", apostrophe) &&
                  apostrophe.name == "Krasus' Landing in Dalaran");
 
-        // Every spot the conf ships reads, is a sane place, and is one of the
-        // code's defaults, word for word.
+        // Every spot the conf ships reads, is a sane place in a city, and is
+        // one of the code's defaults, word for word -- and the code has no
+        // others.
         std::istringstream in(conf);
         std::string text;
         int spots = 0, good = 0, same = 0;
+        const std::set<std::string> cities = { "Stormwind", "Ironforge", "Darnassus", "Exodar", "Orgrimmar",
+                                               "Undercity", "Thunder Bluff", "Silvermoon", "Shattrath", "Dalaran" };
+        std::map<std::string, int> room;   // people's worth, by city
         const std::string prefix = "PlayerbotsPlus.Hangout.Spot.";
         while (std::getline(in, text))
         {
@@ -262,8 +268,11 @@ int main(int argc, char** argv)
             const std::string value = q1 != std::string::npos && q2 > q1 ? text.substr(q1 + 1, q2 - q1 - 1) : "";
             PbpSpotLine s;
             if (PbpParseSpotLine(value, s) && (s.map == 0 || s.map == 1 || s.map == 530 || s.map == 571) &&
-                s.capacity > 0 && s.radius >= 10.0f && !s.name.empty())
+                s.capacity > 0 && s.radius >= 10.0f && !s.name.empty() && cities.count(PbpCityOf(s.name)))
+            {
                 ++good;
+                room[PbpCityOf(s.name)] += s.capacity;
+            }
             else
                 std::printf("   bad spot: %s\n", text.c_str());
             if (config.find("{ \"" + key + "\",") != std::string::npos &&
@@ -272,8 +281,19 @@ int main(int argc, char** argv)
             else
                 std::printf("   not the code's default: %s\n", text.c_str());
         }
-        True("conf spots", spots == 21 && good == 21);
-        True("conf spots are the code's", same == 21);
+        True("conf spots", spots == 30 && good == 30);
+        True("conf spots are the code's", same == 30);
+        const size_t list = config.find("kDefaultHangoutSpots[]");
+        const size_t end  = config.find("};", list);
+        int defaults = 0;
+        for (size_t at = config.find("\n        { \"", list); at < end; at = config.find("\n        { \"", at + 1))
+            ++defaults;
+        True("the code has no other spots: " + std::to_string(defaults), list != std::string::npos && defaults == 30);
+        // Where people meet, there is room for them: Stormwind as much as
+        // Orgrimmar, Dalaran (only from level 68) a good part of that.
+        True("room in Orgrimmar: " + std::to_string(room["Orgrimmar"]), room["Orgrimmar"] >= 80);
+        True("room in Stormwind: " + std::to_string(room["Stormwind"]), room["Stormwind"] >= room["Orgrimmar"]);
+        True("room in Dalaran: " + std::to_string(room["Dalaran"]), room["Dalaran"] >= 60);
     }
 
     // ---- the city a spot is in ----------------------------------------------------------

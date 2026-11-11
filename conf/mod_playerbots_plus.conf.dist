@@ -425,19 +425,38 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        how far from it a place may be; capacity how many bots at most;
 #        name what bots call it ("the Trade District in Stormwind"). Add as
 #        many as you like, one key each; capacity 0 turns one off. With no
-#        Spot keys at all, these are the defaults. Orgrimmar has the most:
-#        the Valley of Strength -- in front of the inn and the auction house,
-#        the bank, the open middle of it and just inside the gates (the
-#        middle and the gates' z are a little above the ground, so a place
-#        may be found up the slopes too) -- the Drag, the Valley of Honor,
-#        and outside the city the gates and the zeppelin tower. Outside the
-#        gates of Orgrimmar and of Stormwind is where people duel (see DUELS
-#        AT THE CITY GATES). A city's spots fill evenly, the emptiest first,
-#        and never with anyone standing in a fire (a bonfire included).
+#        Spot keys at all, these are the defaults. The cities people meet in
+#        have the most room (Orgrimmar and Stormwind about a hundred people
+#        each, Dalaran about sixty):
+#          Orgrimmar: the Valley of Strength -- in front of the inn and the
+#          auction house, the bank, the open middle of it and just inside the
+#          gates (the middle and the gates' z are a little above the ground,
+#          so a place may be found up the slopes too) -- the Drag, the Valley
+#          of Honor, and outside the city the gates and the zeppelin tower.
+#          Stormwind: the Trade District, outside the auction house and the
+#          bank, the Valley of Heroes, Cathedral Square, the Mage Quarter, the
+#          Dwarven District, Old Town, the harbor and outside the gates.
+#          Dalaran (from level 68, both sides): outside both banks, Runeweaver
+#          Square (to one side of the statue, which nobody sees through),
+#          the fountain in the Eventide and Krasus' Landing -- none of them in
+#          the Silver Enclave or Sunreaver's Sanctuary, whose guards see off
+#          the other side.
+#        Outside the gates of Orgrimmar and of Stormwind is where people duel
+#        (see DUELS AT THE CITY GATES). A city's spots fill evenly, the
+#        emptiest first, and never with anyone standing in a fire (a bonfire
+#        included). A spot's middle is somewhere open, never inside a statue
+#        or a fountain: every place is checked to be in sight of it.
 #        Maps: 0 Eastern Kingdoms, 1 Kalimdor, 530 Outland and the Blood
 #        Elf and Draenei lands, 571 Northrend.
-PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 14 the Trade District in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 8 the bank in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 16 the Trade District in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindAuction = "0 -8815.2 652.9 94.9 14 12 outside the auction house in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 10 the bank in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindValley = "0 -8955.0 525.0 96.4 20 10 the Valley of Heroes in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindCathedral = "0 -8635.0 800.0 97.0 24 14 Cathedral Square in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindMageQuarter = "0 -9010.0 850.0 106.0 18 8 the Mage Quarter in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindDwarven = "0 -8425.0 595.0 94.8 18 6 the Dwarven District in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindOldTown = "0 -8675.0 445.0 99.5 16 6 Old Town in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindHarbor = "0 -8565.5 1195.5 5.4 20 8 the harbor in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindGates = "0 -9100.0 380.0 93.8 22 14 outside the gates of Stormwind"
 PlayerbotsPlus.Hangout.Spot.IronforgeCommons = "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarValley = "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar"
@@ -454,9 +473,11 @@ PlayerbotsPlus.Hangout.Spot.DarnassusBank = "1 9943.0 2497.7 1317.7 16 8 outside
 PlayerbotsPlus.Hangout.Spot.ExodarHall = "530 -3965.7 -11653.6 -138.8 18 8 the main hall of the Exodar"
 PlayerbotsPlus.Hangout.Spot.SilvermoonExchange = "530 9744.0 -7466.1 13.5 22 10 the Royal Exchange in Silvermoon"
 PlayerbotsPlus.Hangout.Spot.ShattrathTerrace = "530 -1863.7 5430.0 -9.6 24 12 the Terrace of Light in Shattrath"
-PlayerbotsPlus.Hangout.Spot.DalaranBank = "571 5958.1 617.3 650.6 18 12 outside the bank in Dalaran"
-PlayerbotsPlus.Hangout.Spot.DalaranKrasus = "571 5813.4 453.4 658.8 16 8 Krasus' Landing in Dalaran"
-PlayerbotsPlus.Hangout.Spot.DalaranMerchants = "571 5654.9 682.2 652.0 14 8 outside the Merchants' Bank in Dalaran"
+PlayerbotsPlus.Hangout.Spot.DalaranBank = "571 5958.1 617.3 650.6 18 14 outside the bank in Dalaran"
+PlayerbotsPlus.Hangout.Spot.DalaranRuneweaver = "571 5796.9 646.1 647.4 20 16 Runeweaver Square in Dalaran"
+PlayerbotsPlus.Hangout.Spot.DalaranFountain = "571 5704.2 615.7 646.8 16 12 the fountain in the Eventide in Dalaran"
+PlayerbotsPlus.Hangout.Spot.DalaranKrasus = "571 5813.4 453.4 658.8 16 10 Krasus' Landing in Dalaran"
+PlayerbotsPlus.Hangout.Spot.DalaranMerchants = "571 5654.9 682.2 652.0 14 10 outside the Merchants' Bank in Dalaran"
 
 ###############################################################################
 #

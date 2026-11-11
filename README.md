@@ -78,11 +78,20 @@ Commons, the Valley of Strength, outside the bank in Dalaran. Playerbots never
 sends a bot anywhere in particular, so idle bots in a city just wander from
 NPC to NPC. With hangouts, they gather where players do.
 
-- **Where:** 21 spots in the capitals, Shattrath and Dalaran come set up,
-  eight of them in and around Orgrimmar: in the Valley of Strength in front
-  of the inn and the auction house, outside the bank, the open middle of it
-  and just inside the gates, then the Drag, the Valley of Honor, outside the
-  gates and the zeppelin tower. Outside the gates of Stormwind is one too.
+- **Where:** 30 spots in the capitals, Shattrath and Dalaran come set up.
+  The cities people meet in have the most, room for about a hundred each in
+  Orgrimmar and Stormwind and sixty in Dalaran:
+  - Orgrimmar: in the Valley of Strength in front of the inn and the auction
+    house, outside the bank, the open middle of it and just inside the gates,
+    then the Drag, the Valley of Honor, outside the gates and the zeppelin
+    tower.
+  - Stormwind: the Trade District, outside the auction house and the bank,
+    the Valley of Heroes, Cathedral Square, the Mage Quarter, the Dwarven
+    District, Old Town, the harbor and outside the gates.
+  - Dalaran, from level 68 and for both sides: outside both banks, Runeweaver
+    Square, the fountain in the Eventide and Krasus' Landing, none of them in
+    the Silver Enclave or Sunreaver's Sanctuary.
+
   You can add your own, or change how many bots each one holds. A city's
   spots fill evenly, the emptiest first.
 - **Who:** idle random bots near a spot, of its zone and floor. A bot that is
