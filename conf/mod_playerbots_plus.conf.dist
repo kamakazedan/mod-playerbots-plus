@@ -531,8 +531,9 @@ PlayerbotsPlus.BotDungeons.KeepLogFree = 3
 #       (BenchChance, when there is one; a seat whose name has one of
 #       BenchWords). Orgrimmar has no benches at all, so nobody there
 #       goes looking: it is one of the others;
-#     * mounted (MountedChance), if it can ride and it is outdoors --
-#       playerbots puts an idle random bot on its best mount anyway;
+#     * mounted (MountedChance), if it can ride and its place is out in
+#       the open -- playerbots puts an idle random bot on its best mount
+#       anyway; one whose place is under a roof gets off there;
 #     * sat on the ground (SitChance), or else just standing about;
 #     * and, AfkChance of the time, AFK: the flag, so it shows <AFK>. With
 #       mod-ollama-chat, an AFK bot says nothing and reacts to nothing until
@@ -827,6 +828,43 @@ PlayerbotsPlus.Stuck.IgnoreMinutes = 10
 #        every bot its mount. At most 120.
 #        Default: 10
 PlayerbotsPlus.Stuck.WalkMinutes = 10
+
+###############################################################################
+#
+#   ON FOOT INDOORS
+#
+#   The game lets nobody get on a mount under a roof, but it does not take
+#   anyone off one who rides in, and playerbots' mount check does nothing at
+#   all indoors, up or down. So a bot that rides into a bank or an inn -- or
+#   is teleported to a banker on its mount -- stands at the counter on it for
+#   as long as it is there.
+#
+#   Once a second, a bot that has been on a mount (or in a druid's travel or
+#   flight form) indoors -- anywhere the game would not let it mount: a
+#   building, a cave, a tunnel -- for Seconds gets off it the first time it
+#   is standing still. Riding through a gateway or a tunnel without stopping
+#   is left alone, as a player would ride through. Only a bot on the ground
+#   in the open world, out of any fight, not on a flight path, a vehicle or a
+#   boat; never a self-bot. A player's own bots stay up while their player is
+#   on a mount close by (within 100 yards), and get off once the player has.
+#   Outside again, playerbots puts them back on their mounts as it always
+#   does. Bots hanging out in a city (City hangouts) only ever sit on a mount
+#   at a place out in the open. With PlayerbotsPlus.Debug on, each one is
+#   logged.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Indoors.Enable
+#        Default: 1
+PlayerbotsPlus.Indoors.Enable = 1
+
+#    PlayerbotsPlus.Indoors.Seconds
+#        How long a bot may be on its mount under a roof before it gets off,
+#        the first time it is standing still after that. Short enough that
+#        nobody sees one stand about on it; riding under an arch, or through
+#        a tunnel without stopping, never takes anyone off. 1 to 60.
+#        Default: 3
+PlayerbotsPlus.Indoors.Seconds = 3
 
 ###############################################################################
 #

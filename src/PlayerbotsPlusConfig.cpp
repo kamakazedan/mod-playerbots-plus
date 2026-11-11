@@ -54,6 +54,8 @@ namespace pbp
     uint32_t    g_StuckWalkMinutes        = 10;
     bool        g_FireEnable              = true;
     float       g_FireMargin              = 1.5f;
+    bool        g_IndoorsEnable           = true;
+    uint32_t    g_IndoorsSeconds          = 3;
     bool        g_SpaceEnable             = true;
     uint32_t    g_SpaceCheckSeconds       = 2;
     uint32_t    g_SpaceStillSeconds       = 10;
@@ -385,6 +387,9 @@ namespace
 
         g_FireEnable = B("PlayerbotsPlus.Fire.Enable", true);
         g_FireMargin = std::clamp(F("PlayerbotsPlus.Fire.Margin", 1.5f), 0.5f, 5.0f);
+
+        g_IndoorsEnable  = B("PlayerbotsPlus.Indoors.Enable", true);
+        g_IndoorsSeconds = std::clamp<uint32_t>(U("PlayerbotsPlus.Indoors.Seconds", 3), 1, 60);
 
         g_SpaceEnable          = B("PlayerbotsPlus.Space.Enable", true);
         g_SpaceCheckSeconds    = std::clamp<uint32_t>(U("PlayerbotsPlus.Space.CheckSeconds", 2), 1, 30);
@@ -784,9 +789,11 @@ void PlayerbotsPlus_LoadConfig(bool reload)
         : std::string();
     LOG_INFO(where,
              "[Playerbots Plus] City hangouts {} ({} spots, room for {}{}; fetched from elsewhere {}), stuck mounts "
-             "{}, out of fires {}, room to stand {}, getting back up {}, raid marks {} (sapping the star {}).",
+             "{}, on foot indoors {}, out of fires {}, room to stand {}, getting back up {}, raid marks {} (sapping "
+             "the star {}).",
              pbp::g_HangoutEnable ? "on" : "off", pbp::g_HangoutSpots.size(), places, shared,
-             pbp::g_HangoutBringIn ? "on" : "off", pbp::g_StuckEnable ? "on" : "off", pbp::g_FireEnable ? "on" : "off",
+             pbp::g_HangoutBringIn ? "on" : "off", pbp::g_StuckEnable ? "on" : "off",
+             pbp::g_IndoorsEnable ? "on" : "off", pbp::g_FireEnable ? "on" : "off",
              pbp::g_SpaceEnable ? "on" : "off",
              pbp::g_ReviveEnable ? "on" : "off", pbp::g_MarksEnable ? "on" : "off",
              pbp::g_MarksSapStar ? "on" : "off");

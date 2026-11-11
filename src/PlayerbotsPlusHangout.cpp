@@ -452,10 +452,18 @@ namespace
         return free[std::uniform_int_distribution<size_t>(0, free.size() - 1)(Rng())];
     }
 
-    bool CanRide(Player* bot, PlayerbotAI* ai)
+    // On its mount at its place: only out in the open. Where the bot stands
+    // now is not the question -- one walking in from the street to a place in
+    // the bank rode in on its mount and stood at the counter on it.
+    bool CanRide(Player* bot, PlayerbotAI* ai, const Visit& v)
     {
-        return bot->GetLevel() >= sPlayerbotAIConfig.UseGroundMountAtMinLevel &&
-               ai->HasStrategy("mount", BOT_STATE_NON_COMBAT) && bot->IsOutdoors();
+        if (bot->GetMapId() != v.map || bot->GetLevel() < sPlayerbotAIConfig.UseGroundMountAtMinLevel ||
+            !ai->HasStrategy("mount", BOT_STATE_NON_COMBAT))
+            return false;
+        PositionFullTerrainStatus there;
+        bot->GetMap()->GetFullTerrainStatusForPosition(bot->GetPhaseMask(), v.x, v.y, v.z, bot->GetCollisionHeight(),
+                                                       there);
+        return there.outdoors;
     }
 
     const char* Doing(const Visit& v, Player* bot)
@@ -1030,7 +1038,7 @@ namespace
             v.by      = bench->GetPositionY();
             v.bz      = bench->GetPositionZ();
         }
-        else if (!v.forDuel && CanRide(bot, ai) && Roll(g_HangoutMountedChance))
+        else if (!v.forDuel && CanRide(bot, ai, v) && Roll(g_HangoutMountedChance))
             v.posture = Posture::Mounted;
         else if (!v.forDuel && Roll(g_HangoutSitChance))
             v.posture = Posture::Sit;
@@ -1203,7 +1211,7 @@ namespace
         // Back to its place, to stand, sit or get back on its mount there.
         if (bot->IsSitState())
             bot->SetStandState(UNIT_STAND_STATE_STAND);
-        if (v.posture == Posture::Mounted && !CanRide(bot, ai))
+        if (v.posture == Posture::Mounted && !CanRide(bot, ai, v))
             v.posture = Posture::Stand;
         ai->SetNextCheckDelay(kHoldMs);
         v.phase         = Phase::Approach;

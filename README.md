@@ -13,6 +13,7 @@ their own words.
 | [The auction house](#the-auction-house) | Sell what they have no use for and buy upgrades, under their own names |
 | [City hangouts](#city-hangouts) | Gather where players do in the capitals: on a bench, mounted, or AFK |
 | [Stuck on a mount](#stuck-on-a-mount) | Stop getting on and off their mount at a herb they can't pick, and move on |
+| [On foot indoors](#on-foot-indoors) | Get off their mount in a bank, an inn or a cave, instead of standing at the counter on it |
 | [Out of the fire](#out-of-the-fire) | Step out of a campfire, bonfire or brazier, burning or not, instead of standing in it |
 | [Room to stand](#room-to-stand) | Step aside when they've stopped inside someone, instead of piling up on one spot |
 | [Getting back up](#getting-back-up) | Release and run back when nobody in the group can resurrect them |
@@ -108,8 +109,9 @@ NPC to NPC. With hangouts, they gather where players do.
 - **Who:** idle random bots near a spot, of its zone and floor. A bot that is
   grouped, queued, questing, gathering, fighting or flying is left alone, and
   so is one a real player has targeted.
-- **How they spend it:** on a free bench, mounted on their best mount, sat on
-  the ground or just standing about, for 5 to 20 minutes. Now and then one
+- **How they spend it:** on a free bench, mounted on their best mount (only
+  at a place out in the open), sat on the ground or just standing about, for
+  5 to 20 minutes. Now and then one
   goes AFK, and it shows `<AFK>`.
 - **Keeping spots busy:** playerbots sends few bots to the capitals, so a
   spot short of bots gets some fetched from elsewhere. While someone is in
@@ -152,6 +154,26 @@ and without fighting in between, takes the hint.
   and anyone else at the same thing.
 
 Settings: `PlayerbotsPlus.Stuck.*`.
+
+## On foot indoors
+
+The game won't let anyone get on a mount under a roof, but it doesn't take
+anyone off one who rides in, and playerbots' mount check does nothing at all
+indoors. So a bot that rides into the bank, or is teleported to a banker on
+its mount, stands at the counter on it for as long as it's there.
+
+- A bot that has been on a mount indoors for 3 seconds gets off the first
+  time it stands still. Indoors is wherever the game wouldn't let it mount:
+  a building, a cave, a tunnel. A druid in travel or flight form shifts back.
+- Riding through a gateway or a tunnel without stopping is left alone, the
+  way a player rides through.
+- A player's own bots stay up while their player is mounted close by, and get
+  off once the player has. Self-bots, fights, flight paths, vehicles, boats,
+  dungeons and battlegrounds are left alone.
+- Outside again, playerbots puts them back on their mounts as usual.
+- Bots hanging out in a city only sit on a mount at a place out in the open.
+
+Settings: `PlayerbotsPlus.Indoors.*`.
 
 ## Out of the fire
 

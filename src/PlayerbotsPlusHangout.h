@@ -25,8 +25,9 @@ class Player;
 // StayMinutesMin..Max:
 //
 //   * on a bench within Hangout.BenchRange that is free;
-//   * mounted, if it can ride and it is outdoors (playerbots puts an idle
-//     random bot on its best mount);
+//   * mounted, if it can ride and its place is out in the open (playerbots
+//     puts an idle random bot on its best mount); one whose place is under
+//     a roof gets off there;
 //   * sat on the ground, or just standing about;
 //   * and now and then AFK (the flag, so it shows <AFK>): it stays quiet,
 //     and when someone talks to it, it is back.

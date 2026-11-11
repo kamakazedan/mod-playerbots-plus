@@ -3,6 +3,7 @@
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusFire.h"
 #include "PlayerbotsPlusHangout.h"
+#include "PlayerbotsPlusIndoors.h"
 #include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlusMarketPrice.h"
@@ -57,6 +58,7 @@ namespace
             // left, and the runs going on finish and let their party go.
             PbpDungeons_Update(diff);
             PbpStuck_Update(diff);
+            PbpIndoors_Update(diff);
             PbpFire_Update(diff);
             PbpSpace_Update(diff);
             if (!g_Pbp.enable)
@@ -200,6 +202,11 @@ namespace
                                      "else), {} with nowhere to step to.",
                                      onOff(pbp::g_FireEnable), f.burns, f.seen, f.stepped, f.moved, f.sentOn,
                                      f.nowhere);
+
+            PbpIndoorsStats const in = PbpIndoors_GetStats();
+            handler->PSendSysMessage("On foot indoors: {} - {} bots got off their mount under a roof, {} riding "
+                                     "indoors right now (off once standing still, after {}s).",
+                                     onOff(pbp::g_IndoorsEnable), in.dismounted, in.watching, pbp::g_IndoorsSeconds);
 
             PbpSpaceStats const sp = PbpSpace_GetStats();
             handler->PSendSysMessage("Room to stand: {} - {} bots found standing in someone, {} stepped aside ({} of "

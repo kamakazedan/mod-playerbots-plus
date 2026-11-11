@@ -160,6 +160,10 @@ namespace pbp
     extern bool        g_FireEnable;
     extern float       g_FireMargin;
 
+    // On foot indoors (PlayerbotsPlusIndoors)
+    extern bool        g_IndoorsEnable;
+    extern uint32_t    g_IndoorsSeconds;
+
     // Room to stand (PlayerbotsPlusSpace)
     extern bool        g_SpaceEnable;
     extern uint32_t    g_SpaceCheckSeconds;
