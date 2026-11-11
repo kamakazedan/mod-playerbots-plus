@@ -406,8 +406,10 @@ PlayerbotsPlus.BotDungeons.MaxRuns = 5
 PlayerbotsPlus.BotDungeons.MaxWorldTickMs = 200
 
 #    PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline
-#        No new party while nobody is playing. With playerbots logging its
-#        bots out when the last player leaves
+#        No new party while nobody is playing: when the last player logs off,
+#        the parties still waiting in the queue leave it, and the runs going
+#        on carry on to their end; nothing new starts until someone logs in.
+#        With playerbots logging its bots out when the last player leaves
 #        (Playerbots.DisabledWithoutRealPlayer), give its logout delay time for
 #        a run to finish.
 #        Default: 1

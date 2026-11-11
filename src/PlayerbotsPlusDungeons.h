@@ -105,6 +105,7 @@ struct PbpDungeonsStats
     uint64_t gaveUp    = 0;   // ...that waited too long and left it
     uint64_t together  = 0;   // ...that queued again as a party, after waiting alone
     uint64_t cameApart = 0;   // ...that could not, someone gone (with a player, in a fight elsewhere)
+    uint64_t leftNobody = 0;  // ...that left it when the last player logged off
     uint64_t runs      = 0;   // groups of bots taken on in their dungeon
     uint64_t cleared   = 0;   // ...that cleared it
     uint64_t failed    = 0;   // ...that did not

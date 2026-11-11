@@ -427,8 +427,10 @@ only in a build with
 - **Loose ends.** A bot that logs in inside a dungeon it's no longer grouped
   for (the server went down mid-run) is sent back out.
 
-New parties wait while nobody is playing, and while the world tick averages
-over 200 ms; there are 5 at most at once. `.pbp dungeons` shows what's going
+New parties wait while nobody is playing: when the last player logs off,
+the parties still in the queue leave it and the runs going on finish, and
+nothing new starts until someone logs in. They also wait while the world
+tick averages over 200 ms; there are 5 at most at once. `.pbp dungeons` shows what's going
 on, including the tick. `.pbp dungeons send <dungeon>` queues a party for a
 dungeon now, quest or no quest. Settings: `PlayerbotsPlus.BotDungeons.*`.
 

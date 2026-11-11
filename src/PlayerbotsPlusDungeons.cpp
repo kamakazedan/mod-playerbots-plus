@@ -788,6 +788,43 @@ namespace
         }
     }
 
+    // The last player has gone (OnlyWithPlayersOnline): the parties still
+    // waiting leave the queue -- not one whose offer is out, which is as good
+    // as in -- and the runs going on carry on to their end. Plan starts
+    // nothing new until someone logs in.
+    void LeaveQueuesNobodyPlaying()
+    {
+        uint32 left = 0;
+        std::string what;
+        for (auto it = g_queued.begin(); it != g_queued.end();)
+        {
+            Queued& q = *it;
+            bool offered = false;
+            for (ObjectGuid guid : q.bots)
+            {
+                lfg::LfgState const state = sLFGMgr->GetState(guid);
+                offered = offered || state == lfg::LFG_STATE_PROPOSAL || state == lfg::LFG_STATE_ROLECHECK;
+            }
+            if (offered)
+            {
+                ++it;
+                continue;
+            }
+            for (ObjectGuid guid : q.bots)
+                if (!q.party && sLFGMgr->GetState(guid) == lfg::LFG_STATE_QUEUED)
+                    sLFGMgr->LeaveLfg(guid);
+            Unparty(q);
+            what += (what.empty() ? "" : "; ") + q.what;
+            ++left;
+            it = g_queued.erase(it);
+        }
+        if (!left)
+            return;
+        g_stats.leftNobody += left;
+        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: nobody is playing -- out of the queue: {}. "
+                 "{} run(s) carry on to their end; nothing new until someone logs in.", what, g_runs.size());
+    }
+
     // Leave every queue it made (the feature switched off).
     void LeaveQueues(Clock::time_point now)
     {
@@ -1205,6 +1242,8 @@ void PbpDungeons_Update(uint32_t diff)
     if (g_watchMs >= 1000)
     {
         g_watchMs = 0;
+        if (on && g_Pbp.dungeons.needPlayerOnline && !g_queued.empty() && !PlayerOnline())
+            LeaveQueuesNobodyPlaying();
         WatchQueues(now);
         WatchRuns(now, on);
     }
@@ -1309,7 +1348,8 @@ std::vector<std::string> PbpDungeons_Status()
     PbpDungeonsStats const st = PbpDungeons_GetStats();
     out.push_back("  Since start: " + std::to_string(st.queued) + " parties queued (" + std::to_string(st.together) +
                   " queued again as a party after waiting alone, " + std::to_string(st.cameApart) +
-                  " came apart, " + std::to_string(st.gaveUp) + " gave up waiting; " + std::to_string(st.offers) +
+                  " came apart, " + std::to_string(st.gaveUp) + " gave up waiting, " + std::to_string(st.leftNobody) +
+                  " left when nobody was playing; " + std::to_string(st.offers) +
                   " group offers said yes to, " + std::to_string(st.rejoined) + " dropouts back in the queue), " +
                   std::to_string(st.runs) + " runs: " + std::to_string(st.cleared) +
                   " cleared, " + std::to_string(st.failed) + " failed, " + std::to_string(st.handedOver) +
