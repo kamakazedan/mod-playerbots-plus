@@ -142,6 +142,7 @@ namespace
         return true;
     }
 
+    // For an item sure to be there: one being put on, or used to cast.
     void NoteItem(NoteKind kind, Player* player, Item* item, int64_t count, bool node = false)
     {
         uint32_t account = 0;
@@ -153,6 +154,49 @@ namespace
         n.guid    = player->GetGUID().GetRawValue();
         n.item    = item->GetGUID().GetRawValue();
         n.entry   = item->GetEntry();
+        n.amount  = count;
+        n.node    = node;
+        Push(n);
+    }
+
+    // The item a "something got" hook is about, as StoreNewItem stored it, read
+    // in OnPlayerStoreNewItem while it is sure to be there. The loot, roll,
+    // quest-reward, crafting and vendor hooks come straight after on the same
+    // thread, and must not follow their Item*: a module whose hook runs before
+    // ours may have destroyed it (mod-junk-to-gold sells and destroys grey
+    // loot in OnPlayerLootItem), and a new item destroyed is deleted on the
+    // spot. They only compare its address with this one's.
+    struct Stored
+    {
+        Player const* player = nullptr;
+        Item const*   item   = nullptr;   // compared, never followed
+        uint64_t      guid   = 0;
+        uint32_t      entry  = 0;
+    };
+    thread_local Stored t_stored;
+
+    // Whether `item` is the one just stored for `player` on this thread; the
+    // record is used up either way.
+    bool TakeStored(Player* player, Item* item, Stored& out)
+    {
+        const bool match = item && t_stored.item == item && t_stored.player == player;
+        if (match)
+            out = t_stored;
+        t_stored = {};
+        return match;
+    }
+
+    void NoteStored(NoteKind kind, Player* player, Stored const& stored, int64_t count, bool node = false)
+    {
+        uint32_t account = 0;
+        if (!stored.entry || !BotSession(player, account))
+            return;
+        Note n;
+        n.kind    = kind;
+        n.account = account;
+        n.guid    = player->GetGUID().GetRawValue();
+        n.item    = stored.guid;
+        n.entry   = stored.entry;
         n.amount  = count;
         n.node    = node;
         Push(n);
@@ -431,21 +475,21 @@ namespace
                 Add("loot." + kind, n.amount);
                 if (n.node)
                     Add("loot.nodes", n.amount);
-                if (gear)
+                if (gear && n.item)
                     NoteOrigin(n.item, From::Looted);
                 return;
             case NoteKind::QuestItem:
-                if (gear)
+                if (gear && n.item)
                     NoteOrigin(n.item, From::Quest);
                 return;
             case NoteKind::Made:
                 Add("made." + kind, n.amount);
-                if (gear)
+                if (gear && n.item)
                     NoteOrigin(n.item, From::Made);
                 return;
             case NoteKind::Vendor:
                 Add("vendor." + kind, n.amount);
-                if (gear)
+                if (gear && n.item)
                     NoteOrigin(n.item, From::Vendor);
                 return;
             default:
@@ -738,11 +782,24 @@ namespace
 
 PbpLedgerPlayerScript::PbpLedgerPlayerScript()
     : PlayerScript("PbpLedgerPlayerScript",
-                   { PLAYERHOOK_ON_MONEY_CHANGED, PLAYERHOOK_ON_BEFORE_LOOT_MONEY, PLAYERHOOK_ON_PLAYER_COMPLETE_QUEST,
-                     PLAYERHOOK_ON_LOOT_ITEM, PLAYERHOOK_ON_GROUP_ROLL_REWARD_ITEM, PLAYERHOOK_ON_QUEST_REWARD_ITEM,
-                     PLAYERHOOK_ON_CREATE_ITEM, PLAYERHOOK_ON_AFTER_STORE_OR_EQUIP_NEW_ITEM, PLAYERHOOK_ON_EQUIP,
-                     PLAYERHOOK_ON_SPELL_CAST })
+                   { PLAYERHOOK_ON_STORE_NEW_ITEM, PLAYERHOOK_ON_MONEY_CHANGED, PLAYERHOOK_ON_BEFORE_LOOT_MONEY,
+                     PLAYERHOOK_ON_PLAYER_COMPLETE_QUEST, PLAYERHOOK_ON_LOOT_ITEM, PLAYERHOOK_ON_GROUP_ROLL_REWARD_ITEM,
+                     PLAYERHOOK_ON_QUEST_REWARD_ITEM, PLAYERHOOK_ON_CREATE_ITEM,
+                     PLAYERHOOK_ON_AFTER_STORE_OR_EQUIP_NEW_ITEM, PLAYERHOOK_ON_EQUIP, PLAYERHOOK_ON_SPELL_CAST })
 {
+}
+
+void PbpLedgerPlayerScript::OnPlayerStoreNewItem(Player* player, Item* item, uint32 /*count*/)
+{
+    // Inside StoreNewItem: the item is there. Read what the hook that follows
+    // will need (see Stored).
+    t_stored = {};
+    if (!item || !player || !g_on.load(std::memory_order_relaxed))
+        return;
+    t_stored.player = player;
+    t_stored.item   = item;
+    t_stored.guid   = item->GetGUID().GetRawValue();
+    t_stored.entry  = item->GetEntry();
 }
 
 void PbpLedgerPlayerScript::OnPlayerMoneyChanged(Player* player, int32& amount)
@@ -768,33 +825,54 @@ void PbpLedgerPlayerScript::OnPlayerCompleteQuest(Player* player, Quest const* q
     NoteGold(NoteKind::QuestMoney, player, copper);
 }
 
+// The loot, roll, quest-reward and crafting hooks never follow `item`: it may
+// be gone already (see Stored).
 void PbpLedgerPlayerScript::OnPlayerLootItem(Player* player, Item* item, uint32 count, ObjectGuid lootguid)
 {
-    NoteItem(NoteKind::Looted, player, item, count, lootguid.IsGameObject());
+    Stored stored;
+    if (TakeStored(player, item, stored))
+        NoteStored(NoteKind::Looted, player, stored, count, lootguid.IsGameObject());
 }
 
 void PbpLedgerPlayerScript::OnPlayerGroupRollRewardItem(Player* player, Item* item, uint32 count,
                                                         RollVote /*voteType*/, Roll* /*roll*/)
 {
-    NoteItem(NoteKind::Looted, player, item, count);
+    Stored stored;
+    if (TakeStored(player, item, stored))
+        NoteStored(NoteKind::Looted, player, stored, count);
 }
 
 void PbpLedgerPlayerScript::OnPlayerQuestRewardItem(Player* player, Item* item, uint32 count)
 {
-    NoteItem(NoteKind::QuestItem, player, item, count);
+    Stored stored;
+    if (TakeStored(player, item, stored))
+        NoteStored(NoteKind::QuestItem, player, stored, count);
 }
 
 void PbpLedgerPlayerScript::OnPlayerCreateItem(Player* player, Item* item, uint32 count)
 {
-    NoteItem(NoteKind::Made, player, item, count);
+    Stored stored;
+    if (TakeStored(player, item, stored))
+        NoteStored(NoteKind::Made, player, stored, count);
 }
 
 void PbpLedgerPlayerScript::OnPlayerAfterStoreOrEquipNewItem(Player* player, uint32 /*vendorslot*/, Item* item,
                                                              uint8 count, uint8 /*bag*/, uint8 /*slot*/,
-                                                             ItemTemplate const* /*pProto*/, Creature* /*pVendor*/,
-                                                             VendorItem const* /*crItem*/, bool /*bStore*/)
+                                                             ItemTemplate const* pProto, Creature* /*pVendor*/,
+                                                             VendorItem const* /*crItem*/, bool bStore)
 {
-    NoteItem(NoteKind::Vendor, player, item, count);
+    // Bought into the bags, StoreNewItem stored it just before. Put straight
+    // on, it never went through there: the template the game hands us says
+    // what it was.
+    Stored stored;
+    if (!bStore || !TakeStored(player, item, stored))
+    {
+        t_stored = {};
+        stored   = {};
+        if (pProto)
+            stored.entry = pProto->ItemId;
+    }
+    NoteStored(NoteKind::Vendor, player, stored, count);
 }
 
 void PbpLedgerPlayerScript::OnPlayerEquip(Player* player, Item* it, uint8 /*bag*/, uint8 /*slot*/, bool /*update*/)

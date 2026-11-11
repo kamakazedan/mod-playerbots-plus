@@ -36,6 +36,23 @@ These hooks are the exception, and they touch nothing of the world:
   tick decides whose bot it was (`IsInRandomAccountList`, the character
   cache) and adds it up. Never look up a random bot from a map thread.
 
+## An Item* in a hook may already be freed
+
+Hooks run in module order (alphabetical), and a module before this one may
+destroy the item its hook is about. mod-junk-to-gold sells and destroys a
+bot's grey loot inside its own `OnPlayerLootItem`, and a new item destroyed
+is deleted there and then (`Item::SetState(ITEM_REMOVED)` on an `ITEM_NEW`
+item is `delete this`). Following the `Item*` that `OnPlayerLootItem` then
+hands this module read freed memory, and took the server down a couple of
+minutes after the bots came online.
+
+So the loot, group-roll, quest-reward, crafting and vendor hooks never follow
+their `Item*`. What they need is read in `OnPlayerStoreNewItem`, which runs
+inside `StoreNewItem`, before any of those hooks, while the item is there, and
+matched by its address on the same thread (`PlayerbotsPlusLedger`'s `Stored`).
+An item being put on (`OnPlayerEquip`) or used to cast (`OnPlayerSpellCast`)
+is there to read.
+
 ## Talking is the chat module's
 
 Nothing here makes a bot say anything. Where a bot would say something, raise a

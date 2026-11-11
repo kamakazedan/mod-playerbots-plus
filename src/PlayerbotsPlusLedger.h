@@ -31,6 +31,13 @@
 // The player and auction hooks only note what happened, under a mutex: most
 // run on map threads (looting, quests, spells, putting gear on). The world
 // tick sorts the notes out, and only it touches anything else.
+//
+// The loot, roll, quest-reward, crafting and vendor hooks never follow their
+// Item*: a module whose hook runs first may have destroyed it, and a new item
+// destroyed is deleted there and then (mod-junk-to-gold sells and destroys a
+// bot's grey loot in its own OnPlayerLootItem, which runs before ours). What
+// they need is read in OnPlayerStoreNewItem, inside StoreNewItem, where the
+// item is sure to be there, and matched by its address on the same thread.
 // --------------------------------------------------------------------------
 
 #include "ScriptMgr.h"
@@ -50,6 +57,7 @@ class PbpLedgerPlayerScript : public PlayerScript
 public:
     PbpLedgerPlayerScript();
 
+    void OnPlayerStoreNewItem(Player* player, Item* item, uint32 count) override;
     void OnPlayerMoneyChanged(Player* player, int32& amount) override;
     void OnPlayerBeforeLootMoney(Player* player, Loot* loot) override;
     void OnPlayerCompleteQuest(Player* player, Quest const* quest) override;
