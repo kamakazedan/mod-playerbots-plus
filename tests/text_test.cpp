@@ -281,19 +281,71 @@ int main(int argc, char** argv)
             else
                 std::printf("   not the code's default: %s\n", text.c_str());
         }
-        True("conf spots", spots == 30 && good == 30);
-        True("conf spots are the code's", same == 30);
+        True("conf spots", spots == 31 && good == 31);
+        True("conf spots are the code's", same == 31);
         const size_t list = config.find("kDefaultHangoutSpots[]");
         const size_t end  = config.find("};", list);
         int defaults = 0;
         for (size_t at = config.find("\n        { \"", list); at < end; at = config.find("\n        { \"", at + 1))
             ++defaults;
-        True("the code has no other spots: " + std::to_string(defaults), list != std::string::npos && defaults == 30);
+        True("the code has no other spots: " + std::to_string(defaults), list != std::string::npos && defaults == 31);
         // Where people meet, there is room for them: Stormwind as much as
         // Orgrimmar, Dalaran (only from level 68) a good part of that.
         True("room in Orgrimmar: " + std::to_string(room["Orgrimmar"]), room["Orgrimmar"] >= 80);
         True("room in Stormwind: " + std::to_string(room["Stormwind"]), room["Stormwind"] >= room["Orgrimmar"]);
         True("room in Dalaran: " + std::to_string(room["Dalaran"]), room["Dalaran"] >= 60);
+    }
+
+    // ---- the places, shared out by city weight and hot spot ------------------------------
+    {
+        auto list = [](std::vector<uint32_t> const& v)
+        {
+            std::string out;
+            for (uint32_t n : v)
+                out += (out.empty() ? "" : ",") + std::to_string(n);
+            return out;
+        };
+        // Stormwind: three hot spots and two others; Ironforge: one hot spot only;
+        // Dalaran: nothing hot; Goldshire: no weight.
+        const std::vector<PbpSpotShare> spots = {
+            { "Stormwind", 20, true }, { "Stormwind", 14, true }, { "Stormwind", 12, true },
+            { "Stormwind", 16, false }, { "Stormwind", 8, false },
+            { "Ironforge", 12, true },
+            { "Dalaran", 18, false }, { "Dalaran", 10, false },
+            { "Goldshire", 7, false },
+        };
+        const std::map<std::string, uint32_t> weights = { { "Stormwind", 5 }, { "Ironforge", 2 }, { "Dalaran", 3 } };
+        const std::vector<uint32_t> got = PbpShareHangoutPlaces(spots, weights, 100, 75);
+        EqS("shared out", list(got), "16,12,10,8,4,20,19,11,7");
+        uint32_t sw = 0, swHot = 0;
+        for (size_t i = 0; i < 5; ++i)
+        {
+            sw += got[i];
+            swHot += spots[i].hot ? got[i] : 0;
+        }
+        True("a city by its weight", sw == 50 && got[5] == 20 && got[6] + got[7] == 30);
+        True("three quarters hot", swHot * 4 == sw * 3 + 2);   // 38 of 50, rounded
+        True("one kind takes all", got[5] == 20);
+        True("no weight: as written", got[8] == 7);
+
+        // Places 0: what the weighted spots are written for (110 here).
+        const std::vector<uint32_t> same = PbpShareHangoutPlaces(spots, weights, 0, 75);
+        uint32_t total = 0;
+        for (size_t i = 0; i < 8; ++i)
+            total += same[i];
+        True("places 0: the written total", total == 110);
+
+        // A weight of 0: nobody there.
+        const std::vector<uint32_t> none = PbpShareHangoutPlaces(spots, { { "Stormwind", 5 }, { "Ironforge", 0 },
+                                                                          { "Dalaran", 5 } }, 100, 75);
+        True("weight 0: nobody", none[5] == 0 && none[0] + none[1] + none[2] + none[3] + none[4] == 50);
+        // Hot spots all written 0: by turns.
+        const std::vector<uint32_t> turns = PbpShareHangoutPlaces({ { "Ironforge", 0, true }, { "Ironforge", 0, true } },
+                                                                  { { "Ironforge", 1 } }, 9, 75);
+        EqS("by turns", list(turns), "5,4");
+        // 100%: only the hot spots; 0%: only the others.
+        EqS("all hot", list(PbpShareHangoutPlaces({ spots[0], spots[3] }, { { "Stormwind", 1 } }, 10, 100)), "10,0");
+        EqS("none hot", list(PbpShareHangoutPlaces({ spots[0], spots[3] }, { { "Stormwind", 1 } }, 10, 0)), "0,10");
     }
 
     // ---- the city a spot is in ----------------------------------------------------------

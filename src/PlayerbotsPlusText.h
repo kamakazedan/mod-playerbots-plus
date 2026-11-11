@@ -5,6 +5,7 @@
 // server (tests/text_test.cpp).
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -43,6 +44,26 @@ bool PbpParseSpotLine(std::string const& text, PbpSpotLine& out);
 // Exodar" -> "Exodar", "the zeppelin tower outside Orgrimmar" ->
 // "Orgrimmar"). The whole name when none of those is in it.
 std::string PbpCityOf(std::string const& spotName);
+
+// A hangout spot, as the places are shared out among them.
+struct PbpSpotShare
+{
+    std::string city;           // PbpCityOf its name
+    uint32_t    capacity = 0;   // as written: its part against the others of its kind in its city
+    bool        hot      = false;
+};
+
+// How many people each spot has room for when `places` are shared out among
+// the cities by `weights` (by city; 0: none there), and within a city
+// `hotShare` percent of its places among its hot spots and the rest among the
+// others -- all among one kind when it has only that kind -- each by its
+// written capacity (by turns when those are all 0). A city not in `weights`
+// keeps its spots' written capacities and takes no part. `places` 0: what the
+// written capacities of the weighted cities' spots add up to. Whole places,
+// rounded to add up (the largest remainders get the odd ones).
+std::vector<uint32_t> PbpShareHangoutPlaces(std::vector<PbpSpotShare> const& spots,
+                                            std::map<std::string, uint32_t> const& weights, uint32_t places,
+                                            uint32_t hotShare);
 
 // The holidays a companion can belong to, as the conf names them
 // ("winterveil", "brewfest"): 1 and up for one of them, in a fixed order the

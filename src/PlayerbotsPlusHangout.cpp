@@ -1592,7 +1592,7 @@ std::vector<PbpHangoutCity> PbpHangout_Cities()
         const std::string city = PbpCityOf(s.name.empty() ? s.key : s.name);
         auto [at, fresh] = byName.emplace(city, cities.size());
         if (fresh)
-            cities.push_back({ city, 0, 0, 0 });
+            cities.push_back({ city, 0, 0, 0, 0 });
         cities[at->second].room += s.capacity;
         bySpot[s.key] = at->second;
     }
@@ -1602,7 +1602,11 @@ std::vector<PbpHangoutCity> PbpHangout_Cities()
         if (at == bySpot.end())
             continue;
         if (v.phase == Phase::Settled || v.phase == Phase::Duelling)
+        {
             ++cities[at->second].there;
+            if (PbpHangoutSpot const* s = SpotByKey(v.spotKey); s && s->hot)
+                ++cities[at->second].hot;
+        }
         else
             ++cities[at->second].onTheWay;
     }

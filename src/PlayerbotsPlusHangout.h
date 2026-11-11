@@ -124,6 +124,7 @@ struct PbpHangoutCity
     uint32_t    there    = 0;   // settled at one of its spots, or in a duel at its gates
     uint32_t    onTheWay = 0;
     uint32_t    room     = 0;   // its spots' capacities together
+    uint32_t    hot      = 0;   // of `there`, at its hot spots
 };
 std::vector<PbpHangoutCity> PbpHangout_Cities();
 

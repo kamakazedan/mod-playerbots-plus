@@ -80,9 +80,7 @@ Commons, the Valley of Strength, outside the bank in Dalaran. Playerbots never
 sends a bot anywhere in particular, so idle bots in a city just wander from
 NPC to NPC. With hangouts, they gather where players do.
 
-- **Where:** 30 spots in the capitals, Shattrath and Dalaran come set up.
-  The cities people meet in have the most, room for about a hundred each in
-  Orgrimmar and Stormwind and sixty in Dalaran:
+- **Where:** 31 spots in the capitals, Shattrath and Dalaran come set up:
   - Orgrimmar: in the Valley of Strength in front of the inn and the auction
     house, outside the bank, the open middle of it and just inside the gates,
     then the Drag, the Valley of Honor, outside the gates and the zeppelin
@@ -90,12 +88,23 @@ NPC to NPC. With hangouts, they gather where players do.
   - Stormwind: the Trade District, outside the auction house and the bank,
     the Valley of Heroes, Cathedral Square, the Mage Quarter, the Dwarven
     District, Old Town, the harbor and outside the gates.
+  - Thunder Bluff: the middle of it, among the trainers and below the
+    auction house, and outside the bank.
   - Dalaran, from level 68 and for both sides: outside both banks, Runeweaver
     Square, the fountain in the Eventide and Krasus' Landing, none of them in
     the Silver Enclave or Sunreaver's Sanctuary.
 
   You can add your own, or change how many bots each one holds. A city's
   spots fill evenly, the emptiest first.
+- **How busy each city is:** each city gets its share of the places by the
+  weights playerbots sends bots to the cities' bankers by
+  (`Playerbots.TeleTo<City>Weight`), so with Stormwind 5 and Ironforge 2,
+  Stormwind is two and a half times as busy. In each city three quarters of
+  its people are at its hot spots (`Hangout.HotSpots`, `Hangout.HotShare`):
+  the Trade District, the Commons, the Valley of Strength, the middle of
+  Thunder Bluff, the banks and auction houses. A spot with more people than
+  its radius holds grows to fit them (`Hangout.RoomPerBot`).
+  `Hangout.Places` is how many in all.
 - **Who:** idle random bots near a spot, of its zone and floor. A bot that is
   grouped, queued, questing, gathering, fighting or flying is left alone, and
   so is one a real player has targeted.

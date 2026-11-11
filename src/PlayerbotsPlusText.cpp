@@ -128,6 +128,94 @@ bool PbpParseSpotLine(std::string const& text, PbpSpotLine& out)
     return true;
 }
 
+namespace
+{
+    // `total` shared out by `weights` in whole parts that add up to it; all
+    // weights 0, nothing for any.
+    std::vector<uint32_t> Apportion(uint32_t total, std::vector<uint64_t> const& weights)
+    {
+        std::vector<uint32_t> out(weights.size(), 0);
+        uint64_t sum = 0;
+        for (uint64_t w : weights)
+            sum += w;
+        if (!sum || !total)
+            return out;
+        std::vector<std::pair<uint64_t, size_t>> rest;   // remainder, which
+        uint64_t given = 0;
+        for (size_t i = 0; i < weights.size(); ++i)
+        {
+            const uint64_t share = uint64_t(total) * weights[i];
+            out[i] = uint32_t(share / sum);
+            given += out[i];
+            rest.emplace_back(share % sum, i);
+        }
+        std::stable_sort(rest.begin(), rest.end(), [](auto const& a, auto const& b) { return a.first > b.first; });
+        for (size_t k = 0; given < total && k < rest.size(); ++k)
+            if (weights[rest[k].second])
+            {
+                ++out[rest[k].second];
+                ++given;
+            }
+        return out;
+    }
+}
+
+std::vector<uint32_t> PbpShareHangoutPlaces(std::vector<PbpSpotShare> const& spots,
+                                            std::map<std::string, uint32_t> const& weights, uint32_t places,
+                                            uint32_t hotShare)
+{
+    std::vector<uint32_t> out;
+    for (PbpSpotShare const& s : spots)
+        out.push_back(s.capacity);
+
+    // The weighted cities, in the order their first spot comes.
+    std::vector<std::string> cities;
+    std::map<std::string, std::vector<size_t>> members;
+    uint64_t written = 0;
+    for (size_t i = 0; i < spots.size(); ++i)
+    {
+        if (!weights.count(spots[i].city))
+            continue;
+        if (!members.count(spots[i].city))
+            cities.push_back(spots[i].city);
+        members[spots[i].city].push_back(i);
+        written += spots[i].capacity;
+    }
+    std::vector<uint64_t> cityWeights;
+    for (std::string const& city : cities)
+        cityWeights.push_back(weights.at(city));
+    const std::vector<uint32_t> cityPlaces =
+        Apportion(places ? places : uint32_t(std::min<uint64_t>(written, UINT32_MAX)), cityWeights);
+
+    auto shareAmong = [&](std::vector<size_t> const& group, uint32_t n)
+    {
+        std::vector<uint64_t> w;
+        bool any = false;
+        for (size_t i : group)
+        {
+            w.push_back(spots[i].capacity);
+            any = any || spots[i].capacity;
+        }
+        if (!any)
+            std::fill(w.begin(), w.end(), 1);
+        const std::vector<uint32_t> parts = Apportion(n, w);
+        for (size_t k = 0; k < group.size(); ++k)
+            out[group[k]] = parts[k];
+    };
+    for (size_t c = 0; c < cities.size(); ++c)
+    {
+        std::vector<size_t> hot, others;
+        for (size_t i : members[cities[c]])
+            (spots[i].hot ? hot : others).push_back(i);
+        uint32_t hotPlaces = hot.empty() ? 0 : cityPlaces[c];
+        if (!hot.empty() && !others.empty())
+            hotPlaces = uint32_t((uint64_t(cityPlaces[c]) * std::min<uint32_t>(hotShare, 100) + 50) / 100);
+        shareAmong(hot, hotPlaces);
+        shareAmong(others, cityPlaces[c] - hotPlaces);
+    }
+    return out;
+}
+
 std::string PbpCityOf(std::string const& spotName)
 {
     std::string city = spotName;

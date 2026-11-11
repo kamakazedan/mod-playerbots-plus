@@ -665,12 +665,13 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        Where people hang out: "map x y z radius capacity name". x y z is
 #        the middle (a place a player can stand: these are taken from a
 #        mailbox, a teleport point, a flight master); radius (3-60 yards)
-#        how far from it a place may be; capacity how many bots at most;
-#        name what bots call it ("the Trade District in Stormwind"). Add as
-#        many as you like, one key each; capacity 0 turns one off. With no
-#        Spot keys at all, these are the defaults. The cities people meet in
-#        have the most room (Orgrimmar and Stormwind about a hundred people
-#        each, Dalaran about sixty):
+#        how far from it a place may be (grown to fit its people: see
+#        RoomPerBot); capacity how many bots at most -- with CityWeights on,
+#        its part of its city's places against the city's other spots of its
+#        kind (hot or not); name what bots call it ("the Trade District in
+#        Stormwind"), its last words the city. Add as many as you like, one
+#        key each; capacity 0 turns one off. With no Spot keys at all, these
+#        are the defaults:
 #          Orgrimmar: the Valley of Strength -- in front of the inn and the
 #          auction house, the bank, the open middle of it and just inside the
 #          gates (the middle and the gates' z are a little above the ground,
@@ -679,6 +680,8 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #          Stormwind: the Trade District, outside the auction house and the
 #          bank, the Valley of Heroes, Cathedral Square, the Mage Quarter, the
 #          Dwarven District, Old Town, the harbor and outside the gates.
+#          Thunder Bluff: the middle of it (its teleport point), among the
+#          trainers and below the auction house, and outside the bank.
 #          Dalaran (from level 68, both sides): outside both banks, Runeweaver
 #          Square (to one side of the statue, which nobody sees through),
 #          the fountain in the Eventide and Krasus' Landing -- none of them in
@@ -711,6 +714,7 @@ PlayerbotsPlus.Hangout.Spot.OrgrimmarHonor = "1 2076.4 -4824.2 23.7 18 8 the Val
 PlayerbotsPlus.Hangout.Spot.OrgrimmarGates = "1 1320.0 -4400.0 27.0 22 14 outside the gates of Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarZeppelins = "1 1342.0 -4645.0 53.6 10 5 the zeppelin tower outside Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.UndercityTrade = "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity"
+PlayerbotsPlus.Hangout.Spot.ThunderBluffMiddle = "1 -1277.4 124.8 131.3 30 16 the middle of Thunder Bluff"
 PlayerbotsPlus.Hangout.Spot.ThunderBluffBank = "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff"
 PlayerbotsPlus.Hangout.Spot.DarnassusBank = "1 9943.0 2497.7 1317.7 16 8 outside the bank in Darnassus"
 PlayerbotsPlus.Hangout.Spot.ExodarHall = "530 -3965.7 -11653.6 -138.8 18 8 the main hall of the Exodar"
@@ -721,6 +725,36 @@ PlayerbotsPlus.Hangout.Spot.DalaranRuneweaver = "571 5796.9 646.1 647.4 20 16 Ru
 PlayerbotsPlus.Hangout.Spot.DalaranFountain = "571 5704.2 615.7 646.8 16 12 the fountain in the Eventide in Dalaran"
 PlayerbotsPlus.Hangout.Spot.DalaranKrasus = "571 5813.4 453.4 658.8 16 10 Krasus' Landing in Dalaran"
 PlayerbotsPlus.Hangout.Spot.DalaranMerchants = "571 5654.9 682.2 652.0 14 10 outside the Merchants' Bank in Dalaran"
+
+#    PlayerbotsPlus.Hangout.CityWeights
+#    PlayerbotsPlus.Hangout.Places
+#    PlayerbotsPlus.Hangout.HotShare
+#    PlayerbotsPlus.Hangout.HotSpots
+#        How the room is shared out. With CityWeights on, Places are shared
+#        among the cities by the weights playerbots sends its bots to the
+#        cities' bankers by (Playerbots.TeleTo<City>Weight in playerbots.conf,
+#        its defaults when that has none: Stormwind 5 and Ironforge 2 makes
+#        Stormwind two and a half times as busy, and 0 means nobody there),
+#        and in each city HotShare percent of its places are at its hot
+#        spots (HotSpots: spot names, | separated -- each city's busiest
+#        places: the Trade District, the Commons, the Valley of Strength, the
+#        middle of Thunder Bluff, the banks and auction houses), the rest at
+#        its other spots; a city with only one kind has all of them there.
+#        Each spot gets its part of that by its capacity. Places 0: as many
+#        as the spots' capacities add up to. Off: each spot has room for its
+#        capacity. Either way .pbp status says how many are at the hot spots.
+#        Default: 1, 0, 75, (below)
+PlayerbotsPlus.Hangout.CityWeights = 1
+PlayerbotsPlus.Hangout.Places = 0
+PlayerbotsPlus.Hangout.HotShare = 75
+PlayerbotsPlus.Hangout.HotSpots = "StormwindTrade|StormwindAuction|StormwindBank|IronforgeCommons|OrgrimmarValley|OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|DalaranMerchants"
+
+#    PlayerbotsPlus.Hangout.RoomPerBot
+#        Square yards each person at a spot needs: a spot with room for more
+#        people than its radius holds grows to fit them (up to 60 yards).
+#        Crowded, bots find nowhere to stand there. 0: radii as written.
+#        Default: 60
+PlayerbotsPlus.Hangout.RoomPerBot = 60
 
 ###############################################################################
 #

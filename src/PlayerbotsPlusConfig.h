@@ -121,6 +121,7 @@ namespace pbp
         float       z        = 0.0f;
         float       radius   = 15.0f;
         uint32_t    capacity = 0;
+        bool        hot      = false;   // one of its city's busiest places (Hangout.HotSpots)
     };
     extern bool        g_HangoutEnable;
     extern std::vector<PbpHangoutSpot> g_HangoutSpots;
@@ -144,6 +145,8 @@ namespace pbp
     extern uint32_t    g_HangoutBringInMinLevel;
     extern float       g_HangoutArrivalRange;
     extern uint32_t    g_HangoutInnArrivalSeconds;   // one arrival at a city's inns per this, while someone is there
+    extern bool        g_HangoutCityWeights;   // places shared out by playerbots' city weights
+    extern uint32_t    g_HangoutHotShare;      // ...that share of a city's at its hot spots (percent)
 
     // Stuck on a mount (PlayerbotsPlusStuck)
     extern bool        g_StuckEnable;

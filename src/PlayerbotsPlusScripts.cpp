@@ -173,9 +173,17 @@ namespace
                                      h.lostBusy, h.lostElsewhere, h.lostLanding, h.movedOn, h.cutShort, h.cameBack);
             std::string cities;
             for (PbpHangoutCity const& c : PbpHangout_Cities())
-                if (c.there || c.onTheWay)
-                    cities += fmt::format("{}{} {} of {}{}", cities.empty() ? "" : ", ", c.name, c.there, c.room,
-                                          c.onTheWay ? fmt::format(" ({} on the way)", c.onTheWay) : std::string());
+            {
+                if (!c.there && !c.onTheWay)
+                    continue;
+                std::string more;
+                if (c.hot)
+                    more = fmt::format("{} at the hot spots", c.hot);
+                if (c.onTheWay)
+                    more += fmt::format("{}{} on the way", more.empty() ? "" : ", ", c.onTheWay);
+                cities += fmt::format("{}{} {} of {}{}", cities.empty() ? "" : ", ", c.name, c.there, c.room,
+                                      more.empty() ? std::string() : " (" + more + ")");
+            }
             handler->PSendSysMessage("Hanging out by city: {}.", cities.empty() ? std::string("nobody yet") : cities);
 
             PbpStuckStats const k = PbpStuck_GetStats();

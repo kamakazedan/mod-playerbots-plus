@@ -9,6 +9,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -41,6 +43,8 @@ namespace pbp
     uint32_t    g_HangoutBringInMinLevel  = 10;
     float       g_HangoutArrivalRange     = 400.0f;
     uint32_t    g_HangoutInnArrivalSeconds = 5;
+    bool        g_HangoutCityWeights       = true;
+    uint32_t    g_HangoutHotShare          = 75;
 
     bool        g_StuckEnable             = true;
     uint32_t    g_StuckMountCount         = 4;
@@ -226,6 +230,7 @@ namespace
         { "OrgrimmarGates",     "1 1320.0 -4400.0 27.0 22 14 outside the gates of Orgrimmar" },
         { "OrgrimmarZeppelins", "1 1342.0 -4645.0 53.6 10 5 the zeppelin tower outside Orgrimmar" },
         { "UndercityTrade",     "0 1584.1 240.3 -52.2 16 10 the Trade Quarter in the Undercity" },
+        { "ThunderBluffMiddle", "1 -1277.4 124.8 131.3 30 16 the middle of Thunder Bluff" },
         { "ThunderBluffBank",   "1 -1263.3 44.5 127.5 16 8 outside the bank in Thunder Bluff" },
         { "DarnassusBank",      "1 9943.0 2497.7 1317.7 16 8 outside the bank in Darnassus" },
         { "ExodarHall",         "530 -3965.7 -11653.6 -138.8 18 8 the main hall of the Exodar" },
@@ -237,6 +242,37 @@ namespace
         { "DalaranKrasus",      "571 5813.4 453.4 658.8 16 10 Krasus' Landing in Dalaran" },
         { "DalaranMerchants",   "571 5654.9 682.2 652.0 14 10 outside the Merchants' Bank in Dalaran" },
     };
+
+    // Each city's busiest places, where most of its people are: the Trade
+    // District, the Commons, the Valley of Strength, the middle of Thunder
+    // Bluff, the banks and auction houses.
+    char const* const kDefaultHotSpots =
+        "StormwindTrade|StormwindAuction|StormwindBank|IronforgeCommons|OrgrimmarValley|OrgrimmarBank|"
+        "OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|"
+        "ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|DalaranMerchants";
+
+    // The city weights playerbots sends its bots to the cities' bankers by,
+    // read as it reads them (its keys and defaults), by the city a spot's name
+    // says it is in (PbpCityOf).
+    std::map<std::string, uint32_t> PlayerbotsCityWeights()
+    {
+        auto w = [](char const* key, int def)
+        {
+            return uint32_t(std::max(0, sConfigMgr->GetOption<int>(key, def, false)));
+        };
+        return {
+            { "Stormwind", w("Playerbots.TeleToStormwindWeight", 2) },
+            { "Ironforge", w("Playerbots.TeleToIronforgeWeight", 1) },
+            { "Darnassus", w("Playerbots.TeleToDarnassusWeight", 1) },
+            { "Exodar", w("Playerbots.TeleToExodarWeight", 1) },
+            { "Orgrimmar", w("Playerbots.TeleToOrgrimmarWeight", 2) },
+            { "Undercity", w("Playerbots.TeleToUndercityWeight", 1) },
+            { "Thunder Bluff", w("Playerbots.TeleToThunderBluffWeight", 1) },
+            { "Silvermoon", w("Playerbots.TeleToSilvermoonCityWeight", 1) },
+            { "Shattrath", w("Playerbots.TeleToShattrathCityWeight", 1) },
+            { "Dalaran", w("Playerbots.TeleToDalaranWeight", 1) },
+        };
+    }
 
     void LoadHangout()
     {
@@ -305,6 +341,36 @@ namespace
         if (!bad.empty())
             LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Hangout.Spot: could not read {} (want "
                       "\"map x y z radius capacity name\").", bad);
+
+        // Most of a city's people at its busiest places, and each city as busy
+        // as playerbots' weights for it say: the written capacities are then
+        // only each spot's part against the others of its kind in its city.
+        const std::vector<std::string> hot =
+            PbpSplit(sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Hangout.HotSpots", kDefaultHotSpots), '|');
+        for (PbpHangoutSpot& spot : g_HangoutSpots)
+            spot.hot = std::find(hot.begin(), hot.end(), spot.key) != hot.end();
+        g_HangoutCityWeights = B("PlayerbotsPlus.Hangout.CityWeights", true);
+        g_HangoutHotShare    = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.HotShare", 75));
+        if (g_HangoutCityWeights)
+        {
+            std::vector<PbpSpotShare> shares;
+            for (PbpHangoutSpot const& spot : g_HangoutSpots)
+                shares.push_back({ PbpCityOf(spot.name), spot.capacity, spot.hot });
+            const std::vector<uint32_t> places =
+                PbpShareHangoutPlaces(shares, PlayerbotsCityWeights(),
+                                      std::min<uint32_t>(U("PlayerbotsPlus.Hangout.Places", 0), 5000),
+                                      g_HangoutHotShare);
+            for (size_t i = 0; i < g_HangoutSpots.size(); ++i)
+                g_HangoutSpots[i].capacity = places[i];
+        }
+        // A spot with room for more people than its radius holds grows to fit
+        // them: RoomPerBot square yards each (crowded, the bots find nowhere
+        // to stand). Up to the 60 yards a spot may have.
+        const float room = std::clamp(F("PlayerbotsPlus.Hangout.RoomPerBot", 60.0f), 0.0f, 1000.0f);
+        for (PbpHangoutSpot& spot : g_HangoutSpots)
+            if (room > 0.0f)
+                spot.radius = std::min(60.0f, std::max(spot.radius,
+                                                       std::sqrt(float(spot.capacity) * room / 3.14159265f)));
     }
 
     void LoadStuckReviveMarks()
@@ -707,13 +773,19 @@ void PlayerbotsPlus_LoadConfig(bool reload)
              g_Pbp.market.visitsPerInterval, g_Pbp.market.intervalMs / 1000, g_Pbp.market.cooldownMinMinutes,
              g_Pbp.market.cooldownMaxMinutes, g_Pbp.market.sell ? "yes" : "no", g_Pbp.market.buy ? "yes" : "no");
 
-    uint32_t places = 0;
+    uint32_t places = 0, hotPlaces = 0;
     for (pbp::PbpHangoutSpot const& spot : pbp::g_HangoutSpots)
+    {
         places += spot.capacity;
+        hotPlaces += spot.hot ? spot.capacity : 0;
+    }
+    std::string const shared = pbp::g_HangoutCityWeights
+        ? " by playerbots' city weights, " + std::to_string(hotPlaces) + " of them at the hot spots"
+        : std::string();
     LOG_INFO(where,
-             "[Playerbots Plus] City hangouts {} ({} spots, room for {}; fetched from elsewhere {}), stuck mounts {}, "
-             "out of fires {}, room to stand {}, getting back up {}, raid marks {} (sapping the star {}).",
-             pbp::g_HangoutEnable ? "on" : "off", pbp::g_HangoutSpots.size(), places,
+             "[Playerbots Plus] City hangouts {} ({} spots, room for {}{}; fetched from elsewhere {}), stuck mounts "
+             "{}, out of fires {}, room to stand {}, getting back up {}, raid marks {} (sapping the star {}).",
+             pbp::g_HangoutEnable ? "on" : "off", pbp::g_HangoutSpots.size(), places, shared,
              pbp::g_HangoutBringIn ? "on" : "off", pbp::g_StuckEnable ? "on" : "off", pbp::g_FireEnable ? "on" : "off",
              pbp::g_SpaceEnable ? "on" : "off",
              pbp::g_ReviveEnable ? "on" : "off", pbp::g_MarksEnable ? "on" : "off",

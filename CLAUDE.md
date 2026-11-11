@@ -64,6 +64,18 @@ facts a prompt needs (names, not pointers), and let a listener voice it. Add a
 new event type to `PlayerbotsPlus.h` and bump `PLAYERBOTS_PLUS_API_VERSION`
 when a listener needs to know it is there.
 
+## City hangouts are shared out by playerbots' weights
+
+With `Hangout.CityWeights` on, a spot's written capacity is only its part
+against the other spots of its kind (hot or not) in its city: the places
+(`Hangout.Places`) are shared among the cities by playerbots' own
+`Playerbots.TeleTo<City>Weight` (read from the conf with playerbots' keys
+and defaults, so it does not matter that playerbots loads its config after
+this), and `Hangout.HotShare` of a city's places go to its hot spots. The
+city is the end of the spot's name (`PbpCityOf`); the sharing is pure and
+tested (`PbpShareHangoutPlaces`). A spot whose capacity outgrows its radius
+grows (`Hangout.RoomPerBot`): crowded, `PickPlace` finds nowhere to stand.
+
 ## Auctions and mail copy the game's own handlers
 
 `CreateAuction`, `BuyOut` and `CollectMail` in `PlayerbotsPlusMarket.cpp` do
