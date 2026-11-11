@@ -45,11 +45,29 @@
 #define PBP_BOT_DUNGEONS 0
 #endif
 
+#include "ScriptMgr.h"
+
 #include <cstdint>
 #include <string>
 #include <vector>
 
 class Player;
+
+#if PBP_BOT_DUNGEONS
+// The dungeon finder's offer of a group ("your dungeon is ready"), as it goes to
+// each member. Playerbots says no for a bot that is fighting or dead, and one
+// no ends the offer for all five -- out questing, one of them nearly always is.
+// So this notes each offer (who, which), and the world tick says yes for the
+// bots this queued in the same world tick the offer is made, before their own
+// AI sees it. OnPacketSent fires for a bot's session too (CanPacketSend does
+// not). Runs on whatever thread sends the packet: it only notes, under a mutex.
+class PbpDungeonsPacketScript : public ServerScript
+{
+public:
+    PbpDungeonsPacketScript() : ServerScript("PbpDungeonsPacketScript", { SERVERHOOK_ON_PACKET_SENT }) {}
+    void OnPacketSent(WorldSession* session, WorldPacket const& packet) override;
+};
+#endif
 
 // The dungeon finder's normal dungeons (not heroics, raids or holiday ones):
 // what the planner queues for and what dungeon quests are done in.
@@ -90,6 +108,8 @@ struct PbpDungeonsStats
     uint64_t failed    = 0;   // ...that did not
     uint64_t handedOver = 0;  // ...that a player joined
     uint64_t sentOut   = 0;   // bots found in a dungeon with no group for it, and sent out
+    uint64_t offers    = 0;   // the dungeon finder's offers said yes to for a bot it queued
+    uint64_t rejoined  = 0;   // bots that dropped out of the queue, put back in
     uint32_t queuedNow = 0;   // parties in the queue now
     uint32_t runsNow   = 0;   // runs going on now
 };

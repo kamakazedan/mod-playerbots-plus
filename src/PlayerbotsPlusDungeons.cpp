@@ -29,8 +29,14 @@
 #include "UpdateTime.h"
 #include "WorldSessionMgr.h"
 
+#include "Opcodes.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
+
+#include <atomic>
 #include <chrono>
 #include <deque>
+#include <mutex>
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
@@ -240,11 +246,23 @@ namespace
     struct Queued
     {
         std::vector<ObjectGuid> bots;
+        std::vector<uint8> roles;    // each one's, as it queued
         lfg::LfgDungeonSet dungeons;
         std::string what;            // "Deadmines, for 2 quests"
         Clock::time_point since;
+        uint32 rejoins = 0;          // dropouts put back in the queue
     };
     std::vector<Queued> g_queued;
+
+    // The dungeon finder's offers, by the bot they went to (PbpDungeonsPacketScript
+    // notes them; AnswerOffers answers). Noted only while a party this queued waits.
+    std::mutex g_offerMutex;
+    std::unordered_map<uint64, uint32> g_offers;
+    std::atomic<bool> g_noteOffers{ false };
+    // The offer each bot was last said yes to. Every yes sends the offer out again
+    // to everyone in it, so one still waiting on somebody else (a player) must not
+    // be said yes to again each tick.
+    std::unordered_map<uint64, uint32> g_answered;
 
     enum class Phase : uint8
     {
@@ -328,10 +346,12 @@ namespace
         }
 
         std::vector<ObjectGuid> joined;
+        std::vector<uint8> roles;
         for (size_t i = 0; i < bots.size(); ++i)
         {
             Player* bot = bots[i];
             Role const role = i == 0 ? Role::Tank : i == 1 ? Role::Healer : Role::Damage;
+            roles.push_back(RoleMask(role));
             lfg::LfgDungeonSet set = dungeons;   // JoinLfg narrows it to what the bot may enter
             sLFGMgr->JoinLfg(bot, RoleMask(role), set, "");
             if (sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_QUEUED)
@@ -347,6 +367,7 @@ namespace
 
         Queued q;
         q.bots = std::move(joined);
+        q.roles = std::move(roles);
         q.dungeons = dungeons;
         q.what = what;
         q.since = now;
@@ -545,6 +566,12 @@ namespace
 
     void TakeOn(Group* group, Clock::time_point now);
 
+    bool Waiting(lfg::LfgState state)
+    {
+        return state == lfg::LFG_STATE_QUEUED || state == lfg::LFG_STATE_PROPOSAL ||
+               state == lfg::LFG_STATE_ROLECHECK;
+    }
+
     void WatchQueues(Clock::time_point now)
     {
         PbpBotDungeonSettings const& s = g_Pbp.dungeons;
@@ -553,18 +580,36 @@ namespace
             Queued& q = *it;
             bool waiting = false;
             for (ObjectGuid guid : q.bots)
+                waiting = waiting || Waiting(sLFGMgr->GetState(guid));
+            for (size_t i = 0; i < q.bots.size(); ++i)
             {
+                ObjectGuid const guid = q.bots[i];
                 lfg::LfgState const state = sLFGMgr->GetState(guid);
-                if (state == lfg::LFG_STATE_QUEUED || state == lfg::LFG_STATE_PROPOSAL ||
-                    state == lfg::LFG_STATE_ROLECHECK)
+                if (state != lfg::LFG_STATE_PROPOSAL)
+                    g_answered.erase(guid.GetRawValue());
+                if (Waiting(state))
+                    continue;
+                Player* bot = ObjectAccessor::FindPlayer(guid);
+                if (!bot)
+                    continue;
+                // Matched: the group it is in now, if nobody is playing in it.
+                if (Group* group = bot->GetGroup())
                 {
-                    waiting = true;
+                    if (group->isLFGGroup())
+                        TakeOn(group, now);
                     continue;
                 }
-                // Matched: the group it is in now, if nobody is playing in it.
-                if (Player* bot = ObjectAccessor::FindPlayer(guid))
-                    if (Group* group = bot->GetGroup(); group && group->isLFGGroup())
-                        TakeOn(group, now);
+                // Out of the queue with no group while the rest still wait: an offer
+                // turned down (or one nobody answered in time). Back in, a few times.
+                if (waiting && q.rejoins < 5 && i < q.roles.size() && !bot->InBattlegroundQueue() &&
+                    !bot->HasAura(lfg::LFG_SPELL_DUNGEON_DESERTER))
+                {
+                    lfg::LfgDungeonSet set = q.dungeons;
+                    sLFGMgr->JoinLfg(bot, q.roles[i], set, "");
+                    ++q.rejoins;
+                    if (Waiting(sLFGMgr->GetState(guid)))
+                        ++g_stats.rejoined;
+                }
             }
             if (!waiting)
             {
@@ -588,6 +633,42 @@ namespace
         }
     }
 
+    // Says yes to the dungeon finder's offers for the bots this queued, in the
+    // world tick the offer was made in (PbpDungeonsPacketScript says why).
+    void AnswerOffers()
+    {
+        std::unordered_map<uint64, uint32> offers;
+        {
+            std::lock_guard<std::mutex> lock(g_offerMutex);
+            if (g_offers.empty())
+                return;
+            offers.swap(g_offers);
+        }
+        for (auto const& [raw, offer] : offers)
+        {
+            ObjectGuid const guid(raw);
+            if (sLFGMgr->GetState(guid) != lfg::LFG_STATE_PROPOSAL)
+                continue;
+            if (auto said = g_answered.find(raw); said != g_answered.end() && said->second == offer)
+                continue;
+            bool ours = false;
+            for (Queued const& q : g_queued)
+                ours = ours || std::find(q.bots.begin(), q.bots.end(), guid) != q.bots.end();
+            if (!ours)
+                continue;
+            // What playerbots does for a random bot saying yes: repaired, healed and
+            // stocked up. Only on its feet and out of a fight (playerbots says no
+            // then; this says yes, and the run brings it in once it can come), and
+            // before it is in the group: it leaves any group it is in.
+            Player* bot = ObjectAccessor::FindPlayer(guid);
+            if (bot && bot->IsAlive() && !bot->IsInCombat() && !bot->GetGroup())
+                sRandomPlayerbotMgr.Refresh(bot);
+            g_answered[raw] = offer;
+            sLFGMgr->UpdateProposal(offer, guid, true);
+            ++g_stats.offers;
+        }
+    }
+
     // Leave every queue it made (the feature switched off).
     void LeaveQueues(Clock::time_point now)
     {
@@ -599,6 +680,7 @@ namespace
                     CoolDown(guid, 5, now);
                 }
         g_queued.clear();
+        g_answered.clear();
     }
 
     // ---- runs ------------------------------------------------------------------------------
@@ -624,9 +706,9 @@ namespace
         r.name = NameOf(dungeon, map);
         r.since = r.phaseSince = r.nextTry = r.nextStrip = now;
         g_runs.emplace(key, std::move(r));
-        if (g_PbpDebug)
-            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: a group of bots for {} -- taking it on.",
-                     NameOf(dungeon, map));
+        LOG_INFO("module.playerbotsplus",
+                 "[Playerbots Plus] Bot dungeons: the dungeon finder made a group of bots for {} -- taking it on.",
+                 NameOf(dungeon, map));
     }
 
     DcBotRun::Limits Limits()
@@ -992,6 +1074,10 @@ void PbpDungeons_Update(uint32_t diff)
     else
         g_wasOn = true;
 
+    // Every tick: an offer is answered in the tick it was made in.
+    g_noteOffers.store(on && !g_queued.empty(), std::memory_order_relaxed);
+    AnswerOffers();
+
     g_watchMs += diff;
     if (g_watchMs >= 1000)
     {
@@ -1096,7 +1182,9 @@ std::vector<std::string> PbpDungeons_Status()
 
     PbpDungeonsStats const st = PbpDungeons_GetStats();
     out.push_back("  Since start: " + std::to_string(st.queued) + " parties queued (" + std::to_string(st.gaveUp) +
-                  " gave up waiting), " + std::to_string(st.runs) + " runs: " + std::to_string(st.cleared) +
+                  " gave up waiting; " + std::to_string(st.offers) + " group offers said yes to, " +
+                  std::to_string(st.rejoined) + " dropouts back in the queue), " + std::to_string(st.runs) +
+                  " runs: " + std::to_string(st.cleared) +
                   " cleared, " + std::to_string(st.failed) + " failed, " + std::to_string(st.handedOver) +
                   " joined by a player; " + std::to_string(st.sentOut) + " bots sent out of a dungeon.");
 
@@ -1147,6 +1235,22 @@ std::string PbpDungeons_Send(std::string const& which)
     }
     return "No party for " + d->name + " (levels " + std::to_string(d->minLevel) + "-" + std::to_string(d->maxLevel) +
            "): free bots of a level for it -- " + counts + ".";
+}
+
+void PbpDungeonsPacketScript::OnPacketSent(WorldSession* session, WorldPacket const& packet)
+{
+    // Every packet to every session comes through here: the opcode first.
+    if (packet.GetOpcode() != SMSG_LFG_PROPOSAL_UPDATE || !g_noteOffers.load(std::memory_order_relaxed))
+        return;
+    // The dungeon (uint32), the offer's state (uint8), then its id (uint32).
+    if (!session || packet.size() < 9)
+        return;
+    Player* player = session->GetPlayer();
+    if (!player)
+        return;
+    uint32 const offer = packet.read<uint32>(5);
+    std::lock_guard<std::mutex> lock(g_offerMutex);
+    g_offers[player->GetGUID().GetRawValue()] = offer;
 }
 
 PbpDungeonsStats PbpDungeons_GetStats()

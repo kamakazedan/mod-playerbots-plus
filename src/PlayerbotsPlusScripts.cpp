@@ -337,4 +337,7 @@ void Addmod_playerbots_plusScripts()
     new PbpStuckScript();
     new PbpFireScript();
     new PbpMuteScript();
+#if PBP_BOT_DUNGEONS
+    new PbpDungeonsPacketScript();
+#endif
 }

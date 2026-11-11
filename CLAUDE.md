@@ -29,6 +29,9 @@ These hooks are the exception, and they touch nothing of the world:
 - `PbpMuteScript::CanPacketSend` runs on whatever thread sends the packet. It
   reads only a snapshot (patterns and bot guids) published from the world
   thread, and `PlayerbotsPlus::OwnLine` is a thread-local counter.
+- `PbpDungeonsPacketScript::OnPacketSent` runs on whatever thread sends the
+  packet. It only notes a dungeon finder offer (who, which) under a mutex;
+  the world tick answers it.
 - `PbpLedgerPlayerScript`'s hooks (money, loot, quest rewards, crafting,
   vendor buys, gear put on, consumables used) run on map threads, and the
   ledger's auction notes may come from any thread. They read the session's
@@ -102,6 +105,13 @@ otherwise. This module must still build and run without it; check both ways.
   the queue, getting everyone in, and letting them go after.
 - Bots queue with `sLFGMgr->JoinLfg` from the world tick, not playerbots'
   packet: JoinLfg is only unsafe from a map thread.
+- Playerbots says no to a dungeon finder offer for a bot that is fighting or
+  dead, and one no ends the offer for all five. So the offer is said yes to
+  (`UpdateProposal`) for the bots this queued in the world tick it goes out,
+  before their AI reads it: `OnPacketSent` fires for a bot's session
+  (`CanPacketSend` does not). Each offer once per bot, since every yes sends
+  it to everyone again; and the playerbots `Refresh` that goes with a yes
+  only before the group exists, because it leaves any group.
 - A group with nobody playing in it has no master for its bots, so the
   wander-about strategies a random bot gets on its own (grind, rpg) stay on
   it, and mod-dungeon-clear only holds them back on the tank. They come off
