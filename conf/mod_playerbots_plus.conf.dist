@@ -326,9 +326,13 @@ PlayerbotsPlus.Ledger.KeepDays = 90
 #     - Every CheckSeconds a party is picked -- a tank, a healer and three to
 #       do the damage, of one side and a level for the dungeon, those holding
 #       quests for it first -- and each of them queues for it, as a player
-#       queues. Whoever the dungeon finder puts together goes: a player
-#       matched in makes it a player's group, and what happens there is
-#       theirs, as it is in any group.
+#       queues. A player who queues for it then can be matched in, which makes
+#       it a player's group, and what happens there is theirs, as it is in any
+#       group. Playerbots never lets the dungeon finder put bots together by
+#       themselves, so with nobody matched in after AloneMinutes the five
+#       leave the queue, make a party (the tank leads) and queue as one, which
+#       it lets be. Either way, the offer of a group is said yes to for them
+#       straight away: playerbots turns one down for a bot that is fighting.
 #     - A group of bots the dungeon finder made, with no player in it (one
 #       this queued, or one playerbots queued for a dungeon a player wanted),
 #       is taken on in its dungeon: anyone left outside is brought in, the
@@ -414,6 +418,15 @@ PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline = 1
 #        dungeon (the others go along). 0: any dungeon of their level.
 #        Default: 1
 PlayerbotsPlus.BotDungeons.QuestRequired = 1
+
+#    PlayerbotsPlus.BotDungeons.AloneMinutes
+#        How long a party's bots wait in the queue each on their own, where a
+#        player who queues for the dungeon can be matched with them, before
+#        they queue together as a party (playerbots lets the dungeon finder
+#        make a group of bots only from a party). 0: as a party straight away.
+#        Less than QueueMinutes.
+#        Default: 2
+PlayerbotsPlus.BotDungeons.AloneMinutes = 2
 
 #    PlayerbotsPlus.BotDungeons.QueueMinutes
 #        A party still in the queue after this long leaves it (1-240).

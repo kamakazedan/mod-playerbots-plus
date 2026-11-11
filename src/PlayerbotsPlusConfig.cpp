@@ -671,6 +671,8 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     d.needPlayerOnline    = B("PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline", true);
     d.questRequired       = B("PlayerbotsPlus.BotDungeons.QuestRequired", true);
     d.queueMinutes        = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.QueueMinutes", 15), 1, 240);
+    // Alone for as long as the whole wait, a party never goes as one.
+    d.aloneMinutes        = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.AloneMinutes", 2), d.queueMinutes - 1);
     d.cooldownMinutes     = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.CooldownMinutes", 15), 1440);
     d.failCooldownMinutes = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.FailCooldownMinutes", 30), 1440);
     d.noProgressMinutes   = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.NoProgressMinutes", 10), 240);

@@ -73,6 +73,7 @@ struct PbpBotDungeonSettings
     uint32_t maxTickMs            = 200;     // no new party while the world tick averages more; 0: no check
     bool     needPlayerOnline     = true;    // ...nor while no player is online
     bool     questRequired        = true;    // a party only goes where one of it holds a quest
+    uint32_t aloneMinutes         = 2;       // queued each alone this long (a player may be matched in), then as a party
     uint32_t queueMinutes         = 15;      // the longest a party waits in the queue
     uint32_t cooldownMinutes      = 15;      // after a run, before a bot queues again
     uint32_t failCooldownMinutes  = 30;      // ...after one that failed

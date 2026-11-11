@@ -105,6 +105,14 @@ otherwise. This module must still build and run without it; check both ways.
   the queue, getting everyone in, and letting them go after.
 - Bots queue with `sLFGMgr->JoinLfg` from the world tick, not playerbots'
   packet: JoinLfg is only unsafe from a map thread.
+- Playerbots vetoes every dungeon finder offer with no player, self-bot or
+  party in it (`PlayerbotsGlobalScript::CanCreateLfgProposal`), so five bots
+  queued each on their own only ever go with a player. After `AloneMinutes`
+  they leave the queue, are made a party (`Group::Create`, the tank leading)
+  and queue as one, the role check answered here (`UpdateRoleCheck`). The
+  dungeon finder turns that party itself into the dungeon group
+  (`ConvertToLFG`). Playerbots' "leave a group a random bot leads" is in
+  `ProcessBot`, which skips grouped bots.
 - Playerbots says no to a dungeon finder offer for a bot that is fighting or
   dead, and one no ends the offer for all five. So the offer is said yes to
   (`UpdateProposal`) for the bots this queued in the world tick it goes out,

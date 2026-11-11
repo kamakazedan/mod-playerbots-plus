@@ -251,6 +251,8 @@ namespace
         std::string what;            // "Deadmines, for 2 quests"
         Clock::time_point since;
         uint32 rejoins = 0;          // dropouts put back in the queue
+        ObjectGuid party;            // queued together as this group, after waiting alone (QueueAsParty)
+        Clock::time_point partySince;
     };
     std::vector<Queued> g_queued;
 
@@ -572,6 +574,94 @@ namespace
                state == lfg::LFG_STATE_ROLECHECK;
     }
 
+    // A party this made that the dungeon finder never turned into a dungeon
+    // group: broken up again.
+    void Unparty(Queued& q)
+    {
+        Group* group = GroupOf(q.party);
+        q.party.Clear();
+        if (!group || group->isLFGGroup() || !AllRandomBots(group))
+            return;
+        if (sLFGMgr->GetState(group->GetGUID()) == lfg::LFG_STATE_QUEUED)
+            sLFGMgr->LeaveLfg(group->GetGUID());
+        group->Disband(true);
+    }
+
+    // Bots queued each on their own only ever go with a player: playerbots never
+    // lets the dungeon finder put a group of bots together by themselves (its
+    // CanCreateLfgProposal), but a party that queues as one it lets be. So after
+    // AloneMinutes, when nobody has been matched in, the five leave the queue,
+    // make a party (the tank leads) and queue as one, each in the role it had --
+    // answered here and now, as the dungeon finder asks each member. The offer
+    // then goes to each of them, and AnswerOffers says yes.
+    bool QueueAsParty(Queued& q, Clock::time_point now, std::string& why)
+    {
+        std::vector<Player*> bots;
+        for (ObjectGuid guid : q.bots)
+        {
+            Player* bot = ObjectAccessor::FindPlayer(guid);
+            if (!bot || !bot->IsInWorld() || bot->IsBeingTeleported())
+            {
+                why = "one of them logged out";
+                return false;
+            }
+            if (bot->GetGroup() || bot->GetGroupInvite() || sLFGMgr->GetState(guid) != lfg::LFG_STATE_QUEUED)
+            {
+                why = bot->GetName() + " went another way";
+                return false;
+            }
+            bots.push_back(bot);
+        }
+        if (bots.size() != MAXGROUPSIZE || q.roles.size() != bots.size())
+        {
+            why = "not five of them";
+            return false;
+        }
+
+        for (Player* bot : bots)
+        {
+            sLFGMgr->LeaveLfg(bot->GetGUID());
+            // What playerbots does for a random bot that takes a dungeon finder
+            // offer (AnswerOffers' Refresh): it leaves any group, so before the party.
+            if (bot->IsAlive() && !bot->IsInCombat())
+                sRandomPlayerbotMgr.Refresh(bot);
+        }
+
+        Group* group = new Group();
+        if (!group->Create(bots[0]))
+        {
+            delete group;
+            why = "the party could not be made";
+            return false;
+        }
+        sGroupMgr->AddGroup(group);
+        q.party = group->GetGUID();
+        for (size_t i = 1; i < bots.size(); ++i)
+            if (bots[i]->GetGroup() || !group->AddMember(bots[i]))
+            {
+                why = bots[i]->GetName() + " could not join the party";
+                Unparty(q);
+                return false;
+            }
+
+        lfg::LfgDungeonSet set = q.dungeons;
+        sLFGMgr->JoinLfg(bots[0], q.roles[0] | lfg::PLAYER_ROLE_LEADER, set, "");
+        for (size_t i = 1; i < bots.size(); ++i)
+            sLFGMgr->UpdateRoleCheck(group->GetGUID(), bots[i]->GetGUID(), q.roles[i]);
+        if (sLFGMgr->GetState(group->GetGUID()) != lfg::LFG_STATE_QUEUED)
+        {
+            why = "the dungeon finder would not take the party";
+            Unparty(q);
+            return false;
+        }
+
+        q.partySince = now;
+        ++g_stats.together;
+        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: nobody came along for {} in {} -- queued "
+                 "again as a party.", q.what, PbpDungeons::Duration(SecondsOf(now - q.since)));
+        return true;
+    }
+
     void WatchQueues(Clock::time_point now)
     {
         PbpBotDungeonSettings const& s = g_Pbp.dungeons;
@@ -599,9 +689,9 @@ namespace
                         TakeOn(group, now);
                     continue;
                 }
-                // Out of the queue with no group while the rest still wait: an offer
-                // turned down (or one nobody answered in time). Back in, a few times.
-                if (waiting && q.rejoins < 5 && i < q.roles.size() && !bot->InBattlegroundQueue() &&
+                // Out of the queue with no group while the rest still wait alone: an
+                // offer turned down (or one nobody answered in time). Back in, a few times.
+                if (waiting && !q.party && q.rejoins < 5 && i < q.roles.size() && !bot->InBattlegroundQueue() &&
                     !bot->HasAura(lfg::LFG_SPELL_DUNGEON_DESERTER))
                 {
                     lfg::LfgDungeonSet set = q.dungeons;
@@ -613,17 +703,46 @@ namespace
             }
             if (!waiting)
             {
+                Unparty(q);
                 it = g_queued.erase(it);
                 continue;
+            }
+            // Alone long enough with nobody matched in: as a party, then -- not
+            // while an offer with a player in it is out to one of them.
+            if (!q.party && now - q.since >= std::chrono::minutes(s.aloneMinutes))
+            {
+                bool offered = false;
+                for (ObjectGuid guid : q.bots)
+                {
+                    lfg::LfgState const state = sLFGMgr->GetState(guid);
+                    offered = offered || state == lfg::LFG_STATE_PROPOSAL || state == lfg::LFG_STATE_ROLECHECK;
+                }
+                std::string why;
+                if (!offered && !QueueAsParty(q, now, why))
+                {
+                    for (ObjectGuid guid : q.bots)
+                    {
+                        if (sLFGMgr->GetState(guid) == lfg::LFG_STATE_QUEUED)
+                            sLFGMgr->LeaveLfg(guid);
+                        CoolDown(guid, 5, now);
+                    }
+                    ++g_stats.cameApart;
+                    LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: no party for {} after all: "
+                             "{}.", q.what, why);
+                    it = g_queued.erase(it);
+                    continue;
+                }
             }
             if (now - q.since >= std::chrono::minutes(s.queueMinutes))
             {
                 for (ObjectGuid guid : q.bots)
                     if (sLFGMgr->GetState(guid) == lfg::LFG_STATE_QUEUED)
                     {
-                        sLFGMgr->LeaveLfg(guid);
+                        if (!q.party)
+                            sLFGMgr->LeaveLfg(guid);
                         CoolDown(guid, 5, now);
                     }
+                Unparty(q);
                 ++g_stats.gaveUp;
                 LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: gave up waiting for {}.", q.what);
                 it = g_queued.erase(it);
@@ -672,13 +791,17 @@ namespace
     // Leave every queue it made (the feature switched off).
     void LeaveQueues(Clock::time_point now)
     {
-        for (Queued const& q : g_queued)
+        for (Queued& q : g_queued)
+        {
             for (ObjectGuid guid : q.bots)
                 if (sLFGMgr->GetState(guid) == lfg::LFG_STATE_QUEUED)
                 {
-                    sLFGMgr->LeaveLfg(guid);
+                    if (!q.party)
+                        sLFGMgr->LeaveLfg(guid);
                     CoolDown(guid, 5, now);
                 }
+            Unparty(q);
+        }
         g_queued.clear();
         g_answered.clear();
     }
@@ -1143,8 +1266,11 @@ std::vector<std::string> PbpDungeons_Status()
         for (ObjectGuid guid : q.bots)
             if (Player* bot = ObjectAccessor::FindPlayer(guid))
                 names += (names.empty() ? "" : ", ") + bot->GetName();
-        out.push_back("  In the queue for " + PbpDungeons::Duration(SecondsOf(now - q.since)) + ": " + q.what +
-                      " -- " + names);
+        std::string const together = q.party ? " (as a party for " +
+                                                   PbpDungeons::Duration(SecondsOf(now - q.partySince)) + ")"
+                                             : std::string();
+        out.push_back("  In the queue for " + PbpDungeons::Duration(SecondsOf(now - q.since)) + together + ": " +
+                      q.what + " -- " + names);
     }
     for (auto const& [key, r] : g_runs)
     {
@@ -1181,10 +1307,11 @@ std::vector<std::string> PbpDungeons_Status()
         out.push_back("  Left alone after failing: " + avoided);
 
     PbpDungeonsStats const st = PbpDungeons_GetStats();
-    out.push_back("  Since start: " + std::to_string(st.queued) + " parties queued (" + std::to_string(st.gaveUp) +
-                  " gave up waiting; " + std::to_string(st.offers) + " group offers said yes to, " +
-                  std::to_string(st.rejoined) + " dropouts back in the queue), " + std::to_string(st.runs) +
-                  " runs: " + std::to_string(st.cleared) +
+    out.push_back("  Since start: " + std::to_string(st.queued) + " parties queued (" + std::to_string(st.together) +
+                  " queued again as a party after waiting alone, " + std::to_string(st.cameApart) +
+                  " came apart, " + std::to_string(st.gaveUp) + " gave up waiting; " + std::to_string(st.offers) +
+                  " group offers said yes to, " + std::to_string(st.rejoined) + " dropouts back in the queue), " +
+                  std::to_string(st.runs) + " runs: " + std::to_string(st.cleared) +
                   " cleared, " + std::to_string(st.failed) + " failed, " + std::to_string(st.handedOver) +
                   " joined by a player; " + std::to_string(st.sentOut) + " bots sent out of a dungeon.");
 

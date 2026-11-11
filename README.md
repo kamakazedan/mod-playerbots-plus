@@ -391,11 +391,15 @@ only in a build with
   again.
 - **Queueing.** Every half minute or so, a party is picked: a tank, a healer
   and three to do the damage, of one side and a level for the dungeon, those
-  holding quests for it first. Each queues on their own, as a player does.
-  When the dungeon finder offers a group, they say yes straight away, even
-  mid-fight: playerbots turns an offer down for a bot that's fighting or
-  dead, and one no cancels it for everyone. One that dropped out of the queue
-  goes back in. If a player is matched in, it's their group from then on.
+  holding quests for it first. Each queues on their own, as a player does,
+  and a player who queues for that dungeon then can be matched in: it's
+  their group from then on. Playerbots never lets the dungeon finder put bots
+  together by themselves, so if nobody has been matched in after a couple of
+  minutes (`AloneMinutes`), the five leave the queue, make a party with the
+  tank leading, and queue as one, which it allows. When the dungeon finder
+  offers a group, they say yes straight away, even mid-fight: playerbots
+  turns an offer down for a bot that's fighting or dead, and one no cancels
+  it for everyone.
 - **The run.** A group of bots the dungeon finder made, with no player in it,
   is taken on in its dungeon. Anyone left outside is brought in, playerbots'
   wander-about strategies (grind, rpg) come off for the run, and
