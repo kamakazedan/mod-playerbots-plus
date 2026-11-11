@@ -113,6 +113,9 @@ void PbpHangout_MakeRoom(const std::string& spotKey, uint32_t count, const std::
 // in a duel.
 bool PbpHangout_SettledAt(Player* bot, const std::string& spotKey);
 
+// Hanging out, or on its way to: whatever else wants the bot leaves it be.
+bool PbpHangout_Has(Player* bot);
+
 // How full each city is: its spots taken together, by the city their names
 // end with ("outside the bank in Thunder Bluff" -> "Thunder Bluff").
 struct PbpHangoutCity

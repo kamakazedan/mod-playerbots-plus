@@ -89,13 +89,40 @@ Whether a bot can spare something or wants it comes from playerbots' own
 qualifier for as long as the bot is logged in, and the market asks about
 thousands of different auctions.
 
+## Bot dungeons and mod-dungeon-clear
+
+Bot dungeons (`PlayerbotsPlusDungeons`, `PlayerbotsPlusDungeonQuests`) are
+built only with mod-dungeon-clear in the build: `PBP_BOT_DUNGEONS` is 1 when
+its `DcBotRun.h` is there (`DC_BOT_RUN_API`), and both files are stubs
+otherwise. This module must still build and run without it; check both ways.
+
+- The clearing is mod-dungeon-clear's, through `DcBotRun`: `Start` a group's
+  run, read how it stands with `Get`, `Stop` it. What a run is, how it is
+  judged (its watchdogs) and how it ends are decided there. Here: who goes,
+  the queue, getting everyone in, and letting them go after.
+- Bots queue with `sLFGMgr->JoinLfg` from the world tick, not playerbots'
+  packet: JoinLfg is only unsafe from a map thread.
+- A group with nobody playing in it has no master for its bots, so the
+  wander-about strategies a random bot gets on its own (grind, rpg) stay on
+  it, and mod-dungeon-clear only holds them back on the tank. They come off
+  for the run (and again when playerbots resets them), and `ResetStrategies`
+  gives them back once the bot is out of the group.
+- Walks for quests use playerbots' own "go camp" (`rpgInfo.ChangeToGoCamp`),
+  as hangouts do: hangouts leave a bot on its way to a camp alone, and these
+  leave a hanging-out one alone (`PbpHangout_Has`).
+- Playerbots empties a quest log with fewer than two slots free, dropping
+  first what one cannot do alone: every dungeon quest. Keeping
+  `KeepLogFree` slots free (dropping what a player would first) is what keeps
+  them; the world tick does it between the bot's own ticks.
+
 ## Pure files are tested
 
-`PlayerbotsPlusMarketPrice.{h,cpp}` and `PlayerbotsPlusText.{h,cpp}` have no
-game types in them, so they can be tested without a server. Keep it that way:
-`tests/build.sh`. The text test also checks the conf against the code: every
-key the code reads is in the conf, and the default mute list, hangout spots,
-companion lists and pet names are the same in both.
+`PlayerbotsPlusMarketPrice.{h,cpp}`, `PlayerbotsPlusText.{h,cpp}`,
+`PlayerbotsPlusLedgerText.{h,cpp}` and `PlayerbotsPlusDungeonsText.{h,cpp}`
+have no game types in them, so they can be tested without a server. Keep it
+that way: `tests/build.sh`. The text test also checks the conf against the
+code: every key the code reads is in the conf, and the default mute list,
+hangout spots, companion lists and pet names are the same in both.
 
 ## Conventions
 

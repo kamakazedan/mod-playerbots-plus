@@ -1,5 +1,6 @@
 #include "PlayerbotsPlusConfig.h"
 #include "PlayerbotsPlusDuels.h"
+#include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusFire.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusLedger.h"
@@ -52,6 +53,9 @@ namespace
             // whoever they are holding (sat down, AFK, kept on foot). The
             // fires' notes are taken either way, so none pile up.
             PbpHangout_Update(diff);
+            // Bot dungeons as well: switched off, the queues they made are
+            // left, and the runs going on finish and let their party go.
+            PbpDungeons_Update(diff);
             PbpStuck_Update(diff);
             PbpFire_Update(diff);
             PbpSpace_Update(diff);
@@ -114,9 +118,15 @@ namespace
 
         ChatCommandTable GetCommands() const override
         {
+            static ChatCommandTable dungeonsTable =
+            {
+                { "",     HandleDungeons,     SEC_GAMEMASTER, Console::Yes },
+                { "send", HandleDungeonsSend, SEC_GAMEMASTER, Console::Yes },
+            };
             static ChatCommandTable pbpTable =
             {
                 { "status", HandleStatus, SEC_GAMEMASTER,    Console::Yes },
+                { "dungeons", dungeonsTable },
                 { "economy", HandleEconomy, SEC_GAMEMASTER,  Console::Yes },
                 { "visit",  HandleVisit,  SEC_GAMEMASTER,    Console::No  },
                 { "fires",  HandleFires,  SEC_GAMEMASTER,    Console::No  },
@@ -231,7 +241,35 @@ namespace
                                      lg.lookedAt.empty() ? std::string("not yet")
                                                          : fmt::format("{} bots at {}", lg.looked, lg.lookedAt));
 
+            PbpDungeonsStats const bd = PbpDungeons_GetStats();
+            handler->PSendSysMessage("Bot dungeons: {} - {} parties in the queue, {} runs going on; {} runs since "
+                                     "startup ({} cleared, {} failed). .pbp dungeons shows them.",
+                                     onOff(s.enable && s.dungeons.enable), bd.queuedNow, bd.runsNow, bd.runs,
+                                     bd.cleared, bd.failed);
+
             handler->SendSysMessage("Select a random bot and type .pbp visit to send it to the auction house now.");
+            return true;
+        }
+
+        // .pbp dungeons: random bots running dungeons on their own.
+        static bool HandleDungeons(ChatHandler* handler)
+        {
+            for (std::string const& line : PbpDungeons_Status())
+                handler->PSendSysMessage("{}", line);
+            return true;
+        }
+
+        // .pbp dungeons send <dungeon>: a party queued for it now (its dungeon
+        // finder id, or part of its name), to see one through.
+        static bool HandleDungeonsSend(ChatHandler* handler, Tail which)
+        {
+            if (which.empty())
+            {
+                handler->SendErrorMessage("Which dungeon? Its dungeon finder id, or part of its name: "
+                                          ".pbp dungeons send deadmines");
+                return false;
+            }
+            handler->SendSysMessage(PbpDungeons_Send(std::string(which)));
             return true;
         }
 

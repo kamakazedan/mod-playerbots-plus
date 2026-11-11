@@ -21,6 +21,7 @@ their own words.
 | [Duels at the city gates](#duels-at-the-city-gates) | Gather outside the gates of Orgrimmar and Stormwind and duel each other there |
 | [Muted bot lines](#muted-bot-lines) | Playerbots' stock whispers, like "Using [Hearthstone]", are dropped |
 | [The economy ledger](#the-economy-ledger) | Nothing new: it counts what the bots' economy does, day by day, to decide by |
+| [Bot dungeons](#bot-dungeons) | Take dungeon quests, queue through the dungeon finder and run the dungeon themselves, with nobody playing among them (needs mod-dungeon-clear) |
 
 Each one can be switched off on its own. Every setting is documented in
 `conf/mod_playerbots_plus.conf.dist`.
@@ -371,6 +372,50 @@ server log. The figures are kept in the characters database
 (`playerbots_plus_ledger`, made by the SQL in `data/sql` or at startup) for 90
 days. Settings: `PlayerbotsPlus.Ledger.*`.
 
+## Bot dungeons
+
+Random bots run dungeons on their own, the way players do: they take the
+quests, queue through the dungeon finder, clear the dungeon, keep the loot and
+hand the quests in. Off by default (`PlayerbotsPlus.BotDungeons.Enable`), and
+only in a build with
+[mod-dungeon-clear](https://github.com/kamakazedan/mod-dungeon-clear) (branch
+`dangaming`), which does the clearing.
+
+- **Dungeon quests.** Playerbots' own questing only takes quests one can do
+  alone, and empties a full quest log starting with the ones it can't. With
+  bot dungeons on, idle bots walk to the givers of normal dungeon quests on
+  their continent and take the ones that suit them (their level, not grey, for
+  a dungeon they haven't outgrown). A few quest log slots are kept free while
+  a bot holds one, by dropping what a player would first: failed, grey, other
+  zones, the lowest. A bot with one done walks to hand it in before it queues
+  again.
+- **Queueing.** Every half minute or so, a party is picked: a tank, a healer
+  and three to do the damage, of one side and a level for the dungeon, those
+  holding quests for it first. Each queues on their own, as a player does. If
+  a player is matched in, it's their group from then on.
+- **The run.** A group of bots the dungeon finder made, with no player in it,
+  is taken on in its dungeon. Anyone left outside is brought in, playerbots'
+  wander-about strategies (grind, rpg) come off for the run, and
+  mod-dungeon-clear clears the dungeon, silently: there's nobody there to
+  talk to (mod-ollama-chat keeps its bots quiet in such a run too).
+- **When it fails.** A run ends when the whole party dies with nobody to rez,
+  when nothing has moved forward for 10 minutes (no kill, no pack cleared, no
+  fight going on, not getting closer to the next boss), when it's stuck on
+  something for 2 minutes, or after 2 hours.
+- **After.** Everyone is brought back to life and leaves the group, which takes
+  them back where they queued from. They're unbound from the dungeon and get
+  their usual strategies back. They queue again after a cooldown, a longer one
+  after a failure. A dungeon whose runs keep failing is left alone for a while.
+  A quest that 4 runs of its dungeon haven't finished is dropped, and so is one
+  that goes grey.
+- **Loose ends.** A bot that logs in inside a dungeon it's no longer grouped
+  for (the server went down mid-run) is sent back out.
+
+New parties wait while nobody is playing, and while the world tick averages
+over 200 ms; there are 5 at most at once. `.pbp dungeons` shows what's going
+on, including the tick. `.pbp dungeons send <dungeon>` queues a party for a
+dungeon now, quest or no quest. Settings: `PlayerbotsPlus.BotDungeons.*`.
+
 ## With other modules
 
 - **[mod-ah-bot-plus](https://github.com/NathanHandley/mod-ah-bot-plus):**
@@ -398,9 +443,12 @@ days. Settings: `PlayerbotsPlus.Ledger.*`.
 
   This works through the `PlayerbotsPlus.h` interface. Each module builds and
   runs without the other.
-- **[mod-dungeon-clear](https://github.com/kamakazedan/mod-dungeon-clear):**
-  while a run is on, it decides how its dead come back, and getting back up
-  stays out of it.
+- **[mod-dungeon-clear](https://github.com/kamakazedan/mod-dungeon-clear)**
+  (branch `dangaming`):
+  - While a run is on, it decides how its dead come back, and getting back up
+    stays out of it.
+  - It clears the dungeons of [bot dungeons](#bot-dungeons). Without it, bot
+    dungeons aren't built in, and switching them on only gets a warning.
 
 ### Coming from mod-ollama-chat
 
@@ -440,16 +488,20 @@ module at startup if the updater is off.
 | `.pbp status` | What it's doing: the auction house, hangouts (and how full each city is), stuck bots, fires, room to stand, revives, marks, pets, companions, duels, muted lines and the ledger |
 | `.pbp economy [days]` | The random bots' economy over the last days (7 unless you say) |
 | `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
+| `.pbp dungeons` | Bot dungeons: parties in the queue, runs going on, recent results, the world tick, dungeon quests |
+| `.pbp dungeons send <dungeon>` | Queues a party of bots for that dungeon now (its dungeon finder id, or part of its name) |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |
 
 `PlayerbotsPlus.Debug = 1` logs more of what the bots do, such as each bot
-heading to a hangout and a rogue's sap step by step.
+heading to a hangout, a rogue's sap step by step, and bots walking off to take
+or hand in dungeon quests.
 
 ## Development
 
 See `CLAUDE.md` for the rules. The tests run without a server: the pricing,
-the text helpers, the ledger's words and sums, and checks that the conf
-matches the code.
+the text helpers, the ledger's words and sums, bot dungeons' choices (who goes,
+grey quests, wings, a full quest log), and checks that the conf matches the
+code.
 
 ```bash
 bash tests/build.sh

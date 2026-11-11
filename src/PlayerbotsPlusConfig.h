@@ -64,11 +64,39 @@ struct PbpLedgerSettings
     std::unordered_set<uint32_t> auctionBots;   // AuctionHouseBot.GUIDs: the AH bot's characters
 };
 
+// Bot dungeons (PlayerbotsPlusDungeons, PlayerbotsPlusDungeonQuests).
+struct PbpBotDungeonSettings
+{
+    bool     enable               = false;
+    uint32_t checkSeconds         = 30;      // the planner looks for a party this often
+    uint32_t maxRuns              = 5;       // parties in the queue and runs going on, together
+    uint32_t maxTickMs            = 200;     // no new party while the world tick averages more; 0: no check
+    bool     needPlayerOnline     = true;    // ...nor while no player is online
+    bool     questRequired        = true;    // a party only goes where one of it holds a quest
+    uint32_t queueMinutes         = 15;      // the longest a party waits in the queue
+    uint32_t cooldownMinutes      = 15;      // after a run, before a bot queues again
+    uint32_t failCooldownMinutes  = 30;      // ...after one that failed
+    uint32_t noProgressMinutes    = 10;      // a run with nothing moving forward this long fails
+    uint32_t maxRunMinutes        = 120;     // and any run this long
+    uint32_t lootSeconds          = 30;      // after the last boss, before they leave
+    uint32_t avoidAfterFailures   = 3;       // a dungeon whose runs failed this many times in a row...
+    uint32_t avoidMinutes         = 120;     // ...is not gone to for this long
+
+    bool     quests               = true;    // take, keep, hand in and let go of dungeon quests
+    float    questRange           = 1500.0f; // yards: the farthest a bot walks to a giver
+    uint32_t questWalksPerMinute  = 10;      // bots sent to a giver or to hand in, all told
+    uint32_t questWalkMinutes     = 15;      // a walk not there by then is given up
+    uint32_t questLookMinutes     = 30;      // a bot is looked at for quests to take this often
+    uint32_t questRuns            = 4;       // runs of its dungeon that do not finish a quest before it goes
+    uint32_t keepLogFree          = 3;       // quest log slots kept free while it holds a dungeon quest
+};
+
 struct PbpSettings
 {
-    bool              enable = true;
-    PbpMarketSettings market;
-    PbpLedgerSettings ledger;
+    bool                  enable = true;
+    PbpMarketSettings     market;
+    PbpLedgerSettings     ledger;
+    PbpBotDungeonSettings dungeons;
 };
 
 extern PbpSettings g_Pbp;

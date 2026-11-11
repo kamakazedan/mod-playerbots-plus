@@ -316,6 +316,179 @@ PlayerbotsPlus.Ledger.KeepDays = 90
 
 ###############################################################################
 #
+#   BOT DUNGEONS (needs mod-dungeon-clear)
+#
+#   Random bots run dungeons with nobody playing among them, the way players
+#   do: through the dungeon finder. Playerbots only ever queues a random bot
+#   for a dungeon a player has queued for, and mod-dungeon-clear only starts
+#   a clear when a player says so; with this on:
+#
+#     - Every CheckSeconds a party is picked -- a tank, a healer and three to
+#       do the damage, of one side and a level for the dungeon, those holding
+#       quests for it first -- and each of them queues for it, as a player
+#       queues. Whoever the dungeon finder puts together goes: a player
+#       matched in makes it a player's group, and what happens there is
+#       theirs, as it is in any group.
+#     - A group of bots the dungeon finder made, with no player in it (one
+#       this queued, or one playerbots queued for a dungeon a player wanted),
+#       is taken on in its dungeon: anyone left outside is brought in, the
+#       wander-about strategies (grind, rpg) come off for the run, and
+#       mod-dungeon-clear clears it. Silently: there is nobody in the group
+#       to talk to.
+#     - The run fails when the whole party dies with nobody to rez, when
+#       nothing has moved forward for NoProgressMinutes (no kill, no pack
+#       cleared, no fight going on, not getting closer to the next boss), when
+#       it stays stuck on something for two minutes, or after MaxRunMinutes.
+#     - Done, and the last boss looted (LootSeconds), or failed: everyone is
+#       brought back to life, leaves the group -- which takes them back where
+#       they queued from -- and is unbound from the dungeon, with their usual
+#       strategies back. They keep what they looted. They queue again after
+#       CooldownMinutes (FailCooldownMinutes after a failure); a dungeon whose
+#       runs fail AvoidAfterFailures times in a row is not gone to for
+#       AvoidMinutes.
+#     - A bot that logs in inside a dungeon it is no longer grouped for (the
+#       server went down mid-run) is sent back out after a minute.
+#
+#   Dungeon quests (Quests = 1). Playerbots' own questing only takes quests
+#   one can do alone, and clears out a full quest log starting with the ones
+#   it cannot. So:
+#
+#     - idle bots walk (playerbots' own "go camp" walk) to the givers of normal
+#       dungeon quests on the continent they are on, within QuestRange, and
+#       take the ones that suit them: of their level, not grey, for a dungeon
+#       they have not outgrown, and that the game lets them take;
+#     - KeepLogFree quest log slots are kept free while a bot holds one, by
+#       letting go of what a player would first: failed quests, grey ones,
+#       ones for other zones, then the lowest -- never a dungeon quest, one
+#       done, or the one it is out doing;
+#     - a bot with one done walks to whoever takes it back on its continent
+#       before it queues again, and hands it in there (playerbots' questing
+#       picks the reward; if it has not in a minute, it is handed in with the
+#       reward that suits the bot best);
+#     - one gone grey is let go once the bot is out of its dungeon, and one
+#       that QuestRuns runs of its dungeon (on a split dungeon, its wing) have
+#       not finished is let go and not taken again.
+#
+#   .pbp dungeons shows what is going on, and .pbp dungeons send <dungeon>
+#   (its dungeon finder id, or part of its name) queues a party for it now,
+#   quest or no quest, to see one through. The dungeon finder must be on
+#   (DungeonFinder.OptionsMask in worldserver.conf).
+#
+#   Without mod-dungeon-clear in the build none of this exists: switched on,
+#   it says so at startup and does nothing.
+#
+###############################################################################
+
+#    PlayerbotsPlus.BotDungeons.Enable
+#        Off by default. Switched off, nobody new queues, the queues it made
+#        are left, and runs going on finish and let their party go.
+#        Default: 0
+PlayerbotsPlus.BotDungeons.Enable = 0
+
+#    PlayerbotsPlus.BotDungeons.CheckSeconds
+#        How often a party is looked for (5-3600). One party at most a look.
+#        Default: 30
+PlayerbotsPlus.BotDungeons.CheckSeconds = 30
+
+#    PlayerbotsPlus.BotDungeons.MaxRuns
+#    PlayerbotsPlus.BotDungeons.MaxWorldTickMs
+#        Parties in the queue and runs going on, together, at most (0-100);
+#        and no new party while the world tick averages more than this many
+#        milliseconds (0: no such check). Each run is a dungeon instance for
+#        the map threads to update; the bots in it were online anyway. .pbp
+#        dungeons shows the tick now.
+#        Default: 5, 200
+PlayerbotsPlus.BotDungeons.MaxRuns = 5
+PlayerbotsPlus.BotDungeons.MaxWorldTickMs = 200
+
+#    PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline
+#        No new party while nobody is playing. With playerbots logging its
+#        bots out when the last player leaves
+#        (Playerbots.DisabledWithoutRealPlayer), give its logout delay time for
+#        a run to finish.
+#        Default: 1
+PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline = 1
+
+#    PlayerbotsPlus.BotDungeons.QuestRequired
+#        1: a party only goes where at least one of it holds a quest for the
+#        dungeon (the others go along). 0: any dungeon of their level.
+#        Default: 1
+PlayerbotsPlus.BotDungeons.QuestRequired = 1
+
+#    PlayerbotsPlus.BotDungeons.QueueMinutes
+#        A party still in the queue after this long leaves it (1-240).
+#        Default: 15
+PlayerbotsPlus.BotDungeons.QueueMinutes = 15
+
+#    PlayerbotsPlus.BotDungeons.CooldownMinutes
+#    PlayerbotsPlus.BotDungeons.FailCooldownMinutes
+#        After a run, how long before a bot queues again; after a failed one.
+#        Default: 15, 30
+PlayerbotsPlus.BotDungeons.CooldownMinutes = 15
+PlayerbotsPlus.BotDungeons.FailCooldownMinutes = 30
+
+#    PlayerbotsPlus.BotDungeons.NoProgressMinutes
+#    PlayerbotsPlus.BotDungeons.MaxRunMinutes
+#        A run with nothing moving forward this long fails (0: never for
+#        that), and any run this long (10-1440).
+#        Default: 10, 120
+PlayerbotsPlus.BotDungeons.NoProgressMinutes = 10
+PlayerbotsPlus.BotDungeons.MaxRunMinutes = 120
+
+#    PlayerbotsPlus.BotDungeons.LootSeconds
+#        After the last boss, how long before they leave. The clear itself
+#        waits for the last boss's loot first.
+#        Default: 30
+PlayerbotsPlus.BotDungeons.LootSeconds = 30
+
+#    PlayerbotsPlus.BotDungeons.AvoidAfterFailures
+#    PlayerbotsPlus.BotDungeons.AvoidMinutes
+#        A dungeon whose runs failed this many times in a row (0: never) is
+#        not gone to for this long.
+#        Default: 3, 120
+PlayerbotsPlus.BotDungeons.AvoidAfterFailures = 3
+PlayerbotsPlus.BotDungeons.AvoidMinutes = 120
+
+#    PlayerbotsPlus.BotDungeons.Quests
+#        Bots take, keep, hand in and let go of dungeon quests (above). 0
+#        leaves quests to playerbots: with QuestRequired on, few parties then.
+#        Default: 1
+PlayerbotsPlus.BotDungeons.Quests = 1
+
+#    PlayerbotsPlus.BotDungeons.QuestRange
+#        Yards: the farthest a bot walks to a quest giver (50-20000); twice
+#        this to hand one in.
+#        Default: 1500
+PlayerbotsPlus.BotDungeons.QuestRange = 1500
+
+#    PlayerbotsPlus.BotDungeons.QuestWalksPerMinute
+#    PlayerbotsPlus.BotDungeons.QuestWalkMinutes
+#    PlayerbotsPlus.BotDungeons.QuestLookMinutes
+#        Bots sent off to take or hand in quests, all told, a minute; a walk
+#        not there after this many minutes is given up (and that place not
+#        walked to again by that bot); and a bot is looked at for quests at
+#        most this often.
+#        Default: 10, 15, 30
+PlayerbotsPlus.BotDungeons.QuestWalksPerMinute = 10
+PlayerbotsPlus.BotDungeons.QuestWalkMinutes = 15
+PlayerbotsPlus.BotDungeons.QuestLookMinutes = 30
+
+#    PlayerbotsPlus.BotDungeons.QuestRuns
+#        Runs of its dungeon (its wing, on a split one) that do not finish a
+#        quest before the bot lets it go and does not take it again (1-100).
+#        Counted while the server is up.
+#        Default: 4
+PlayerbotsPlus.BotDungeons.QuestRuns = 4
+
+#    PlayerbotsPlus.BotDungeons.KeepLogFree
+#        Quest log slots kept free while a bot holds a dungeon quest (2-10).
+#        Playerbots clears out a log with fewer than two free, starting with
+#        the quests one cannot do alone.
+#        Default: 3
+PlayerbotsPlus.BotDungeons.KeepLogFree = 3
+
+###############################################################################
+#
 #   CITY HANGOUTS
 #
 #   On a real server everyone parks in the same places: the Trade District,

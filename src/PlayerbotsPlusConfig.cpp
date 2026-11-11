@@ -1,4 +1,5 @@
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusLedgerText.h"
 #include "PlayerbotsPlusMute.h"
 #include "PlayerbotsPlusText.h"
@@ -662,6 +663,29 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     for (uint64_t guid : PbpLedger::GuidList(sConfigMgr->GetOption<std::string>("AuctionHouseBot.GUIDs", "", false)))
         l.auctionBots.insert(uint32_t(guid));
 
+    PbpBotDungeonSettings& d = s.dungeons;
+    d.enable              = B("PlayerbotsPlus.BotDungeons.Enable", false);
+    d.checkSeconds        = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.CheckSeconds", 30), 5, 3600);
+    d.maxRuns             = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.MaxRuns", 5), 100);
+    d.maxTickMs           = U("PlayerbotsPlus.BotDungeons.MaxWorldTickMs", 200);
+    d.needPlayerOnline    = B("PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline", true);
+    d.questRequired       = B("PlayerbotsPlus.BotDungeons.QuestRequired", true);
+    d.queueMinutes        = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.QueueMinutes", 15), 1, 240);
+    d.cooldownMinutes     = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.CooldownMinutes", 15), 1440);
+    d.failCooldownMinutes = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.FailCooldownMinutes", 30), 1440);
+    d.noProgressMinutes   = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.NoProgressMinutes", 10), 240);
+    d.maxRunMinutes       = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.MaxRunMinutes", 120), 10, 1440);
+    d.lootSeconds         = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.LootSeconds", 30), 600);
+    d.avoidAfterFailures  = U("PlayerbotsPlus.BotDungeons.AvoidAfterFailures", 3);
+    d.avoidMinutes        = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.AvoidMinutes", 120), 10080);
+    d.quests              = B("PlayerbotsPlus.BotDungeons.Quests", true);
+    d.questRange          = std::clamp(F("PlayerbotsPlus.BotDungeons.QuestRange", 1500.0f), 50.0f, 20000.0f);
+    d.questWalksPerMinute = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.QuestWalksPerMinute", 10), 600);
+    d.questWalkMinutes    = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.QuestWalkMinutes", 15), 1, 240);
+    d.questLookMinutes    = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.QuestLookMinutes", 30), 1, 1440);
+    d.questRuns           = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.QuestRuns", 4), 1, 100);
+    d.keepLogFree         = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.KeepLogFree", 3), 2, 10);
+
     g_Pbp = std::move(s);
 
     pbp::g_PbpDebug = B("PlayerbotsPlus.Debug", false);
@@ -698,6 +722,25 @@ void PlayerbotsPlus_LoadConfig(bool reload)
              "days; the AH bot's characters: {}).",
              g_Pbp.ledger.enable ? "on" : "off", g_Pbp.ledger.flushMinutes, g_Pbp.ledger.censusMinutes,
              g_Pbp.ledger.keepDays, g_Pbp.ledger.auctionBots.size());
+
+    PbpBotDungeonSettings const& bd = g_Pbp.dungeons;
+#if PBP_BOT_DUNGEONS
+    if (bd.enable)
+        LOG_INFO(where,
+                 "[Playerbots Plus] Bot dungeons on (up to {} at once{}{}; {}; dungeon quests {}).",
+                 bd.maxRuns,
+                 bd.maxTickMs ? ", while the world tick averages " + std::to_string(bd.maxTickMs) + " ms or less"
+                              : std::string(),
+                 bd.needPlayerOnline ? ", only with a player online" : "",
+                 bd.questRequired ? "a party only goes where one of it holds a quest" : "quests or not",
+                 bd.quests ? "fetched, kept, handed in" : "left to playerbots");
+    else
+        LOG_INFO(where, "[Playerbots Plus] Bot dungeons off.");
+#else
+    if (bd.enable)
+        LOG_WARN(where, "[Playerbots Plus] PlayerbotsPlus.BotDungeons.Enable is on, but this build has no "
+                        "mod-dungeon-clear (DcBotRun.h): bot dungeons stay off.");
+#endif
 
     size_t names = 0;
     for (auto const& [family, list] : pbp::g_PetNames)

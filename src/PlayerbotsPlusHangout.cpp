@@ -1530,6 +1530,11 @@ void PbpHangout_MakeRoom(const std::string& spotKey, uint32_t count, const std::
     }
 }
 
+bool PbpHangout_Has(Player* bot)
+{
+    return bot && !g_visits.empty() && g_visits.count(bot->GetGUID().GetRawValue()) != 0;
+}
+
 bool PbpHangout_SettledAt(Player* bot, const std::string& spotKey)
 {
     if (!bot || g_visits.empty())
