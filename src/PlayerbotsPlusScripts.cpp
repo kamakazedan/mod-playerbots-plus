@@ -2,6 +2,7 @@
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusFire.h"
 #include "PlayerbotsPlusHangout.h"
+#include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlusMarketPrice.h"
 #include "PlayerbotsPlusMarks.h"
@@ -27,11 +28,13 @@ namespace
     {
     public:
         PlayerbotsPlusWorldScript()
-            : WorldScript("PlayerbotsPlusWorldScript", { WORLDHOOK_ON_AFTER_CONFIG_LOAD, WORLDHOOK_ON_UPDATE }) { }
+            : WorldScript("PlayerbotsPlusWorldScript",
+                          { WORLDHOOK_ON_AFTER_CONFIG_LOAD, WORLDHOOK_ON_UPDATE, WORLDHOOK_ON_SHUTDOWN }) { }
 
         void OnAfterConfigLoad(bool reload) override
         {
             PlayerbotsPlus_LoadConfig(reload);
+            PbpLedger_Load(reload);
             if (reload)
             {
                 PbpMarket_Reset();
@@ -41,6 +44,10 @@ namespace
 
         void OnUpdate(uint32 diff) override
         {
+            // First: what the game paid the bots is all counted before anyone
+            // looks at what they have (the ledger), and anything this tick
+            // pays them is counted next tick, before the next look.
+            PbpLedger_Update(diff);
             // These two also run with the module switched off: they let go
             // whoever they are holding (sat down, AFK, kept on foot). The
             // fires' notes are taken either way, so none pile up.
@@ -57,17 +64,29 @@ namespace
             PbpPets_Update(diff);
             PbpDuels_Update(diff);
         }
+
+        void OnShutdown() override
+        {
+            PbpLedger_Shutdown();
+        }
     };
 
     // A bot's auction sold, or came back unsold: the mail about it is the one
-    // moment the game says so, whoever did the buying, the bot online or not.
+    // moment the game says so, whoever did the buying (the AH bot's buyouts
+    // too), the bot online or not. And anyone's auction put up, for the ledger.
     class PlayerbotsPlusAuctionScript : public AuctionHouseScript
     {
     public:
         PlayerbotsPlusAuctionScript()
             : AuctionHouseScript("PlayerbotsPlusAuctionScript",
-                                 { AUCTIONHOUSEHOOK_ON_BEFORE_AUCTIONHOUSEMGR_SEND_AUCTION_SUCCESSFUL_MAIL,
+                                 { AUCTIONHOUSEHOOK_ON_AUCTION_ADD,
+                                   AUCTIONHOUSEHOOK_ON_BEFORE_AUCTIONHOUSEMGR_SEND_AUCTION_SUCCESSFUL_MAIL,
                                    AUCTIONHOUSEHOOK_ON_BEFORE_AUCTIONHOUSEMGR_SEND_AUCTION_EXPIRED_MAIL }) { }
+
+        void OnAuctionAdd(AuctionHouseObject* /*ah*/, AuctionEntry* entry) override
+        {
+            PbpLedger_OnAuctionAdded(entry);
+        }
 
         void OnBeforeAuctionHouseMgrSendAuctionSuccessfulMail(AuctionHouseMgr* /*mgr*/, AuctionEntry* auction,
                                                               Player* /*owner*/, uint32& ownerAccount,
@@ -75,6 +94,7 @@ namespace
                                                               bool& /*updateAchievementCriteria*/,
                                                               bool& /*sendMail*/) override
         {
+            PbpLedger_OnSaleMailed(auction);
             PbpMarket_OnSaleMailed(auction, ownerAccount);
         }
 
@@ -82,6 +102,7 @@ namespace
                                                            Player* /*owner*/, uint32& ownerAccount,
                                                            bool& /*sendNotification*/, bool& /*sendMail*/) override
         {
+            PbpLedger_OnExpiryMailed(auction);
             PbpMarket_OnExpiryMailed(auction, ownerAccount);
         }
     };
@@ -96,6 +117,7 @@ namespace
             static ChatCommandTable pbpTable =
             {
                 { "status", HandleStatus, SEC_GAMEMASTER,    Console::Yes },
+                { "economy", HandleEconomy, SEC_GAMEMASTER,  Console::Yes },
                 { "visit",  HandleVisit,  SEC_GAMEMASTER,    Console::No  },
                 { "fires",  HandleFires,  SEC_GAMEMASTER,    Console::No  },
                 { "reload", HandleReload, SEC_ADMINISTRATOR, Console::Yes },
@@ -201,7 +223,23 @@ namespace
                                      d.challenged, d.asked, h.duels, h.duelling, d.walking, d.gaveUp, d.pacts,
                                      d.pactsHeld, d.pactsLost, d.pactsNow);
 
+            PbpLedgerStats const lg = PbpLedger_GetStats();
+            handler->PSendSysMessage("Economy ledger: {} - {} things noted since startup ({} dropped, too many at "
+                                     "once), written {} times; last look at the bots: {}. .pbp economy [days] shows "
+                                     "it.",
+                                     onOff(s.ledger.enable), lg.notes, lg.dropped, lg.writes,
+                                     lg.lookedAt.empty() ? std::string("not yet")
+                                                         : fmt::format("{} bots at {}", lg.looked, lg.lookedAt));
+
             handler->SendSysMessage("Select a random bot and type .pbp visit to send it to the auction house now.");
+            return true;
+        }
+
+        // .pbp economy [days]: the random bots' economy over the last days (7).
+        static bool HandleEconomy(ChatHandler* handler, Optional<uint32> days)
+        {
+            for (std::string const& line : PbpLedger_Report(days ? *days : 7))
+                handler->PSendSysMessage("{}", line);
             return true;
         }
 
@@ -257,6 +295,7 @@ void Addmod_playerbots_plusScripts()
     new PlayerbotsPlusWorldScript();
     new PlayerbotsPlusAuctionScript();
     new PlayerbotsPlusCommandScript();
+    new PbpLedgerPlayerScript();
     new PbpStuckScript();
     new PbpFireScript();
     new PbpMuteScript();

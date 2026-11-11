@@ -1,4 +1,5 @@
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusLedgerText.h"
 #include "PlayerbotsPlusMute.h"
 #include "PlayerbotsPlusText.h"
 
@@ -652,6 +653,15 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     if (m.sellMinQuality > m.sellMaxQuality)
         std::swap(m.sellMinQuality, m.sellMaxQuality);
 
+    PbpLedgerSettings& l = s.ledger;
+    l.enable        = B("PlayerbotsPlus.Ledger.Enable", true);
+    l.flushMinutes  = std::clamp<uint32_t>(U("PlayerbotsPlus.Ledger.FlushMinutes", 10), 1, 60);
+    l.censusMinutes = std::clamp<uint32_t>(U("PlayerbotsPlus.Ledger.CensusMinutes", 30), 5, 1440);
+    l.keepDays      = std::clamp<uint32_t>(U("PlayerbotsPlus.Ledger.KeepDays", 90), 7, 3650);
+    // mod-ah-bot-plus's own setting: whose auctions are the AH bot's.
+    for (uint64_t guid : PbpLedger::GuidList(sConfigMgr->GetOption<std::string>("AuctionHouseBot.GUIDs", "", false)))
+        l.auctionBots.insert(uint32_t(guid));
+
     g_Pbp = std::move(s);
 
     pbp::g_PbpDebug = B("PlayerbotsPlus.Debug", false);
@@ -682,6 +692,12 @@ void PlayerbotsPlus_LoadConfig(bool reload)
              pbp::g_SpaceEnable ? "on" : "off",
              pbp::g_ReviveEnable ? "on" : "off", pbp::g_MarksEnable ? "on" : "off",
              pbp::g_MarksSapStar ? "on" : "off");
+
+    LOG_INFO(where,
+             "[Playerbots Plus] Economy ledger {} (written every {} min, a look at the bots every {} min, kept {} "
+             "days; the AH bot's characters: {}).",
+             g_Pbp.ledger.enable ? "on" : "off", g_Pbp.ledger.flushMinutes, g_Pbp.ledger.censusMinutes,
+             g_Pbp.ledger.keepDays, g_Pbp.ledger.auctionBots.size());
 
     size_t names = 0;
     for (auto const& [family, list] : pbp::g_PetNames)

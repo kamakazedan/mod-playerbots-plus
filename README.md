@@ -20,6 +20,7 @@ their own words.
 | [Hunters' pets and companions](#hunters-pets-and-companions) | Name their hunter pets the way players do, and keep companions of their side and level |
 | [Duels at the city gates](#duels-at-the-city-gates) | Gather outside the gates of Orgrimmar and Stormwind and duel each other there |
 | [Muted bot lines](#muted-bot-lines) | Playerbots' stock whispers, like "Using [Hearthstone]", are dropped |
+| [The economy ledger](#the-economy-ledger) | Nothing new: it counts what the bots' economy does, day by day, to decide by |
 
 Each one can be switched off on its own. Every setting is documented in
 `conf/mod_playerbots_plus.conf.dist`.
@@ -339,6 +340,37 @@ right now", can be muted too. You can add any line you like.
 
 Settings: `PlayerbotsPlus.Mute.*`.
 
+## The economy ledger
+
+Before anything about the bots' economy changes (professions that craft, gear
+that has to be earned, selling in trade chat), the numbers: what it does now,
+day by day. The ledger changes nothing; it only counts. Only playerbots' random
+bots count, not anyone's own.
+
+- **Gold:** what comes in (looted, quest rewards, auction house mail, the
+  rest) and goes out (auction house buys and deposits, the rest). Also what
+  playerbots gives or takes outside the game's own payments: its top-up
+  whenever it refreshes a bot, and level resets.
+- **The auction house:** what bots list and who buys it (the AH bot, a
+  player, another bot), what bots buy and from whom, and what comes back
+  unsold.
+- **What they get:** looted by kind (herbs, ore, leather, cloth, gems, gear by
+  quality, junk), and how much of it from herbs, ore veins, chests and fishing.
+  Also what they make (crafted or conjured) and buy from vendors.
+- **Where their gear comes from:** handed out by playerbots, looted, a quest
+  reward, the auction house, a vendor or made, and its item level.
+- **What they use up:** food and drink, potions, elixirs, flasks, bandages,
+  scrolls, oils and stones.
+- **A look at all of them, every half hour:** gold held, item level by level,
+  professions, who is in the dungeon queue, the trade goods they carry and
+  what is in their banks, and who has what up for auction.
+
+`.pbp economy [days]` prints it (the last 7 days unless you say), from the
+console or SOAP as well as in game. Each finished day is also written to the
+server log. The figures are kept in the characters database
+(`playerbots_plus_ledger`, made by the SQL in `data/sql` or at startup) for 90
+days. Settings: `PlayerbotsPlus.Ledger.*`.
+
 ## With other modules
 
 - **[mod-ah-bot-plus](https://github.com/NathanHandley/mod-ah-bot-plus):**
@@ -397,13 +429,16 @@ git clone https://github.com/kamakazedan/mod-playerbots-plus.git
 ```
 
 Copy `conf/mod_playerbots_plus.conf.dist` to your module config folder as
-`mod_playerbots_plus.conf`, then rebuild. The module needs no SQL.
+`mod_playerbots_plus.conf`, then rebuild. The one table it has, the economy
+ledger's, is made by the core's database updater from `data/sql`, or by the
+module at startup if the updater is off.
 
 ## Commands (GM)
 
 | Command | What it does |
 |---|---|
-| `.pbp status` | What it's doing: the auction house, hangouts (and how full each city is), stuck bots, fires, room to stand, revives, marks, pets, companions, duels and muted lines |
+| `.pbp status` | What it's doing: the auction house, hangouts (and how full each city is), stuck bots, fires, room to stand, revives, marks, pets, companions, duels, muted lines and the ledger |
+| `.pbp economy [days]` | The random bots' economy over the last days (7 unless you say) |
 | `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |
 
@@ -413,7 +448,8 @@ heading to a hangout and a rogue's sap step by step.
 ## Development
 
 See `CLAUDE.md` for the rules. The tests run without a server: the pricing,
-the text helpers, and checks that the conf matches the code.
+the text helpers, the ledger's words and sums, and checks that the conf
+matches the code.
 
 ```bash
 bash tests/build.sh

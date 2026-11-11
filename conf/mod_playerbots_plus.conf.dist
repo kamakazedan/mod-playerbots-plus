@@ -16,6 +16,7 @@
 #
 #   GM commands:
 #       .pbp status          what it is doing
+#       .pbp economy [days]  the random bots' economy over the last days (7)
 #       .pbp visit [name]    that bot (or the one selected) trades now
 #       .pbp reload          re-read this file (.reload config does too)
 #
@@ -256,6 +257,62 @@ PlayerbotsPlus.Market.Price.UndercutPct = 1:5
 #        Asked this much less (percent) for every time it came back unsold.
 #        Default: 15
 PlayerbotsPlus.Market.Price.RelistDiscountPct = 15
+
+###############################################################################
+#
+#   THE ECONOMY LEDGER
+#
+#   What the random bots' economy does, day by day, so changes to it can be
+#   judged by numbers: it changes nothing itself. .pbp economy [days] prints
+#   it, from the console or SOAP as well as in game; each day's is also
+#   written to the server log (module.playerbotsplus) once the day is over.
+#
+#     - Gold in: looted, quest rewards, auction house mail, the rest (selling
+#       to vendors, other mail, trades). Gold out: auction house buys and
+#       deposits, the rest (vendors, repairs, training). And what playerbots
+#       gives or takes outside the game's own payments -- its top-up whenever
+#       it refreshes a bot, a level reset -- found by setting what a bot has
+#       against what the game paid it, at each look.
+#     - The auction house: what bots list (gear, goods, other) and who buys it
+#       -- the AH bot, a player, another bot -- what bots buy and from whom,
+#       and what comes back unsold.
+#     - What bots loot (herbs, ore, leather, cloth, meat and fish, gems, gear
+#       by quality, junk...), how much of it from herbs, veins, chests and
+#       fishing; what they make (crafted or conjured) and buy from vendors.
+#     - Where the gear they put on came from: handed out by playerbots (at a
+#       level-up or a refresh), looted, a quest reward, the auction house, a
+#       vendor, made -- and its item level.
+#     - What they use up: food and drink, potions, elixirs, flasks, bandages,
+#       scrolls, oils and stones.
+#     - Every CensusMinutes, a look at all of them: gold held, item level by
+#       level band, professions (and how many have a gathering one), who is in
+#       the dungeon queue, the trade goods they carry and what is in their
+#       banks, and who has what up on the auction houses.
+#
+#   Only playerbots' random bots count, not anyone's own. Whose auctions are
+#   the AH bot's is mod-ah-bot-plus's own setting, AuctionHouseBot.GUIDs.
+#
+#   Kept in the characters database, table playerbots_plus_ledger (one row
+#   per day and figure), written every FlushMinutes and at shutdown.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Ledger.Enable
+#        Default: 1
+PlayerbotsPlus.Ledger.Enable = 1
+
+#    PlayerbotsPlus.Ledger.FlushMinutes
+#    PlayerbotsPlus.Ledger.CensusMinutes
+#    PlayerbotsPlus.Ledger.KeepDays
+#        How often the figures are written to the database (1-60 minutes: a
+#        crash loses at most this much); how often all the bots are looked at
+#        (5-1440 minutes; spread over a second or two, a slice a tick); and
+#        how many days are kept (7-3650; older ones are let go at
+#        startup).
+#        Default: 10, 30, 90
+PlayerbotsPlus.Ledger.FlushMinutes = 10
+PlayerbotsPlus.Ledger.CensusMinutes = 30
+PlayerbotsPlus.Ledger.KeepDays = 90
 
 ###############################################################################
 #

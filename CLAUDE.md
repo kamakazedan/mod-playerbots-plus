@@ -19,7 +19,7 @@ it is safe to touch a bot's `Player`, its inventory, its mail and its
 playerbots AI. Do not add threads. Do not call into this module from a map
 thread or a packet hook.
 
-Three hooks are the exception, and they touch nothing of the world:
+These hooks are the exception, and they touch nothing of the world:
 
 - `PbpStuckScript::OnAuraApply` runs on map threads. It only notes the mount
   under a mutex; the world tick looks at the notes.
@@ -29,6 +29,12 @@ Three hooks are the exception, and they touch nothing of the world:
 - `PbpMuteScript::CanPacketSend` runs on whatever thread sends the packet. It
   reads only a snapshot (patterns and bot guids) published from the world
   thread, and `PlayerbotsPlus::OwnLine` is a thread-local counter.
+- `PbpLedgerPlayerScript`'s hooks (money, loot, quest rewards, crafting,
+  vendor buys, gear put on, consumables used) run on map threads, and the
+  ledger's auction notes may come from any thread. They read the session's
+  own account id and the item's template, and note under a mutex; the world
+  tick decides whose bot it was (`IsInRandomAccountList`, the character
+  cache) and adds it up. Never look up a random bot from a map thread.
 
 ## Talking is the chat module's
 
@@ -86,9 +92,14 @@ companion lists and pet names are the same in both.
 - `urand(min, max)` is inclusive at both ends. Use the module's own `Between`
   and `Roll`.
 - AzerothCore compiles only `src/`. Tests and tools go outside it.
-- New tables go in `data/sql/<db>/base/` as `CREATE TABLE IF NOT EXISTS`.
-  There are none yet: market state is in memory and rebuilt from the auction
-  house itself.
+- New tables go in `data/sql/db-characters/base/` (the core applies a module's
+  `data/sql/*characters*` to the characters database) as `CREATE TABLE IF NOT
+  EXISTS`. The one there is the economy ledger's, `playerbots_plus_ledger`;
+  `PbpLedger_Load` makes it too, for a server whose updater is off. Market
+  state is in memory and rebuilt from the auction house itself.
+- A bot's gold changes outside `ModifyMoney` too: playerbots' refresh and
+  level resets use `SetMoney`, which no hook sees. The ledger finds those by
+  setting what a bot has against what the hooks saw, at each look.
 
 ## Checking without a full build
 

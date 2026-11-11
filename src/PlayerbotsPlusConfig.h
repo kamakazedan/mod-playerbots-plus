@@ -54,10 +54,21 @@ struct PbpMarketSettings
     PbpPrice::Settings price;
 };
 
+// The economy ledger (PlayerbotsPlusLedger).
+struct PbpLedgerSettings
+{
+    bool     enable        = true;
+    uint32_t flushMinutes  = 10;   // figures written this often
+    uint32_t censusMinutes = 30;   // a look at all the bots this often
+    uint32_t keepDays      = 90;
+    std::unordered_set<uint32_t> auctionBots;   // AuctionHouseBot.GUIDs: the AH bot's characters
+};
+
 struct PbpSettings
 {
     bool              enable = true;
     PbpMarketSettings market;
+    PbpLedgerSettings ledger;
 };
 
 extern PbpSettings g_Pbp;

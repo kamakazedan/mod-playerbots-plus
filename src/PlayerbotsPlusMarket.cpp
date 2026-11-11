@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlus.h"
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusMarketPrice.h"
 
 #include "AuctionHouseMgr.h"
@@ -602,6 +603,7 @@ namespace
                     continue;   // at the gold cap: leave it
                 r.money += mail->money;
                 g_stats.mailMoney += mail->money;
+                PbpLedger_MailMoney(mail->money);
                 mail->money = 0;
                 tookMoney = true;
             }
