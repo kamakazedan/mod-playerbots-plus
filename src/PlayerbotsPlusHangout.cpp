@@ -1098,14 +1098,14 @@ namespace
                      DoingAt(v, bot), v.wantsAfk ? ", going AFK" : "");
     }
 
-    void StartDuel(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now);
+    void StartDuel(Player* bot, PlayerbotAI* ai, Visit& v);
 
     // The last steps, its AI held. False: something else came up.
     bool Approach(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
         if (bot->duel && bot->IsAlive() && DuelSpot(v.spotKey))
         {
-            StartDuel(bot, ai, v, now);   // challenged on its way to its place at the gates
+            StartDuel(bot, ai, v);   // challenged on its way to its place at the gates
             return true;
         }
         if (!StillFree(bot, v) || !std::holds_alternative<NewRpgInfo::Rest>(ai->rpgInfo.data))
@@ -1128,7 +1128,7 @@ namespace
 
     // A duel at the gates (Duels.Spots) is what it came for: its own AI
     // answers the challenge and fights it out, and it stays one of the crowd.
-    void StartDuel(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    void StartDuel(Player* bot, PlayerbotAI* ai, Visit& v)
     {
         if (v.afkSet && bot->isAFK())
             bot->ToggleAFK();
@@ -1219,7 +1219,7 @@ namespace
     {
         if (bot->duel && bot->IsAlive() && DuelSpot(v.spotKey))
         {
-            StartDuel(bot, ai, v, now);
+            StartDuel(bot, ai, v);
             return true;
         }
         if (Wanted(bot))
