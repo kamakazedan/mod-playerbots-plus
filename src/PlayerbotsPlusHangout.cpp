@@ -57,6 +57,17 @@ namespace
     constexpr float    kMaxClimb   = 30.0f;      // a bot this far above or below a spot is on another level
     constexpr auto     kMountGrace = std::chrono::seconds(10);
 
+    // What "in sight of a spot's middle" looks through: walls and buildings,
+    // a door, but not a gameobject's small model (a mailbox, a crate, a
+    // holiday decoration) -- the core leaves those out for a gameobject's
+    // own casts the same way. Most spots' middles are a mailbox, and the look
+    // starts two yards up inside it, which left eight of them where nobody
+    // ever stood: every place out of sight.
+    const LineOfSightChecks kSightChecks = LineOfSightChecks(LINEOFSIGHT_ALL_CHECKS & ~LINEOFSIGHT_CHECK_GOBJECT_M2);
+    // A spot that has looked at this many places and found none says so in
+    // the log, once.
+    constexpr uint64_t kNobodyAfter = 960;
+
     // Set while a bench is used here, so a chat module's "used an object"
     // chatter leaves it alone (PlayerbotsPlus::UsingBench).
     thread_local bool t_usingBench = false;
@@ -172,6 +183,9 @@ namespace
         uint64_t water = 0, sight = 0, taken = 0, roof = 0, fire = 0, crowded = 0, path = 0;
         uint64_t noRoom = 0;   // a bot fetched there found nowhere at all
         uint64_t full = 0;     // times found full
+        bool     said = false; // "nobody can stand here" logged
+
+        uint64_t Looked() const { return found + ground + water + sight + taken + roof + fire + crowded + path; }
     };
     std::unordered_map<std::string, Looks> g_looks;   // by spot key
     // A city someone is in takes its next arrival from then.
@@ -415,7 +429,8 @@ namespace
     }
 
     // A place within the spot: on the ground near the middle's height, in
-    // sight of the middle (so not behind a wall), outdoors if the middle is
+    // sight of the middle (so not behind a wall; a mailbox is no wall:
+    // kSightChecks), outdoors if the middle is
     // (so not inside the inn off the Valley of Strength), out of the water
     // and any fire, not where another bot's place is or anyone stands -- and
     // one you can walk to from the middle, so not the top of a crate or a
@@ -450,7 +465,7 @@ namespace
                 ++look.water;
                 continue;
             }
-            if (!map->isInLineOfSight(s.x, s.y, s.z + 2.0f, x, y, z + 2.0f, phaseMask, LINEOFSIGHT_ALL_CHECKS,
+            if (!map->isInLineOfSight(s.x, s.y, s.z + 2.0f, x, y, z + 2.0f, phaseMask, kSightChecks,
                                       VMAP::ModelIgnoreFlags::Nothing))
             {
                 ++look.sight;
@@ -503,6 +518,16 @@ namespace
             outZ = z;
             return true;
         }
+        // Never a place at all: its middle is most likely inside something,
+        // or not on the floor. Said once; .pbp hangouts has the counts.
+        if (!look.said && !look.found && look.Looked() >= kNobodyAfter)
+        {
+            look.said = true;
+            LOG_WARN("module.playerbotsplus", "[Playerbots Plus] Nobody can stand at hangout spot {}: no place found "
+                     "in {} looks ({} out of sight of its middle, {} not at its height, {} no way there from it). Is "
+                     "its middle ({} {} {} {}) inside something, or off the floor?", s.key, look.Looked(), look.sight,
+                     look.ground, look.path, s.map, s.x, s.y, s.z);
+        }
         return false;
     }
 
@@ -537,8 +562,8 @@ namespace
             if (!IsBench(go) || std::fabs(go->GetPositionZ() - v.cz) > g_HangoutHeightTolerance)
                 continue;
             if (!bot->GetMap()->isInLineOfSight(v.cx, v.cy, v.cz + 2.0f, go->GetPositionX(), go->GetPositionY(),
-                                                go->GetPositionZ() + 1.5f, bot->GetPhaseMask(),
-                                                LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing))
+                                                go->GetPositionZ() + 1.5f, bot->GetPhaseMask(), kSightChecks,
+                                                VMAP::ModelIgnoreFlags::Nothing))
                 continue;
             uint32_t seats = 1;
             if (GameObjectTemplate const* info = go->GetGOInfo())
@@ -1804,7 +1829,7 @@ std::vector<std::string> PbpHangout_SpotReport()
             continue;
         }
         const Looks& l = it->second;
-        const uint64_t looked = l.found + l.ground + l.water + l.sight + l.taken + l.roof + l.fire + l.crowded + l.path;
+        const uint64_t looked = l.Looked();
         line += fmt::format("; found full {} times, no room for a bot fetched there {} times. Places looked at {}: {} "
                             "taken up; turned down {} not at its height, {} in water, {} out of sight of its middle, "
                             "{} someone's already, {} under a roof, {} by a fire, {} with someone standing there, {} "

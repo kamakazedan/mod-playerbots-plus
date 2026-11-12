@@ -714,7 +714,10 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        (see DUELS AT THE CITY GATES). A city's spots fill evenly, the
 #        emptiest first, and never with anyone standing in a fire (a bonfire
 #        included). A spot's middle is somewhere open, never inside a statue
-#        or a fountain: every place is checked to be in sight of it.
+#        or a fountain: every place is checked to be in sight of it, through
+#        anything but a gameobject's small model (a mailbox -- most middles
+#        are one -- a crate or a holiday decoration). A spot nobody can be
+#        put at says so in the log, once; .pbp hangouts shows why.
 #        Maps: 0 Eastern Kingdoms, 1 Kalimdor, 530 Outland and the Blood
 #        Elf and Draenei lands, 571 Northrend.
 PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 16 the Trade District in Stormwind"

@@ -115,7 +115,8 @@ NPC to NPC. With hangouts, they gather where players do.
   with its room as it stands now, and `.pbp hangouts` lists every spot: who's
   there, its room, and why places looked at for it were turned down (no
   ground at its height, water, out of sight of the middle, a crowd, no path),
-  which shows up a spot nobody can be put at.
+  which shows up a spot nobody can be put at. Such a spot also says so in
+  the log, once.
 - **Who:** idle random bots near a spot, of its zone and floor. A bot that is
   grouped, queued, questing, gathering, fighting or flying is left alone, and
   so is one a real player has targeted.
@@ -135,7 +136,9 @@ NPC to NPC. With hangouts, they gather where players do.
   Switching hangouts off lets everyone go.
 
 Nothing happens while no real player is online. Every place a bot stands is
-checked to be on the spot's own floor, in sight of its middle, indoors or out
+checked to be on the spot's own floor, in sight of its middle (walls and
+buildings block the view; the mailbox most middles are, a crate or a holiday
+decoration doesn't), indoors or out
 the way the middle is, reachable on foot, out of any fire and not where
 anyone stands, so never under the city, on a roof, in the inn off the spot or
 in a brazier. Orgrimmar has no benches, so bots there stand, sit on the
