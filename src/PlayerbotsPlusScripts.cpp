@@ -132,6 +132,7 @@ namespace
                 { "economy", HandleEconomy, SEC_GAMEMASTER,  Console::Yes },
                 { "visit",  HandleVisit,  SEC_GAMEMASTER,    Console::No  },
                 { "fires",  HandleFires,  SEC_GAMEMASTER,    Console::No  },
+                { "hangouts", HandleHangouts, SEC_GAMEMASTER, Console::Yes },
                 { "reload", HandleReload, SEC_ADMINISTRATOR, Console::Yes },
             };
             static ChatCommandTable commandTable =
@@ -168,21 +169,30 @@ namespace
             handler->PSendSysMessage("City hangouts: {} - {} hanging out ({} AFK), {} on their way, {} spots ({} with "
                                      "an inn to arrive at). Sent {}, fetched from elsewhere {} ({} gone back), "
                                      "settled {}, never got there {} ({} no room at the spot, {} too slow, {} given "
-                                     "something else to do, {} went elsewhere, {} never landed), moved on {}, cut "
-                                     "short {}, back from AFK {}.",
+                                     "something else to do, {} went elsewhere, {} never landed), sent on to another "
+                                     "spot in the city {}, spots found full {} times, moved on {}, cut short {}, back "
+                                     "from AFK {}.",
                                      onOff(pbp::g_HangoutEnable), h.hanging, h.away, h.onTheWay, h.spots, h.withInn,
                                      h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.lostNoRoom, h.lostSlow,
-                                     h.lostBusy, h.lostElsewhere, h.lostLanding, h.movedOn, h.cutShort, h.cameBack);
+                                     h.lostBusy, h.lostElsewhere, h.lostLanding, h.redirected, h.foundFull, h.movedOn,
+                                     h.cutShort, h.cameBack);
             std::string cities;
             for (PbpHangoutCity const& c : PbpHangout_Cities())
             {
-                if (!c.there && !c.onTheWay)
+                if (!c.there && !c.onTheWay && !c.share)
                     continue;
                 std::string more;
+                auto add = [&more](std::string const& what) { more += (more.empty() ? "" : ", ") + what; };
                 if (c.hot)
-                    more = fmt::format("{} at the hot spots", c.hot);
+                    add(fmt::format("{} at the hot spots", c.hot));
                 if (c.onTheWay)
-                    more += fmt::format("{}{} on the way", more.empty() ? "" : ", ", c.onTheWay);
+                    add(fmt::format("{} on the way", c.onTheWay));
+                if (c.full)
+                    add(fmt::format("{} spot{} full", c.full, c.full == 1 ? "" : "s"));
+                if (c.room < c.share)
+                    add(fmt::format("{} of its {} places at other cities' spots", c.share - c.room, c.share));
+                else if (c.room > c.share)
+                    add(fmt::format("{} more from cities that are full", c.room - c.share));
                 cities += fmt::format("{}{} {} of {}{}", cities.empty() ? "" : ", ", c.name, c.there, c.room,
                                       more.empty() ? std::string() : " (" + more + ")");
             }
@@ -316,6 +326,15 @@ namespace
 
         // .pbp reload: re-read mod_playerbots_plus.conf.
         // The fires about you, how near anyone may stand, and who is in one.
+        // .pbp hangouts: each spot -- who is there, its room, and how the
+        // places looked at for it went (what was turned down, and why).
+        static bool HandleHangouts(ChatHandler* handler)
+        {
+            for (std::string const& line : PbpHangout_SpotReport())
+                handler->PSendSysMessage("{}", line);
+            return true;
+        }
+
         static bool HandleFires(ChatHandler* handler)
         {
             Player* me = handler->GetSession() ? handler->GetSession()->GetPlayer() : nullptr;

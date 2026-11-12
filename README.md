@@ -106,6 +106,16 @@ NPC to NPC. With hangouts, they gather where players do.
   Thunder Bluff, the banks and auction houses. A spot with more people than
   its radius holds grows to fit them (`Hangout.RoomPerBot`).
   `Hangout.Places` is how many in all.
+- **When a spot is full:** a bot sent or fetched to a spot where there's
+  nowhere left to stand walks on to another spot in the city with room, and
+  the full spot takes nobody more for a while (`Hangout.FullMinutes`, or
+  until someone leaves it). Its unused places go to its city's other spots of
+  the same kind first (hot or quiet), then its other spots, and once the
+  whole city is full, to other cities' spots. `.pbp status` shows each city
+  with its room as it stands now, and `.pbp hangouts` lists every spot: who's
+  there, its room, and why places looked at for it were turned down (no
+  ground at its height, water, out of sight of the middle, a crowd, no path),
+  which shows up a spot nobody can be put at.
 - **Who:** idle random bots near a spot, of its zone and floor. A bot that is
   grouped, queued, questing, gathering, fighting or flying is left alone, and
   so is one a real player has targeted.
@@ -436,6 +446,14 @@ only in a build with
   wander-about strategies (grind, rpg) come off for the run, and
   mod-dungeon-clear clears the dungeon, silently: there's nobody there to
   talk to (mod-ollama-chat keeps its bots quiet in such a run too).
+- **Deaths.** A bot that dies lies where it fell until someone rezzes it, the
+  tank included. Playerbots releases a dead bot with no player in its group
+  straight away, and a tank whose ghost is out of the dungeon ends the clear.
+  So its AI is held while it lies there, and it takes the rez the moment it's
+  offered. Mod-dungeon-clear sends a healer over once the fight is done, and
+  calls the run off if nobody left can rez. A bot that releases anyway, leaves
+  the dungeon or logs out during a clear goes in the log, and so does how
+  everyone stood when a run fails.
 - **When it fails.** A run ends when the whole party dies with nobody to rez,
   when nothing has moved forward for 10 minutes (no kill, no pack cleared, no
   fight going on, not getting closer to the next boss), when it's stuck on

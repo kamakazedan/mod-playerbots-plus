@@ -124,10 +124,17 @@ struct PbpHangoutCity
     std::string name;
     uint32_t    there    = 0;   // settled at one of its spots, or in a duel at its gates
     uint32_t    onTheWay = 0;
-    uint32_t    room     = 0;   // its spots' capacities together
+    uint32_t    room     = 0;   // its spots' room together, as given out now
+    uint32_t    share    = 0;   // ...its share of the places before a full spot's went elsewhere
     uint32_t    hot      = 0;   // of `there`, at its hot spots
+    uint32_t    full     = 0;   // its spots found full just now
 };
 std::vector<PbpHangoutCity> PbpHangout_Cities();
+
+// One line per spot for .pbp hangouts: who is there and on the way, its room
+// (and whether it was found full), and how the places looked at for it went
+// -- what was turned down, and why.
+std::vector<std::string> PbpHangout_SpotReport();
 
 struct PbpHangoutStats
 {
@@ -145,6 +152,8 @@ struct PbpHangoutStats
     uint64_t broughtIn = 0;   // fetched from elsewhere (Hangout.BringIn)
     uint64_t sentBack  = 0;   // ...and gone back there when done
     uint64_t duels     = 0;   // duels fought at the gates without leaving the crowd
+    uint64_t foundFull = 0;   // times a spot was found full (its room went elsewhere for a while)
+    uint64_t redirected = 0;  // fetched, no room at the spot: on to another spot in the city
     uint32_t hanging   = 0;   // there now
     uint32_t away      = 0;   // ...of whom AFK
     uint32_t duelling  = 0;   // ...of whom in a duel or just out of one

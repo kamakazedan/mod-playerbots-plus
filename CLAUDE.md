@@ -76,6 +76,13 @@ city is the end of the spot's name (`PbpCityOf`); the sharing is pure and
 tested (`PbpShareHangoutPlaces`). A spot whose capacity outgrows its radius
 grows (`Hangout.RoomPerBot`): crowded, `PickPlace` finds nowhere to stand.
 
+A spot where `PickPlace` finds nowhere is full (`FoundFull`): it keeps the
+room it holds, and `ShareRoom` gives the rest out (`PbpShareFullRoom`, pure
+and tested) -- its city's spots of its kind, its city's others, then every
+open spot -- until fewer are there or `Hangout.FullMinutes` pass. Use
+`RoomAt(spot)`, never `spot.capacity`, for how many a spot takes now.
+`PickPlace` counts why it turns places down per spot (`.pbp hangouts`).
+
 ## Auctions and mail copy the game's own handlers
 
 `CreateAuction`, `BuyOut` and `CollectMail` in `PlayerbotsPlusMarket.cpp` do
@@ -137,6 +144,13 @@ otherwise. This module must still build and run without it; check both ways.
   it, and mod-dungeon-clear only holds them back on the tank. They come off
   for the run (and again when playerbots resets them), and `ResetStrategies`
   gives them back once the bot is out of the group.
+- A member of a run that dies is kept down (`KeepTheDeadDown`, every tick):
+  playerbots releases a dead bot with no player in its group at its next AI
+  tick, the group's leader always, and a tank out of its dungeon ends the
+  clear. Its AI is held (`SetNextCheckDelay`) while it lies dead in the
+  dungeon, and a rez offered to it is taken (`ResurectUsingRequestData`, what
+  Accept does). mod-dungeon-clear never ticks on a corpse, so holding it costs
+  the run nothing; its rez recovery runs on the living.
 - Walks for quests use playerbots' own "go camp" (`rpgInfo.ChangeToGoCamp`),
   as hangouts do: hangouts leave a bot on its way to a camp alone, and these
   leave a hanging-out one alone (`PbpHangout_Has`).

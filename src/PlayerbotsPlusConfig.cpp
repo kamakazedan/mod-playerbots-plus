@@ -30,6 +30,7 @@ namespace pbp
     uint32_t    g_HangoutStayMinutesMax   = 20;
     uint32_t    g_HangoutCooldownMinutes  = 45;
     uint32_t    g_HangoutTravelSeconds    = 180;
+    uint32_t    g_HangoutFullMinutes      = 10;
     uint32_t    g_HangoutMountedChance    = 45;
     uint32_t    g_HangoutBenchChance      = 60;
     uint32_t    g_HangoutSitChance        = 35;
@@ -291,6 +292,7 @@ namespace
                                                         g_HangoutStayMinutesMin, 60);
         g_HangoutCooldownMinutes = U("PlayerbotsPlus.Hangout.CooldownMinutes", 45);
         g_HangoutTravelSeconds   = std::max<uint32_t>(30, U("PlayerbotsPlus.Hangout.TravelSeconds", 180));
+        g_HangoutFullMinutes     = std::clamp<uint32_t>(U("PlayerbotsPlus.Hangout.FullMinutes", 10), 1, 120);
         g_HangoutMountedChance   = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.MountedChance", 45));
         g_HangoutBenchChance     = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.BenchChance", 60));
         g_HangoutSitChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.SitChance", 35));

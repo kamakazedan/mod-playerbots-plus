@@ -346,6 +346,45 @@ int main(int argc, char** argv)
         // 100%: only the hot spots; 0%: only the others.
         EqS("all hot", list(PbpShareHangoutPlaces({ spots[0], spots[3] }, { { "Stormwind", 1 } }, 10, 100)), "10,0");
         EqS("none hot", list(PbpShareHangoutPlaces({ spots[0], spots[3] }, { { "Stormwind", 1 } }, 10, 0)), "0,10");
+
+        // ---- a full spot's room given out ----------------------------------------------
+        // Stormwind's bank (hot) full at 5 of 12: its 7 go to Stormwind's other hot
+        // spot (20), not its quiet one (10). Darnassus full at 0: its 24 go to every
+        // open spot there is, by room (Stormwind's two, Orgrimmar's).
+        const std::vector<PbpSpotRoom> rooms = {
+            { "Stormwind", 20, true, false, 0 }, { "Stormwind", 12, true, true, 5 }, { "Stormwind", 10, false, false, 0 },
+            { "Darnassus", 24, true, true, 0 },
+            { "Orgrimmar", 30, true, false, 0 },
+        };
+        const std::vector<uint32_t> given = PbpShareFullRoom(rooms);
+        EqS("full room given out", list(given), "35,5,14,0,42");
+        uint32_t before = 0, after = 0;
+        for (size_t i = 0; i < rooms.size(); ++i)
+        {
+            before += rooms[i].room;
+            after += given[i];
+        }
+        True("nothing lost", before == after);
+        // Its city's hot spots all full: to the city's quiet ones.
+        EqS("hot full, to the quiet", list(PbpShareFullRoom({ { "Stormwind", 20, true, true, 18 },
+                                                               { "Stormwind", 10, false, false, 0 },
+                                                               { "Orgrimmar", 30, true, false, 0 } })),
+            "18,12,30");
+        // Nothing full: as it was.
+        EqS("nothing full", list(PbpShareFullRoom({ { "Stormwind", 20, true, false, 0 },
+                                                     { "Ironforge", 9, true, false, 0 } })),
+            "20,9");
+        // Held more than its room (the room went down since): it keeps its room.
+        EqS("held above its room", list(PbpShareFullRoom({ { "Stormwind", 6, true, true, 9 },
+                                                            { "Ironforge", 9, true, false, 0 } })),
+            "6,9");
+        // Everyone full: each keeps what it held, the rest has nowhere to go.
+        EqS("all full", list(PbpShareFullRoom({ { "Stormwind", 20, true, true, 12 }, { "Ironforge", 9, true, true, 3 } })),
+            "12,3");
+        // A spot with no room of its own (switched off) takes none.
+        EqS("no room takes none", list(PbpShareFullRoom({ { "Exodar", 8, true, true, 2 }, { "Ironforge", 0, true, false, 0 },
+                                                          { "Dalaran", 10, false, false, 0 } })),
+            "2,0,16");
     }
 
     // ---- the city a spot is in ----------------------------------------------------------

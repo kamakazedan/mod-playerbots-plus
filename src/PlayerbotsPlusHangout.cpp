@@ -149,6 +149,31 @@ namespace
 
     std::deque<Clock::time_point>  g_fetchTimes;   // bots fetched in the last minute
     std::unordered_map<std::string, Clock::time_point> g_spotNextFetch;   // a spot with no room fetches again from then
+
+    // A spot found full: nowhere left there that checks out, with `held`
+    // bots there or on their way. It takes nobody more until fewer are there
+    // or Hangout.FullMinutes have gone by, and the rest of its room goes to
+    // spots that can take people, its own city's first (PbpShareFullRoom).
+    struct Full
+    {
+        uint32_t          held = 0;
+        Clock::time_point since{};
+    };
+    std::unordered_map<std::string, Full>     g_full;   // by spot key
+    std::unordered_map<std::string, uint32_t> g_room;   // each spot's room, as last given out (ShareRoom)
+
+    // How the places looked at for each spot went, since startup: what
+    // .pbp hangouts shows, to tell a spot that is full from one nobody can
+    // stand at.
+    struct Looks
+    {
+        uint64_t found = 0;    // a place taken up
+        uint64_t ground = 0;   // no ground there, or not at the middle's height
+        uint64_t water = 0, sight = 0, taken = 0, roof = 0, fire = 0, crowded = 0, path = 0;
+        uint64_t noRoom = 0;   // a bot fetched there found nowhere at all
+        uint64_t full = 0;     // times found full
+    };
+    std::unordered_map<std::string, Looks> g_looks;   // by spot key
     // A city someone is in takes its next arrival from then.
     std::unordered_map<uint64_t, Clock::time_point>    g_cityNextFetch;
     std::unordered_set<uint64_t>   g_watched;      // (map << 32 | zone) with a real player in it, as of the last look
@@ -337,6 +362,58 @@ namespace
         return false;
     }
 
+    // Bots at a spot, settled or on their way (`but` not counted).
+    uint32_t AtSpot(const std::string& key, uint64_t but = 0)
+    {
+        uint32_t n = 0;
+        for (const auto& [guid, v] : g_visits)
+            if (v.spotKey == key && guid != but)
+                ++n;
+        return n;
+    }
+
+    // Nowhere left at `key` with `held` there: no more for it for now.
+    void FoundFull(const std::string& key, uint32_t held, const Clock::time_point now)
+    {
+        g_full[key] = Full{ held, now };
+        ++g_looks[key].full;
+        ++g_stats.foundFull;
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} is full with {} there: the rest of its room goes "
+                     "to other spots for now.", key, held);
+    }
+
+    // Every spot's room now: its share of the places, or -- found full --
+    // what it held then, the rest of its room given to spots that can take
+    // people, its own city's first (PbpShareFullRoom). A spot found full
+    // opens again once fewer are there, or Hangout.FullMinutes on.
+    void ShareRoom(std::unordered_map<std::string, uint32_t>& there, const Clock::time_point now)
+    {
+        for (auto it = g_full.begin(); it != g_full.end();)
+        {
+            const bool open = !SpotByKey(it->first) || there[it->first] < it->second.held ||
+                              now - it->second.since >= std::chrono::minutes(g_HangoutFullMinutes);
+            it = open ? g_full.erase(it) : std::next(it);
+        }
+        std::vector<PbpSpotRoom> rooms;
+        for (const PbpHangoutSpot& s : g_HangoutSpots)
+        {
+            auto full = g_full.find(s.key);
+            rooms.push_back({ PbpCityOf(s.name.empty() ? s.key : s.name), s.capacity, s.hot, full != g_full.end(),
+                              full != g_full.end() ? full->second.held : 0 });
+        }
+        const std::vector<uint32_t> room = PbpShareFullRoom(rooms);
+        g_room.clear();
+        for (size_t i = 0; i < g_HangoutSpots.size(); ++i)
+            g_room[g_HangoutSpots[i].key] = room[i];
+    }
+
+    uint32_t RoomAt(const PbpHangoutSpot& s)
+    {
+        auto it = g_room.find(s.key);
+        return it == g_room.end() ? s.capacity : it->second;
+    }
+
     // A place within the spot: on the ground near the middle's height, in
     // sight of the middle (so not behind a wall), outdoors if the middle is
     // (so not inside the inn off the Valley of Strength), out of the water
@@ -347,6 +424,7 @@ namespace
     {
         Map* map = bot->GetMap();
         const uint32_t phaseMask = bot->GetPhaseMask();
+        Looks& look = g_looks[s.key];
         float groundZ = map->GetHeight(phaseMask, s.x, s.y, s.z + 3.0f, true, g_HangoutHeightTolerance + 6.0f);
         if (groundZ <= INVALID_HEIGHT)
             groundZ = s.z;
@@ -363,38 +441,63 @@ namespace
             const float y = s.y + dist * std::sin(angle);
             const float z = map->GetHeight(phaseMask, x, y, s.z + 3.0f, true, g_HangoutHeightTolerance + 6.0f);
             if (z <= INVALID_HEIGHT || std::fabs(z - s.z) > g_HangoutHeightTolerance)
+            {
+                ++look.ground;
                 continue;
+            }
             if (map->IsInWater(phaseMask, x, y, z, 2.0f))
+            {
+                ++look.water;
                 continue;
+            }
             if (!map->isInLineOfSight(s.x, s.y, s.z + 2.0f, x, y, z + 2.0f, phaseMask, LINEOFSIGHT_ALL_CHECKS,
                                       VMAP::ModelIgnoreFlags::Nothing))
+            {
+                ++look.sight;
                 continue;
+            }
             if (Taken(s.map, x, y, 2.5f))
+            {
+                ++look.taken;
                 continue;
+            }
             if (middle.outdoors)
             {
                 PositionFullTerrainStatus there;
                 map->GetFullTerrainStatusForPosition(phaseMask, x, y, z, bot->GetCollisionHeight(), there);
                 if (!there.outdoors)
+                {
+                    ++look.roof;
                     continue;   // under a roof off an open square: a shop, the inn
+                }
             }
             // Not in a campfire or a brazier, nor in a vendor or the next person.
             // (Room for a mount too: whoever stands here may mount up.)
-            if (PbpFire_Burns(bot, x, y, z, 1.0f + PbpFire_MountRoom()) ||
-                PbpSpace_Crowded(map, bot, x, y, z, 2.5f, bot))
+            if (PbpFire_Burns(bot, x, y, z, 1.0f + PbpFire_MountRoom()))
+            {
+                ++look.fire;
                 continue;
+            }
+            if (PbpSpace_Crowded(map, bot, x, y, z, 2.5f, bot))
+            {
+                ++look.crowded;
+                continue;
+            }
 
             ++paths;
             PathGenerator path(bot);
             path.CalculatePath(s.x, s.y, s.z, x, y, z, false);
             const uint32_t type = path.GetPathType();
-            if (!(type & PATHFIND_NORMAL) ||
-                (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT | PATHFIND_NOT_USING_PATH)))
-                continue;
             // Where the path really ends: beside a crate, not on it.
             G3D::Vector3 const& end = path.GetActualEndPosition();
-            if (std::hypot(end.x - x, end.y - y) > 1.0f || std::fabs(end.z - z) > 0.5f)
+            if (!(type & PATHFIND_NORMAL) ||
+                (type & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT | PATHFIND_NOT_USING_PATH)) ||
+                std::hypot(end.x - x, end.y - y) > 1.0f || std::fabs(end.z - z) > 0.5f)
+            {
+                ++look.path;
                 continue;
+            }
+            ++look.found;
             outX = x;
             outY = y;
             outZ = z;
@@ -557,9 +660,22 @@ namespace
                std::holds_alternative<NewRpgInfo::WanderNpc>(data);
     }
 
-    bool Send(Player* bot, PlayerbotAI* ai, const PbpHangoutSpot& s, const Clock::time_point now)
+    // `from`: a fetched bot that found no room at the spot it came for, sent
+    // on to another in the city -- it goes back where it was fetched from
+    // all the same, once done.
+    bool Send(Player* bot, PlayerbotAI* ai, const PbpHangoutSpot& s, const Clock::time_point now,
+              Visit const* from = nullptr)
     {
         Visit v;
+        if (from && from->broughtIn)
+        {
+            v.broughtIn = true;
+            v.fromMap   = from->fromMap;
+            v.fromX     = from->fromX;
+            v.fromY     = from->fromY;
+            v.fromZ     = from->fromZ;
+            v.fromO     = from->fromO;
+        }
         v.spotKey  = s.key;
         v.spotName = s.name;
         v.map      = s.map;
@@ -757,9 +873,36 @@ namespace
             v.nextTry = now + std::chrono::seconds(1);
             if (now - v.landedAt < std::chrono::seconds(6))
                 return true;   // everywhere taken just now: another look in a moment
+            const uint64_t raw = bot->GetGUID().GetRawValue();
+            ++g_looks[v.spotKey].noRoom;
+            FoundFull(v.spotKey, AtSpot(v.spotKey, raw), now);
+            g_spotNextFetch[v.spotKey] = now + std::chrono::seconds(45);   // nowhere to put them: not for a while
+            // Another spot in the city with room, the emptiest first: it walks
+            // over there, as anyone finding one square packed tries the next.
+            std::vector<std::pair<float, PbpHangoutSpot const*>> others;
+            for (const PbpHangoutSpot& o : g_HangoutSpots)
+            {
+                if (o.key == s.key || o.map != s.map || ZoneOf(o) != zone || DuelSpot(o.key) ||
+                    std::fabs(o.z - bot->GetPositionZ()) > kMaxClimb || bot->GetExactDist2d(o.x, o.y) > g_HangoutRecruitRange)
+                    continue;
+                const uint32_t room = RoomAt(o), at = AtSpot(o.key);
+                if (room > at)
+                    others.emplace_back(float(at) / float(room), &o);
+            }
+            std::sort(others.begin(), others.end(),
+                      [](auto const& a, auto const& b) { return a.first < b.first; });
+            const Visit from = v;   // Send replaces this bot's visit, v with it
+            for (const auto& [fill, o] : others)
+                if (Send(bot, ai, *o, now, &from))
+                {
+                    ++g_stats.redirected;
+                    if (g_PbpDebug)
+                        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} found no room at {}, and goes on to "
+                                 "{}.", bot->GetName(), from.spotName, o->name);
+                    return true;   // its new visit, on its way
+                }
             ++g_stats.gaveUp;
             ++g_stats.lostNoRoom;
-            g_spotNextFetch[v.spotKey] = now + std::chrono::seconds(45);   // nowhere to put them: not for a while
             Let(bot, ai, v, false, now);
             if (!SendBack(bot, ai, v))
             {
@@ -808,7 +951,7 @@ namespace
         std::vector<std::pair<PbpHangoutSpot const*, uint32_t>> wanting, others;
         for (const auto& [s, zone] : open)
         {
-            const uint32_t target = (s->capacity * g_HangoutBringInFill + 99) / 100;
+            const uint32_t target = (RoomAt(*s) * g_HangoutBringInFill + 99) / 100;
             if (there[s->key] >= target)
                 continue;
             auto next = g_spotNextFetch.find(s->key);
@@ -824,8 +967,8 @@ namespace
             std::shuffle(list.begin(), list.end(), Rng());
             std::stable_sort(list.begin(), list.end(), [&there](auto const& a, auto const& b)
             {
-                return float(there[a.first->key]) / float(std::max<uint32_t>(1, a.first->capacity)) <
-                       float(there[b.first->key]) / float(std::max<uint32_t>(1, b.first->capacity));
+                return float(there[a.first->key]) / float(std::max<uint32_t>(1, RoomAt(*a.first))) <
+                       float(there[b.first->key]) / float(std::max<uint32_t>(1, RoomAt(*b.first)));
             });
         };
         emptiest(wanting);
@@ -889,9 +1032,10 @@ namespace
         std::unordered_map<std::string, uint32_t> there;   // spot -> bots there or on the way
         for (const auto& [guid, v] : g_visits)
             ++there[v.spotKey];
+        ShareRoom(there, now);
         std::vector<std::pair<PbpHangoutSpot const*, uint32_t>> open;   // spots with room, and their zone
         for (const PbpHangoutSpot& s : g_HangoutSpots)
-            if (s.capacity > there[s.key])
+            if (RoomAt(s) > there[s.key])
                 if (const uint32_t zone = ZoneOf(s))
                     open.emplace_back(&s, zone);
         if (open.empty())
@@ -959,9 +1103,12 @@ namespace
             if (!s || bots.empty() || !Roll(g_HangoutRecruitChance))
                 continue;
             std::shuffle(bots.begin(), bots.end(), Rng());
-            for (size_t i = 0; i < bots.size() && i < 3; ++i)   // the first that has somewhere to stand
-                if (Send(bots[i], AiOf(bots[i]), *s, now))
-                    break;
+            size_t tried = 0;
+            bool sent = false;
+            for (; tried < bots.size() && tried < 3 && !sent; ++tried)   // the first that has somewhere to stand
+                sent = Send(bots[tried], AiOf(bots[tried]), *s, now);
+            if (!sent && tried >= 2)
+                FoundFull(key, there[key], now);   // twice nowhere to stand: full as it is
         }
 
         // Not enough idle bots in town: some from elsewhere.
@@ -1513,9 +1660,10 @@ void PbpHangout_MakeRoom(const std::string& spotKey, uint32_t count, const std::
         if (v.phase == Phase::Settled && !v.forDuel)
             settled.push_back(guid);
     }
-    if (there + count <= s->capacity)
+    const uint32_t room = RoomAt(*s);
+    if (there + count <= room)
         return;
-    uint32_t over = there + count - s->capacity;
+    uint32_t over = there + count - room;
     std::shuffle(settled.begin(), settled.end(), Rng());
     const auto now = Clock::now();
     for (uint64_t guid : settled)
@@ -1600,8 +1748,15 @@ std::vector<PbpHangoutCity> PbpHangout_Cities()
         const std::string city = PbpCityOf(s.name.empty() ? s.key : s.name);
         auto [at, fresh] = byName.emplace(city, cities.size());
         if (fresh)
-            cities.push_back({ city, 0, 0, 0, 0 });
-        cities[at->second].room += s.capacity;
+        {
+            PbpHangoutCity c;
+            c.name = city;
+            cities.push_back(c);
+        }
+        PbpHangoutCity& c = cities[at->second];
+        c.room += RoomAt(s);
+        c.share += s.capacity;
+        c.full += g_full.count(s.key) ? 1 : 0;
         bySpot[s.key] = at->second;
     }
     for (const auto& [guid, v] : g_visits)
@@ -1619,6 +1774,46 @@ std::vector<PbpHangoutCity> PbpHangout_Cities()
             ++cities[at->second].onTheWay;
     }
     return cities;
+}
+
+std::vector<std::string> PbpHangout_SpotReport()
+{
+    std::vector<std::string> out;
+    const auto now = Clock::now();
+    std::unordered_map<std::string, std::pair<uint32_t, uint32_t>> at;   // spot -> settled, on the way
+    for (const auto& [guid, v] : g_visits)
+    {
+        auto& [settled, onTheWay] = at[v.spotKey];
+        ++(v.phase == Phase::Settled || v.phase == Phase::Duelling ? settled : onTheWay);
+    }
+    for (const PbpHangoutSpot& s : g_HangoutSpots)
+    {
+        const auto [settled, onTheWay] = at[s.key];
+        std::string line = fmt::format("{} ({}{}): {} there, {} on the way, room {}", s.key,
+                                       PbpCityOf(s.name.empty() ? s.key : s.name), s.hot ? ", hot" : "", settled,
+                                       onTheWay, RoomAt(s));
+        if (RoomAt(s) != s.capacity)
+            line += fmt::format(" (its share {})", s.capacity);
+        if (auto full = g_full.find(s.key); full != g_full.end())
+            line += fmt::format(", full with {} for {} min", full->second.held,
+                                std::chrono::duration_cast<std::chrono::minutes>(now - full->second.since).count());
+        auto it = g_looks.find(s.key);
+        if (it == g_looks.end())
+        {
+            out.push_back(line + "; not looked at yet.");
+            continue;
+        }
+        const Looks& l = it->second;
+        const uint64_t looked = l.found + l.ground + l.water + l.sight + l.taken + l.roof + l.fire + l.crowded + l.path;
+        line += fmt::format("; found full {} times, no room for a bot fetched there {} times. Places looked at {}: {} "
+                            "taken up; turned down {} not at its height, {} in water, {} out of sight of its middle, "
+                            "{} someone's already, {} under a roof, {} by a fire, {} with someone standing there, {} "
+                            "no way there from its middle.",
+                            l.full, l.noRoom, looked, l.found, l.ground, l.water, l.sight, l.taken, l.roof, l.fire,
+                            l.crowded, l.path);
+        out.push_back(line);
+    }
+    return out;
 }
 
 void PbpHangout_At(const std::string& spotKey, std::vector<Player*>& settled, uint32_t& duelling)

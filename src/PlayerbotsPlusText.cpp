@@ -160,6 +160,51 @@ namespace
     }
 }
 
+std::vector<uint32_t> PbpShareFullRoom(std::vector<PbpSpotRoom> const& spots)
+{
+    std::vector<uint32_t> out;
+    std::map<std::pair<std::string, bool>, uint64_t> spare;   // by city and kind: room its full spots give up
+    std::vector<std::string> cities;                           // in the order they first come
+    for (PbpSpotRoom const& s : spots)
+    {
+        if (std::find(cities.begin(), cities.end(), s.city) == cities.end())
+            cities.push_back(s.city);
+        const uint32_t kept = s.full ? std::min(s.room, s.held) : s.room;
+        out.push_back(kept);
+        spare[{ s.city, s.hot }] += s.room - kept;
+    }
+
+    auto giveTo = [&](uint64_t places, auto const& takes)
+    {
+        std::vector<size_t> who;
+        std::vector<uint64_t> weights;
+        for (size_t i = 0; i < spots.size(); ++i)
+            if (!spots[i].full && spots[i].room && takes(spots[i]))
+            {
+                who.push_back(i);
+                weights.push_back(spots[i].room);
+            }
+        if (who.empty())
+            return false;
+        const std::vector<uint32_t> parts = Apportion(uint32_t(std::min<uint64_t>(places, UINT32_MAX)), weights);
+        for (size_t k = 0; k < who.size(); ++k)
+            out[who[k]] += parts[k];
+        return true;
+    };
+    uint64_t homeless = 0;   // a city's spare with nowhere open in it
+    for (std::string const& city : cities)
+        for (bool hot : { true, false })
+        {
+            const uint64_t rest = spare[{ city, hot }];
+            if (rest && !giveTo(rest, [&city, hot](PbpSpotRoom const& s) { return s.city == city && s.hot == hot; }) &&
+                !giveTo(rest, [&city](PbpSpotRoom const& s) { return s.city == city; }))
+                homeless += rest;
+        }
+    if (homeless)
+        giveTo(homeless, [](PbpSpotRoom const&) { return true; });
+    return out;
+}
+
 std::vector<uint32_t> PbpShareHangoutPlaces(std::vector<PbpSpotShare> const& spots,
                                             std::map<std::string, uint32_t> const& weights, uint32_t places,
                                             uint32_t hotShare)

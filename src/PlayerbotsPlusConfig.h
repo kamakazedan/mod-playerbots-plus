@@ -132,6 +132,7 @@ namespace pbp
     extern uint32_t    g_HangoutStayMinutesMax;
     extern uint32_t    g_HangoutCooldownMinutes;
     extern uint32_t    g_HangoutTravelSeconds;
+    extern uint32_t    g_HangoutFullMinutes;
     extern uint32_t    g_HangoutMountedChance;
     extern uint32_t    g_HangoutBenchChance;
     extern uint32_t    g_HangoutSitChance;

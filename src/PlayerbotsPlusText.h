@@ -65,6 +65,26 @@ std::vector<uint32_t> PbpShareHangoutPlaces(std::vector<PbpSpotShare> const& spo
                                             std::map<std::string, uint32_t> const& weights, uint32_t places,
                                             uint32_t hotShare);
 
+// A hangout spot as its room is taken back and given out again: a spot
+// found full keeps only what it held then.
+struct PbpSpotRoom
+{
+    std::string city;          // PbpCityOf its name
+    uint32_t    room = 0;      // its share of the places (PbpShareHangoutPlaces)
+    bool        hot  = false;
+    bool        full = false;  // no place left to stand there
+    uint32_t    held = 0;      // full: how many it held then
+};
+
+// Each spot's room once the places a full spot cannot hold are given to
+// spots that can: a full spot keeps what it held (at most its room), and the
+// rest goes, by their room, to the open spots of its own city of its own
+// kind (hot or not); with none, to its city's others; and a city with no
+// spot open at all gives its rest to every open spot there is. A spot with
+// no room of its own takes none. Whole places, adding up to what they did
+// as long as some spot is open (the largest remainders get the odd ones).
+std::vector<uint32_t> PbpShareFullRoom(std::vector<PbpSpotRoom> const& spots);
+
 // The holidays a companion can belong to, as the conf names them
 // ("winterveil", "brewfest"): 1 and up for one of them, in a fixed order the
 // game's holiday ids are matched to (PlayerbotsPlusPets.cpp); 0 for anything

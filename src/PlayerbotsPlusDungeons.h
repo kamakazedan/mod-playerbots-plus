@@ -22,6 +22,12 @@
 //     wander-about strategies (grind, rpg) are taken off them, and
 //     mod-dungeon-clear runs the dungeon (DcBotRun), silently: nobody in the
 //     group to talk to;
+//   * a member that dies lies where it fell until it is rezzed, the tank
+//     too: playerbots releases a dead bot with no player in its group at
+//     once, and a tank out of its dungeon ends the clear. Its AI is held
+//     while it lies there, and a rez offered to it is taken, as a player
+//     clicks Accept. mod-dungeon-clear sends a healer over once the fight is
+//     done, and calls the run off if nobody left can rez;
 //   * when the clear is done (and the last boss looted), or it fails (the
 //     party wiped, nothing moved for BotDungeons.NoProgressMinutes, the
 //     BotDungeons.MaxRunMinutes cap), everyone is brought back to life,
@@ -111,6 +117,8 @@ struct PbpDungeonsStats
     uint64_t failed    = 0;   // ...that did not
     uint64_t handedOver = 0;  // ...that a player joined
     uint64_t sentOut   = 0;   // bots found in a dungeon with no group for it, and sent out
+    uint64_t keptDown  = 0;   // members of a run that died, left where they fell for a rez
+    uint64_t rezzed    = 0;   // ...rezzes taken for them, as a player clicks Accept
     uint64_t offers    = 0;   // the dungeon finder's offers said yes to for a bot it queued
     uint64_t rejoined  = 0;   // bots that dropped out of the queue, put back in
     uint32_t queuedNow = 0;   // parties in the queue now

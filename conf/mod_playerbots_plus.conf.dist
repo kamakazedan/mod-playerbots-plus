@@ -339,6 +339,16 @@ PlayerbotsPlus.Ledger.KeepDays = 90
 #       wander-about strategies (grind, rpg) come off for the run, and
 #       mod-dungeon-clear clears it. Silently: there is nobody in the group
 #       to talk to.
+#     - A member that dies lies where it fell until someone rezzes it, the
+#       tank too. Playerbots releases a dead bot with no player in its group
+#       at once, and a tank out of its dungeon ends the clear, so its AI is
+#       held while it lies there and a rez offered to it is taken straight
+#       away. mod-dungeon-clear sends a healer over once the fight is done,
+#       and calls the run off if nobody left can rez or the rez takes longer
+#       than its DungeonClear.PostCombatRezTimeoutSecs. A member releasing
+#       anyway, leaving the dungeon or logging out during a clear goes to the
+#       log, and how everyone stood when a run fails (each death and rez too,
+#       with Debug on).
 #     - The run fails when the whole party dies with nobody to rez, when
 #       nothing has moved forward for NoProgressMinutes (no kill, no pack
 #       cleared, no fight going on, not getting closer to the next boss), when
@@ -445,7 +455,10 @@ PlayerbotsPlus.BotDungeons.FailCooldownMinutes = 30
 #    PlayerbotsPlus.BotDungeons.NoProgressMinutes
 #    PlayerbotsPlus.BotDungeons.MaxRunMinutes
 #        A run with nothing moving forward this long fails (0: never for
-#        that), and any run this long (10-1440).
+#        that), and any run this long (10-1440). Waiting for a dead tank to
+#        be rezzed counts as nothing moving, but a rez comes within a minute
+#        or two of the fight, and mod-dungeon-clear gives up on one long
+#        before this (DungeonClear.PostCombatRezTimeoutSecs).
 #        Default: 10, 120
 PlayerbotsPlus.BotDungeons.NoProgressMinutes = 10
 PlayerbotsPlus.BotDungeons.MaxRunMinutes = 120
@@ -758,6 +771,21 @@ PlayerbotsPlus.Hangout.HotSpots = "StormwindTrade|StormwindAuction|StormwindBank
 #        Crowded, bots find nowhere to stand there. 0: radii as written.
 #        Default: 60
 PlayerbotsPlus.Hangout.RoomPerBot = 60
+
+#    PlayerbotsPlus.Hangout.FullMinutes
+#        A spot where a bot sent or fetched there finds nowhere to stand is
+#        full: it takes nobody more, and the rest of its room goes to spots
+#        that can take people -- its city's other spots of its kind (hot or
+#        not) first, then its city's others, and when the whole city is full,
+#        the other cities' spots, by their room. A bot fetched to a full spot
+#        walks on to another spot in the city with room, if there is one. The
+#        spot opens again as soon as fewer are there, or after this many
+#        minutes. .pbp hangouts shows each spot: who is there, its room, and
+#        why the places looked at for it were turned down -- for a spot
+#        nobody can be put at (its middle in a wall, a fountain, a crowd).
+#        1 to 120.
+#        Default: 10
+PlayerbotsPlus.Hangout.FullMinutes = 10
 
 ###############################################################################
 #

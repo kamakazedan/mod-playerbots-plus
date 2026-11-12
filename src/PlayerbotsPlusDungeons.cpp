@@ -287,6 +287,7 @@ namespace
         std::unordered_map<uint64, Clock::time_point> broughtIn;   // Gathering: last teleport in, by member
         std::vector<ObjectGuid> members;  // at the start of the clear
         std::unordered_map<uint64, std::vector<uint32>> held;      // the quests each held there then
+        std::unordered_map<uint64, uint8> standing;                // Clearing: each member as last seen
         bool cleared = false;
         bool handedOver = false;          // a player joined: theirs from then on
         std::string why;
@@ -950,6 +951,162 @@ namespace
         }
     }
 
+    // ---- the dead lie where they fell -----------------------------------------------
+
+    // A member of a run, as last seen.
+    enum class Standing : uint8
+    {
+        Up,      // on its feet in the dungeon
+        Down,    // dead where it fell
+        Ghost,   // released: its spirit is at a graveyard
+        Away,    // not in the dungeon, dead or alive
+        Gone     // logged out
+    };
+
+    Standing StandingOf(Player* bot, uint32 map)
+    {
+        if (!bot || !bot->IsInWorld())
+            return Standing::Gone;
+        if (bot->GetMapId() != map)
+            return Standing::Away;
+        if (bot->IsAlive())
+            return Standing::Up;
+        return bot->HasPlayerFlag(PLAYER_FLAGS_GHOST) ? Standing::Ghost : Standing::Down;
+    }
+
+    std::string HowItIs(Player* bot)
+    {
+        return std::string(bot->IsAlive() ? "alive" : bot->HasPlayerFlag(PLAYER_FLAGS_GHOST) ? "a ghost" : "dead") +
+               " in " + PbpZoneName(bot);
+    }
+
+    // Everyone in the run (its members at the start, and anyone in the group now).
+    std::vector<ObjectGuid> Everyone(Run const& r, Group* group)
+    {
+        std::vector<ObjectGuid> guids = r.members;
+        if (group)
+            for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                if (std::find(guids.begin(), guids.end(), slot.guid) == guids.end())
+                    guids.push_back(slot.guid);
+        return guids;
+    }
+
+    Player* InWorld(ObjectGuid guid)
+    {
+        Player* bot = ObjectAccessor::FindPlayer(guid);
+        return bot && bot->IsInWorld() ? bot : nullptr;
+    }
+
+    // Each refreshed every tick while it lies there; let go, its AI runs
+    // again within this.
+    constexpr uint32 kKeepDownMs = 1000;
+
+    // A member of a run that dies lies where it fell until someone rezzes it,
+    // as anyone does in a party with a healer. Playerbots releases a dead bot
+    // with no player in its group at its next AI tick -- the tank always,
+    // since it leads the group -- and a tank that is out of the dungeon ends
+    // the clear there and then. mod-dungeon-clear's PreventBotRelease means
+    // to stop that inside a dungeon, yet bot runs' tanks still left theirs a
+    // few seconds into a big pull. So the AI of a member lying dead in the
+    // dungeon is held, and a rez offered to it is taken, as a player clicks
+    // Accept: mod-dungeon-clear sends a healer over once the fight is done,
+    // and calls the run off itself if nobody left can rez. Every tick, ahead
+    // of that AI tick. During a clear, a member that dies, gets up, releases
+    // anyway or leaves the dungeon is noted: that is how a run ends early,
+    // and the note says how (dead, a ghost, or alive, and where).
+    void KeepTheDeadDown()
+    {
+        for (auto& [key, r] : g_runs)
+        {
+            Group* group = GroupOf(r.group);
+            bool const clearing = r.phase == Phase::Clearing;
+            ObjectGuid tank;
+            bool tankRead = false;
+            for (ObjectGuid guid : Everyone(r, group))
+            {
+                Player* bot = InWorld(guid);
+                Standing const now = StandingOf(bot, r.map);
+                if (now == Standing::Down)
+                {
+                    PlayerbotAI* ai = PbpAiOf(bot);
+                    if (bot->isResurrectRequested() && !bot->HasPreventResurectionAura() && !bot->IsBeingTeleported())
+                    {
+                        bot->ResurectUsingRequestData();   // what Accept does (HandleResurrectResponseOpcode)
+                        ++g_stats.rezzed;
+                        if (ai)
+                            ai->SetNextCheckDelay(0);
+                    }
+                    else if (ai)
+                        ai->SetNextCheckDelay(kKeepDownMs);
+                }
+                if (!clearing)
+                    continue;
+
+                auto [it, first] = r.standing.try_emplace(guid.GetRawValue(), uint8(now));
+                Standing const was = Standing(it->second);
+                it->second = uint8(now);
+                if (first || was == now)
+                    continue;
+                if (!tankRead)
+                {
+                    tank = DcBotRun::Get(r.group).tank;
+                    tankRead = true;
+                }
+                std::string const name = bot ? bot->GetName() : std::string("one of them");
+                std::string const who = name + (guid == tank ? " (the tank)" : "");
+                switch (now)
+                {
+                    case Standing::Down:
+                        ++g_stats.keptDown;
+                        if (g_PbpDebug)
+                            LOG_INFO("module.playerbotsplus",
+                                     "[Playerbots Plus] Bot dungeons: {} died in {} -- left where it fell for a rez.",
+                                     who, r.name);
+                        break;
+                    case Standing::Up:
+                        if (g_PbpDebug && was == Standing::Down)
+                            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: {} is up again in {}.",
+                                     who, r.name);
+                        break;
+                    case Standing::Ghost:
+                        LOG_INFO("module.playerbotsplus",
+                                 "[Playerbots Plus] Bot dungeons: {} released its spirit in {} after all.", who, r.name);
+                        break;
+                    case Standing::Away:
+                        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: {} left {} ({}).", who,
+                                 r.name, HowItIs(bot));
+                        break;
+                    case Standing::Gone:
+                        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: {} logged out during {}.",
+                                 who, r.name);
+                        break;
+                }
+            }
+        }
+    }
+
+    // How everyone stood when a run failed, for the log: "Rahilan (the tank)
+    // dead, Fimur alive, Lugedin away (alive in The Barrens)".
+    std::string AsItEnded(Run const& r, Group* group, ObjectGuid tank)
+    {
+        std::string out;
+        for (ObjectGuid guid : Everyone(r, group))
+        {
+            Player* bot = InWorld(guid);
+            std::string one = bot ? bot->GetName() : std::string("one logged out");
+            if (guid == tank)
+                one += " (the tank)";
+            if (bot && bot->GetMapId() != r.map)
+                one += " away (" + HowItIs(bot) + ")";
+            else if (bot)
+                one += bot->IsAlive() ? " alive" : bot->HasPlayerFlag(PLAYER_FLAGS_GHOST) ? " a ghost" : " dead";
+            if (group && !group->IsMember(guid))
+                one += ", out of the group";
+            out += (out.empty() ? "" : ", ") + one;
+        }
+        return out;
+    }
+
     void Clear(Run& r, Group* group, Clock::time_point now)
     {
         DcBotRun::Status const st = DcBotRun::Get(r.group);
@@ -973,6 +1130,8 @@ namespace
                 break;
             case DcBotRun::Phase::Failed:
                 r.why = st.why;
+                LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: {} as it failed -- {}.", r.name,
+                         AsItEnded(r, group, st.tank));
                 break;
             case DcBotRun::Phase::HandedOver:
                 // A player was in the group, and is gone again by now: the
@@ -1234,9 +1393,12 @@ void PbpDungeons_Update(uint32_t diff)
     else
         g_wasOn = true;
 
-    // Every tick: an offer is answered in the tick it was made in.
+    // Every tick: an offer is answered in the tick it was made in, and a
+    // member of a run that has just died is kept down before its AI's next
+    // tick can release it.
     g_noteOffers.store(on && !g_queued.empty(), std::memory_order_relaxed);
     AnswerOffers();
+    KeepTheDeadDown();
 
     g_watchMs += diff;
     if (g_watchMs >= 1000)
@@ -1353,7 +1515,9 @@ std::vector<std::string> PbpDungeons_Status()
                   " group offers said yes to, " + std::to_string(st.rejoined) + " dropouts back in the queue), " +
                   std::to_string(st.runs) + " runs: " + std::to_string(st.cleared) +
                   " cleared, " + std::to_string(st.failed) + " failed, " + std::to_string(st.handedOver) +
-                  " joined by a player; " + std::to_string(st.sentOut) + " bots sent out of a dungeon.");
+                  " joined by a player; " + std::to_string(st.keptDown) + " deaths left where they fell for a rez (" +
+                  std::to_string(st.rezzed) + " rezzes taken); " + std::to_string(st.sentOut) +
+                  " bots sent out of a dungeon.");
 
     PbpDungeonQuestsStats const q = PbpDungeonQuests_GetStats();
     if (s.quests)
