@@ -73,6 +73,22 @@ public:
     PbpDungeonsPacketScript() : ServerScript("PbpDungeonsPacketScript", { SERVERHOOK_ON_PACKET_SENT }) {}
     void OnPacketSent(WorldSession* session, WorldPacket const& packet) override;
 };
+
+// A living member of a run is not taken out of its dungeon while the run is
+// gathering or clearing. Playerbots teleports a random bot that levels up to
+// somewhere for its new level (Playerbots.AutoTeleportForLevel), a grouped
+// one only if it leads the group -- in a bot dungeon, the tank -- and a tank
+// out of its dungeon ends the clear: every early "Left the dungeon" was that.
+// Moving about inside the dungeon, and the dead's way to a graveyard, are
+// left alone. Runs on whatever thread teleports the bot: it reads only a list
+// the world tick publishes, under a mutex.
+class PbpDungeonsTeleportScript : public PlayerScript
+{
+public:
+    PbpDungeonsTeleportScript() : PlayerScript("PbpDungeonsTeleportScript", { PLAYERHOOK_ON_BEFORE_TELEPORT }) {}
+    bool OnPlayerBeforeTeleport(Player* player, uint32 mapid, float x, float y, float z, float orientation,
+                                uint32 options, Unit* target) override;
+};
 #endif
 
 // The dungeon finder's normal dungeons (not heroics, raids or holiday ones):
@@ -117,6 +133,7 @@ struct PbpDungeonsStats
     uint64_t failed    = 0;   // ...that did not
     uint64_t handedOver = 0;  // ...that a player joined
     uint64_t sentOut   = 0;   // bots found in a dungeon with no group for it, and sent out
+    uint64_t keptIn    = 0;   // members of a run kept in its dungeon when something teleported them out
     uint64_t keptDown  = 0;   // members of a run that died, left where they fell for a rez
     uint64_t rezzed    = 0;   // ...rezzes taken for them, as a player clicks Accept
     uint64_t offers    = 0;   // the dungeon finder's offers said yes to for a bot it queued

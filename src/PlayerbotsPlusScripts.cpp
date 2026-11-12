@@ -373,5 +373,6 @@ void Addmod_playerbots_plusScripts()
     new PbpMuteScript();
 #if PBP_BOT_DUNGEONS
     new PbpDungeonsPacketScript();
+    new PbpDungeonsTeleportScript();
 #endif
 }

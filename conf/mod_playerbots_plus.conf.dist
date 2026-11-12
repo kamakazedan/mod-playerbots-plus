@@ -340,15 +340,22 @@ PlayerbotsPlus.Ledger.KeepDays = 90
 #       mod-dungeon-clear clears it. Silently: there is nobody in the group
 #       to talk to.
 #     - A member that dies lies where it fell until someone rezzes it, the
-#       tank too. Playerbots releases a dead bot with no player in its group
-#       at once, and a tank out of its dungeon ends the clear, so its AI is
-#       held while it lies there and a rez offered to it is taken straight
-#       away. mod-dungeon-clear sends a healer over once the fight is done,
-#       and calls the run off if nobody left can rez or the rez takes longer
-#       than its DungeonClear.PostCombatRezTimeoutSecs. A member releasing
-#       anyway, leaving the dungeon or logging out during a clear goes to the
-#       log, and how everyone stood when a run fails (each death and rez too,
-#       with Debug on).
+#       tank too (mod-dungeon-clear's PreventBotRelease, and its AI held here
+#       as well), and a rez offered to it is taken straight away.
+#       mod-dungeon-clear sends a healer over once the fight is done, and
+#       calls the run off if nobody left can rez or the rez takes longer than
+#       its DungeonClear.PostCombatRezTimeoutSecs.
+#     - A living member stays in its dungeon until the run is over.
+#       Playerbots teleports a random bot that levels up to somewhere for its
+#       new level (Playerbots.AutoTeleportForLevel) -- a grouped one only if
+#       it leads the group, which in a bot dungeon is the tank -- and a tank
+#       out of its dungeon ends the clear. A teleport off the dungeon's map
+#       is turned down for a member of a run (the level-up still resets the
+#       tank's AI for a moment, as playerbots does before it teleports). That
+#       goes for a GM's .tele or .summon on one too, until the run ends.
+#     - A member releasing anyway, leaving the dungeon or logging out during
+#       a clear goes to the log with how and where, and how everyone stood
+#       when a run fails (each death and rez too, with Debug on).
 #     - The run fails when the whole party dies with nobody to rez, when
 #       nothing has moved forward for NoProgressMinutes (no kill, no pack
 #       cleared, no fight going on, not getting closer to the next boss), when

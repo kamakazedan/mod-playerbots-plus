@@ -32,6 +32,10 @@ These hooks are the exception, and they touch nothing of the world:
 - `PbpDungeonsPacketScript::OnPacketSent` runs on whatever thread sends the
   packet. It only notes a dungeon finder offer (who, which) under a mutex;
   the world tick answers it.
+- `PbpDungeonsTeleportScript::OnPlayerBeforeTeleport` runs on whatever
+  thread teleports the player. It reads only the list of run members and
+  their dungeon (`g_keepIn`) that the world tick publishes under a mutex, and
+  turns down a living member's teleport off that map.
 - `PbpLedgerPlayerScript`'s hooks (money, loot, quest rewards, crafting,
   vendor buys, gear put on, consumables used) run on map threads, and the
   ledger's auction notes may come from any thread. They read the session's
@@ -146,11 +150,17 @@ otherwise. This module must still build and run without it; check both ways.
   gives them back once the bot is out of the group.
 - A member of a run that dies is kept down (`KeepTheDeadDown`, every tick):
   playerbots releases a dead bot with no player in its group at its next AI
-  tick, the group's leader always, and a tank out of its dungeon ends the
-  clear. Its AI is held (`SetNextCheckDelay`) while it lies dead in the
-  dungeon, and a rez offered to it is taken (`ResurectUsingRequestData`, what
-  Accept does). mod-dungeon-clear never ticks on a corpse, so holding it costs
-  the run nothing; its rez recovery runs on the living.
+  tick, the group's leader always (mod-dungeon-clear's PreventBotRelease
+  stops that in a dungeon; this makes sure). Its AI is held
+  (`SetNextCheckDelay`) while it lies dead in the dungeon, and a rez offered
+  to it is taken (`ResurectUsingRequestData`, what Accept does).
+  mod-dungeon-clear never ticks on a corpse, so holding it costs the run
+  nothing; its rez recovery runs on the living.
+- A living member is never teleported off its run's dungeon map
+  (`PbpDungeonsTeleportScript`): playerbots' level-up teleport
+  (`AutoTeleportForLevel` -> `RandomTeleport`) moves a grouped bot only if it
+  leads the group, so it took bot dungeons' tanks out mid-run. `Release`
+  takes the members off the list (`LetOut`) before it sends them out.
 - Walks for quests use playerbots' own "go camp" (`rpgInfo.ChangeToGoCamp`),
   as hangouts do: hangouts leave a bot on its way to a camp alone, and these
   leave a hanging-out one alone (`PbpHangout_Has`).

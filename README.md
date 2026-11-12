@@ -447,13 +447,17 @@ only in a build with
   mod-dungeon-clear clears the dungeon, silently: there's nobody there to
   talk to (mod-ollama-chat keeps its bots quiet in such a run too).
 - **Deaths.** A bot that dies lies where it fell until someone rezzes it, the
-  tank included. Playerbots releases a dead bot with no player in its group
-  straight away, and a tank whose ghost is out of the dungeon ends the clear.
-  So its AI is held while it lies there, and it takes the rez the moment it's
-  offered. Mod-dungeon-clear sends a healer over once the fight is done, and
-  calls the run off if nobody left can rez. A bot that releases anyway, leaves
-  the dungeon or logs out during a clear goes in the log, and so does how
-  everyone stood when a run fails.
+  tank included, and takes the rez the moment it's offered. Mod-dungeon-clear
+  sends a healer over once the fight is done, and calls the run off if nobody
+  left can rez.
+- **Staying in.** Playerbots teleports a random bot that levels up to
+  somewhere for its new level (`Playerbots.AutoTeleportForLevel`), and a
+  grouped bot only if it leads the group: the tank, in a bot dungeon. That's
+  what ended runs early with "Left the dungeon". A teleport out of the
+  dungeon is now turned down for anyone in a run until it's over (a GM's
+  `.tele` included). A bot that releases anyway, leaves the dungeon or logs
+  out during a clear goes in the log, and so does how everyone stood when a
+  run fails.
 - **When it fails.** A run ends when the whole party dies with nobody to rez,
   when nothing has moved forward for 10 minutes (no kill, no pack cleared, no
   fight going on, not getting closer to the next boss), when it's stuck on

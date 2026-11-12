@@ -258,6 +258,13 @@ namespace
 
     // The dungeon finder's offers, by the bot they went to (PbpDungeonsPacketScript
     // notes them; AnswerOffers answers). Noted only while a party this queued waits.
+    // Members of a run in its dungeon, kept there (PbpDungeonsTeleportScript):
+    // each with its run's map, published every world tick.
+    std::mutex g_keepMutex;
+    std::unordered_map<uint64, uint32> g_keepIn;
+    std::unordered_map<uint64, std::chrono::steady_clock::time_point> g_keptSaid;   // logged at most once a minute
+    std::atomic<uint64_t> g_keptIn{ 0 };
+
     std::mutex g_offerMutex;
     std::unordered_map<uint64, uint32> g_offers;
     std::atomic<bool> g_noteOffers{ false };
@@ -1005,15 +1012,15 @@ namespace
     // as anyone does in a party with a healer. Playerbots releases a dead bot
     // with no player in its group at its next AI tick -- the tank always,
     // since it leads the group -- and a tank that is out of the dungeon ends
-    // the clear there and then. mod-dungeon-clear's PreventBotRelease means
-    // to stop that inside a dungeon, yet bot runs' tanks still left theirs a
-    // few seconds into a big pull. So the AI of a member lying dead in the
-    // dungeon is held, and a rez offered to it is taken, as a player clicks
-    // Accept: mod-dungeon-clear sends a healer over once the fight is done,
-    // and calls the run off itself if nobody left can rez. Every tick, ahead
-    // of that AI tick. During a clear, a member that dies, gets up, releases
-    // anyway or leaves the dungeon is noted: that is how a run ends early,
-    // and the note says how (dead, a ghost, or alive, and where).
+    // the clear there and then. mod-dungeon-clear's PreventBotRelease stops
+    // that inside a dungeon; this makes sure of it for a run: the AI of a
+    // member lying dead in the dungeon is held, and a rez offered to it is
+    // taken, as a player clicks Accept. mod-dungeon-clear sends a healer over
+    // once the fight is done, and calls the run off itself if nobody left can
+    // rez. Every tick, ahead of that AI tick. During a clear, a member that
+    // dies, gets up, releases anyway or leaves the dungeon is noted, with how
+    // (dead, a ghost, or alive, and where): that is how a run ends early --
+    // it is how the level-up teleport (PbpDungeonsTeleportScript) was found.
     void KeepTheDeadDown()
     {
         for (auto& [key, r] : g_runs)
@@ -1083,6 +1090,32 @@ namespace
                 }
             }
         }
+    }
+
+    // Who is kept in which dungeon: those in the group of every run gathering
+    // or clearing (one who has left the group is free to go, as the game's
+    // own homebind sends it). Every tick, so a run that has just begun is
+    // covered.
+    void PublishKeepIn()
+    {
+        std::unordered_map<uint64, uint32> keep;
+        for (auto const& [key, r] : g_runs)
+            if (r.phase == Phase::Gathering || r.phase == Phase::Clearing)
+                if (Group* group = GroupOf(r.group))
+                    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+                        keep.emplace(slot.guid.GetRawValue(), r.map);
+        std::lock_guard<std::mutex> lock(g_keepMutex);
+        g_keepIn.swap(keep);
+        for (auto it = g_keptSaid.begin(); it != g_keptSaid.end();)
+            it = g_keepIn.count(it->first) ? std::next(it) : g_keptSaid.erase(it);
+    }
+
+    // Before the run's own end takes them out of the dungeon.
+    void LetOut(std::vector<ObjectGuid> const& guids)
+    {
+        std::lock_guard<std::mutex> lock(g_keepMutex);
+        for (ObjectGuid guid : guids)
+            g_keepIn.erase(guid.GetRawValue());
     }
 
     // How everyone stood when a run failed, for the log: "Rahilan (the tank)
@@ -1159,6 +1192,7 @@ namespace
             for (Group::MemberSlot const& slot : group->GetMemberSlots())
                 if (std::find(guids.begin(), guids.end(), slot.guid) == guids.end())
                     guids.push_back(slot.guid);
+        LetOut(guids);
 
         for (ObjectGuid guid : guids)
         {
@@ -1399,6 +1433,7 @@ void PbpDungeons_Update(uint32_t diff)
     g_noteOffers.store(on && !g_queued.empty(), std::memory_order_relaxed);
     AnswerOffers();
     KeepTheDeadDown();
+    PublishKeepIn();
 
     g_watchMs += diff;
     if (g_watchMs >= 1000)
@@ -1515,7 +1550,9 @@ std::vector<std::string> PbpDungeons_Status()
                   " group offers said yes to, " + std::to_string(st.rejoined) + " dropouts back in the queue), " +
                   std::to_string(st.runs) + " runs: " + std::to_string(st.cleared) +
                   " cleared, " + std::to_string(st.failed) + " failed, " + std::to_string(st.handedOver) +
-                  " joined by a player; " + std::to_string(st.keptDown) + " deaths left where they fell for a rez (" +
+                  " joined by a player; " + std::to_string(st.keptIn) +
+                  " teleports out of a dungeon turned down (a level-up, mostly); " + std::to_string(st.keptDown) +
+                  " deaths left where they fell for a rez (" +
                   std::to_string(st.rezzed) + " rezzes taken); " + std::to_string(st.sentOut) +
                   " bots sent out of a dungeon.");
 
@@ -1568,6 +1605,36 @@ std::string PbpDungeons_Send(std::string const& which)
            "): free bots of a level for it -- " + counts + ".";
 }
 
+bool PbpDungeonsTeleportScript::OnPlayerBeforeTeleport(Player* player, uint32 mapid, float x, float y, float z,
+                                                       float /*orientation*/, uint32 /*options*/, Unit* /*target*/)
+{
+    // Within its own map (a stranded member brought to the tank), and the
+    // dead on their way to a graveyard, as ever.
+    if (!player || mapid == player->GetMapId() || !player->IsAlive())
+        return true;
+    bool say = false;
+    {
+        std::lock_guard<std::mutex> lock(g_keepMutex);
+        uint64 const id = player->GetGUID().GetRawValue();
+        auto it = g_keepIn.find(id);
+        if (it == g_keepIn.end() || it->second != player->GetMapId())
+            return true;   // not in a run's dungeon: on its way in, or anyone else
+        auto const now = std::chrono::steady_clock::now();
+        auto& said = g_keptSaid[id];
+        if (said == std::chrono::steady_clock::time_point() || now - said >= std::chrono::minutes(1))
+        {
+            said = now;
+            say = true;
+        }
+    }
+    g_keptIn.fetch_add(1, std::memory_order_relaxed);
+    if (say)
+        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: kept {} (level {}) in its dungeon -- "
+                 "something tried to take it to map {} ({:.1f}, {:.1f}, {:.1f}): playerbots' teleport on a "
+                 "level-up, most likely.", player->GetName(), player->GetLevel(), mapid, x, y, z);
+    return false;
+}
+
 void PbpDungeonsPacketScript::OnPacketSent(WorldSession* session, WorldPacket const& packet)
 {
     // Every packet to every session comes through here: the opcode first.
@@ -1587,6 +1654,7 @@ void PbpDungeonsPacketScript::OnPacketSent(WorldSession* session, WorldPacket co
 PbpDungeonsStats PbpDungeons_GetStats()
 {
     PbpDungeonsStats out = g_stats;
+    out.keptIn = g_keptIn.load(std::memory_order_relaxed);
     out.queuedNow = uint32(g_queued.size());
     out.runsNow = uint32(g_runs.size());
     return out;
