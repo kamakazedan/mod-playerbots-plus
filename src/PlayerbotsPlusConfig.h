@@ -1,6 +1,7 @@
 #ifndef PLAYERBOTS_PLUS_CONFIG_H
 #define PLAYERBOTS_PLUS_CONFIG_H
 
+#include "PlayerbotsPlusDungeonsText.h"
 #include "PlayerbotsPlusMarketPrice.h"
 
 #include <array>
@@ -82,6 +83,8 @@ struct PbpBotDungeonSettings
     uint32_t lootSeconds          = 30;      // after the last boss, before they leave
     uint32_t avoidAfterFailures   = 3;       // a dungeon whose runs failed this many times in a row...
     uint32_t avoidMinutes         = 120;     // ...is not gone to for this long
+    std::vector<PbpDungeons::Band> bands;    // the runs shared out by the dungeon's level; none: any dungeon
+    std::vector<uint32_t> bandShares;        // how many runs each band is meant to hold, one per band
 
     bool     quests               = true;    // take, keep, hand in and let go of dungeon quests
     float    questRange           = 1500.0f; // yards: the farthest a bot walks to a giver

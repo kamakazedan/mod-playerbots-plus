@@ -558,6 +558,11 @@ namespace
     // Stormwind, as on any realm.
     constexpr char const* kDefaultDuelSpots = "OrgrimmarGates|StormwindGates";
 
+    // Bot dungeons by level: one run in each band from the first dungeons
+    // to Outland, the rest at the level cap's end.
+    constexpr char const* kDefaultLevelBands = "15-19,20-29,30-39,40-49,50-59,60-69,70-80";
+    constexpr char const* kDefaultLevelBandRuns = "1,1,1,1,1,1,4";
+
     // "graboid" -> "Graboid": a pet name the way the game keeps one. Empty
     // for one the game would not take: letters only, 2 to 12 of them.
     std::string PetName(std::string name)
@@ -753,6 +758,21 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     d.lootSeconds         = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.LootSeconds", 30), 600);
     d.avoidAfterFailures  = U("PlayerbotsPlus.BotDungeons.AvoidAfterFailures", 3);
     d.avoidMinutes        = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.AvoidMinutes", 120), 10080);
+    {
+        std::string bad;
+        d.bands = PbpDungeons::ParseBands(
+            sConfigMgr->GetOption<std::string>("PlayerbotsPlus.BotDungeons.LevelBands", kDefaultLevelBands), bad);
+        if (!bad.empty())
+            LOG_ERROR("module.playerbotsplus",
+                      "[Playerbots Plus] PlayerbotsPlus.BotDungeons.LevelBands: '{}' left out (a band is low-high)", bad);
+        d.bandShares = PbpDungeons::ParseShares(
+            sConfigMgr->GetOption<std::string>("PlayerbotsPlus.BotDungeons.LevelBandRuns", kDefaultLevelBandRuns),
+            d.bands.size(), bad);
+        if (!bad.empty())
+            LOG_ERROR("module.playerbotsplus",
+                      "[Playerbots Plus] PlayerbotsPlus.BotDungeons.LevelBandRuns: '{}' is not a number; 1 instead",
+                      bad);
+    }
     d.quests              = B("PlayerbotsPlus.BotDungeons.Quests", true);
     d.questRange          = std::clamp(F("PlayerbotsPlus.BotDungeons.QuestRange", 1500.0f), 50.0f, 20000.0f);
     d.questWalksPerMinute = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.QuestWalksPerMinute", 10), 600);
@@ -809,14 +829,20 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     PbpBotDungeonSettings const& bd = g_Pbp.dungeons;
 #if PBP_BOT_DUNGEONS
     if (bd.enable)
+    {
+        std::string bands;
+        for (size_t i = 0; i < bd.bands.size(); ++i)
+            bands += (bands.empty() ? "; by level " : ", ") + PbpDungeons::BandName(bd.bands[i]) + " x" +
+                     std::to_string(i < bd.bandShares.size() ? bd.bandShares[i] : 1);
         LOG_INFO(where,
-                 "[Playerbots Plus] Bot dungeons on (up to {} at once{}{}; {}; dungeon quests {}).",
+                 "[Playerbots Plus] Bot dungeons on (up to {} at once{}{}{}; {}; dungeon quests {}).",
                  bd.maxRuns,
                  bd.maxTickMs ? ", while the world tick averages " + std::to_string(bd.maxTickMs) + " ms or less"
                               : std::string(),
-                 bd.needPlayerOnline ? ", only with a player online" : "",
+                 bd.needPlayerOnline ? ", only with a player online" : "", bands,
                  bd.questRequired ? "a party only goes where one of it holds a quest" : "quests or not",
                  bd.quests ? "fetched, kept, handed in" : "left to playerbots");
+    }
     else
         LOG_INFO(where, "[Playerbots Plus] Bot dungeons off.");
 #else

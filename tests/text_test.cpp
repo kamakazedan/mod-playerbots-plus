@@ -493,6 +493,12 @@ int main(int argc, char** argv)
         True("conf pet names are all names the game takes", names > 300 && good == names);
     }
 
+    // ---- bot dungeons' level bands: what the conf ships is the code's ---------------------
+    EqS("LevelBands is the code's", ConfValue(conf, "PlayerbotsPlus.BotDungeons.LevelBands"),
+        SourceLiteral(config, "kDefaultLevelBands"));
+    EqS("LevelBandRuns is the code's", ConfValue(conf, "PlayerbotsPlus.BotDungeons.LevelBandRuns"),
+        SourceLiteral(config, "kDefaultLevelBandRuns"));
+
     // ---- the rest of the conf: every key the code reads is in it -------------------------
     {
         const std::regex key("\"(PlayerbotsPlus\\.[A-Za-z.]+)\"");

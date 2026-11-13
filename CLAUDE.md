@@ -128,6 +128,11 @@ otherwise. This module must still build and run without it; check both ways.
   the queue, getting everyone in, and letting them go after.
 - Bots queue with `sLFGMgr->JoinLfg` from the world tick, not playerbots'
   packet: JoinLfg is only unsafe from a map thread.
+- Which dungeon a free place goes to is decided band by band
+  (`BotDungeons.LevelBands`): a dungeon's band is its dungeon finder
+  `TargetLevel`, and the order bands are offered a place is
+  `PbpDungeons::BandOrder` (pure, tested), from the runs and queued parties
+  each band has (`RunsByBand`) against its share. Keep the choice there.
 - Playerbots vetoes every dungeon finder offer with no player, self-bot or
   party in it (`PlayerbotsGlobalScript::CanCreateLfgProposal`), so five bots
   queued each on their own only ever go with a player. After `AloneMinutes`

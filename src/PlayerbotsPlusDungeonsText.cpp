@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdio>
 #include <numeric>
+#include <string>
 
 namespace PbpDungeons
 {
@@ -128,5 +129,125 @@ namespace PbpDungeons
         else
             std::snprintf(buf, sizeof(buf), "%uh %02um", seconds / 3600, (seconds % 3600) / 60);
         return buf;
+    }
+
+    namespace
+    {
+        // `text` cut at `sep`, each part trimmed; empty parts kept, so the
+        // shares stay in step with the bands they are for.
+        std::vector<std::string> Parts(std::string const& text, char sep)
+        {
+            std::vector<std::string> out;
+            if (text.find_first_not_of(" \t") == std::string::npos)
+                return out;
+            size_t from = 0;
+            for (;;)
+            {
+                size_t const at = text.find(sep, from);
+                std::string part = text.substr(from, at == std::string::npos ? std::string::npos : at - from);
+                size_t const a = part.find_first_not_of(" \t");
+                size_t const b = part.find_last_not_of(" \t");
+                out.push_back(a == std::string::npos ? std::string() : part.substr(a, b - a + 1));
+                if (at == std::string::npos)
+                    break;
+                from = at + 1;
+            }
+            return out;
+        }
+
+        // "42" -> 42; anything but digits (or a number past a level) is not one.
+        bool Number(std::string const& text, uint32_t& out)
+        {
+            if (text.empty() || text.size() > 6 ||
+                !std::all_of(text.begin(), text.end(), [](unsigned char c) { return std::isdigit(c) != 0; }))
+                return false;
+            out = uint32_t(std::stoul(text));
+            return true;
+        }
+
+        void Note(std::string& bad, std::string const& what)
+        {
+            bad += (bad.empty() ? "" : ", ") + what;
+        }
+    }
+
+    std::vector<Band> ParseBands(std::string const& text, std::string& bad)
+    {
+        std::vector<Band> out;
+        bad.clear();
+        for (std::string const& part : Parts(text, ','))
+        {
+            if (part.empty())
+                continue;
+            std::vector<std::string> const ends = Parts(part, '-');
+            Band band;
+            bool ok = false;
+            if (ends.size() == 1 && Number(ends[0], band.low))
+            {
+                band.high = band.low;
+                ok = true;
+            }
+            else if (ends.size() == 2)
+                ok = Number(ends[0], band.low) && Number(ends[1], band.high) && band.low <= band.high;
+            if (ok)
+                out.push_back(band);
+            else
+                Note(bad, part);
+        }
+        return out;
+    }
+
+    std::vector<uint32_t> ParseShares(std::string const& text, size_t bands, std::string& bad)
+    {
+        std::vector<uint32_t> out(bands, 1);
+        bad.clear();
+        std::vector<std::string> const parts = Parts(text, ',');
+        for (size_t i = 0; i < parts.size() && i < bands; ++i)
+        {
+            uint32_t share = 0;
+            if (Number(parts[i], share))
+                out[i] = share;
+            else if (!parts[i].empty())
+                Note(bad, parts[i]);
+        }
+        return out;
+    }
+
+    int BandOf(std::vector<Band> const& bands, uint32_t level)
+    {
+        for (size_t i = 0; i < bands.size(); ++i)
+            if (level >= bands[i].low && level <= bands[i].high)
+                return int(i);
+        return -1;
+    }
+
+    std::string BandName(Band const& band)
+    {
+        if (band.low == band.high)
+            return std::to_string(band.low);
+        return std::to_string(band.low) + "-" + std::to_string(band.high);
+    }
+
+    std::vector<size_t> BandOrder(std::vector<uint32_t> const& runs, std::vector<uint32_t> const& shares)
+    {
+        size_t const n = std::min(runs.size(), shares.size());
+        std::vector<size_t> order(n);
+        std::iota(order.begin(), order.end(), size_t(0));
+        // 0: under its share, 1: at or over it, 2: no share at all.
+        auto group = [&](size_t i) { return !shares[i] ? 2 : runs[i] < shares[i] ? 0 : 1; };
+        std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b)
+        {
+            if (group(a) != group(b))
+                return group(a) < group(b);
+            if (group(a) == 2)
+                return runs[a] < runs[b];
+            // The fewest runs for its share: runs[a] / shares[a] < runs[b] / shares[b].
+            uint64_t const x = uint64_t(runs[a]) * shares[b];
+            uint64_t const y = uint64_t(runs[b]) * shares[a];
+            if (x != y)
+                return x < y;
+            return shares[a] > shares[b];
+        });
+        return order;
     }
 }

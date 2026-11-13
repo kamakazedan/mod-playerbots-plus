@@ -325,14 +325,16 @@ PlayerbotsPlus.Ledger.KeepDays = 90
 #
 #     - Every CheckSeconds a party is picked -- a tank, a healer and three to
 #       do the damage, of one side and a level for the dungeon, those holding
-#       quests for it first -- and each of them queues for it, as a player
-#       queues. A player who queues for it then can be matched in, which makes
-#       it a player's group, and what happens there is theirs, as it is in any
-#       group. Playerbots never lets the dungeon finder put bots together by
-#       themselves, so with nobody matched in after AloneMinutes the five
-#       leave the queue, make a party (the tank leads) and queue as one, which
-#       it lets be. Either way, the offer of a group is said yes to for them
-#       straight away: playerbots turns one down for a bot that is fighting.
+#       quests for it first, for a dungeon of the level band furthest under
+#       its share of the runs (LevelBands) -- and each of them queues for it,
+#       as a player queues. A player who queues for it then can be matched in,
+#       which makes it a player's group, and what happens there is theirs, as
+#       it is in any group. Playerbots never lets the dungeon finder put bots
+#       together by themselves, so with nobody matched in after AloneMinutes
+#       the five leave the queue, make a party (the tank leads) and queue as
+#       one, which it lets be. Either way, the offer of a group is said yes to
+#       for them straight away: playerbots turns one down for a bot that is
+#       fighting.
 #     - A group of bots the dungeon finder made, with no player in it (one
 #       this queued, or one playerbots queued for a dungeon a player wanted),
 #       is taken on in its dungeon: anyone left outside is brought in, the
@@ -390,10 +392,11 @@ PlayerbotsPlus.Ledger.KeepDays = 90
 #       that QuestRuns runs of its dungeon (on a split dungeon, its wing) have
 #       not finished is let go and not taken again.
 #
-#   .pbp dungeons shows what is going on, and .pbp dungeons send <dungeon>
-#   (its dungeon finder id, or part of its name) queues a party for it now,
-#   quest or no quest, to see one through. The dungeon finder must be on
-#   (DungeonFinder.OptionsMask in worldserver.conf).
+#   .pbp dungeons shows what is going on, .pbp dungeons bands the dungeons in
+#   each level band, and .pbp dungeons send <dungeon> (its dungeon finder id,
+#   or part of its name) queues a party for it now, quest or no quest, to see
+#   one through. The dungeon finder must be on (DungeonFinder.OptionsMask in
+#   worldserver.conf).
 #
 #   Without mod-dungeon-clear in the build none of this exists: switched on,
 #   it says so at startup and does nothing.
@@ -434,7 +437,9 @@ PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline = 1
 
 #    PlayerbotsPlus.BotDungeons.QuestRequired
 #        1: a party only goes where at least one of it holds a quest for the
-#        dungeon (the others go along). 0: any dungeon of their level.
+#        dungeon (the others go along). 0: any dungeon of their level, those
+#        held quests for still first. With 1, a level band whose dungeons
+#        nobody free holds a quest for gets no runs (LevelBands).
 #        Default: 1
 PlayerbotsPlus.BotDungeons.QuestRequired = 1
 
@@ -483,6 +488,27 @@ PlayerbotsPlus.BotDungeons.LootSeconds = 30
 #        Default: 3, 120
 PlayerbotsPlus.BotDungeons.AvoidAfterFailures = 3
 PlayerbotsPlus.BotDungeons.AvoidMinutes = 120
+
+#    PlayerbotsPlus.BotDungeons.LevelBands
+#    PlayerbotsPlus.BotDungeons.LevelBandRuns
+#        The runs shared out by level. Each dungeon is in the band its level
+#        is in -- the level the dungeon finder recommends for it -- and
+#        LevelBandRuns says how many runs each band is meant to have going, in
+#        the same order (a band given no number has 1, and 0 means only a
+#        place nobody else can use). A free place goes to the band furthest
+#        under its share; between equals, the bigger share, then the lower
+#        band. So with MaxRuns at the sum of the shares, every band ends up
+#        with its share: the defaults are a run in each band and four more at
+#        the top end, for MaxRuns = 10. A band that cannot make a party just
+#        then (no tank free of its level, say) is passed over and its place
+#        goes to the next band; it is first in line when a run ends. A
+#        dungeon in none of the bands is not gone to. Empty LevelBands: no
+#        bands, any dungeon, the ones the most free bots hold quests for
+#        first. .pbp dungeons shows each band's runs and why one is short;
+#        .pbp dungeons bands, the dungeons in each.
+#        Default: "15-19,20-29,30-39,40-49,50-59,60-69,70-80", "1,1,1,1,1,1,4"
+PlayerbotsPlus.BotDungeons.LevelBands = "15-19,20-29,30-39,40-49,50-59,60-69,70-80"
+PlayerbotsPlus.BotDungeons.LevelBandRuns = "1,1,1,1,1,1,4"
 
 #    PlayerbotsPlus.BotDungeons.Quests
 #        Bots take, keep, hand in and let go of dungeon quests (above). 0

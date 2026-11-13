@@ -471,15 +471,26 @@ only in a build with
   after a failure. A dungeon whose runs keep failing is left alone for a while.
   A quest that 4 runs of its dungeon haven't finished is dropped, and so is one
   that goes grey.
+- **Spread over the levels.** The runs are shared out by level band
+  (`LevelBands`, by the level the dungeon finder recommends for each
+  dungeon): by default 15-19, 20-29 and so on up to 70-80, one run each and
+  four more at 70-80 (`LevelBandRuns`), which `MaxRuns = 10` fills. A free
+  place goes to the band furthest under its share. A band that can't make a
+  party just then (no tank free of its level, say) lends its place to the
+  next band, and gets the next free place back. Without bands, every run
+  goes where the most free bots hold quests, which can put every run in the
+  same dungeon.
 - **Loose ends.** A bot that logs in inside a dungeon it's no longer grouped
   for (the server went down mid-run) is sent back out.
 
 New parties wait while nobody is playing: when the last player logs off,
 the parties still in the queue leave it and the runs going on finish, and
 nothing new starts until someone logs in. They also wait while the world
-tick averages over 200 ms; there are 5 at most at once. `.pbp dungeons` shows what's going
-on, including the tick. `.pbp dungeons send <dungeon>` queues a party for a
-dungeon now, quest or no quest. Settings: `PlayerbotsPlus.BotDungeons.*`.
+tick averages over 200 ms; there are 5 at most at once. `.pbp dungeons` shows
+what's going on, including the tick and each level band's runs, and
+`.pbp dungeons bands` the dungeons in each band. `.pbp dungeons send <dungeon>`
+queues a party for a dungeon now, quest or no quest. Settings:
+`PlayerbotsPlus.BotDungeons.*`.
 
 ## With other modules
 
@@ -553,7 +564,8 @@ module at startup if the updater is off.
 | `.pbp status` | What it's doing: the auction house, hangouts (and how full each city is), stuck bots, fires, room to stand, revives, marks, pets, companions, duels, muted lines and the ledger |
 | `.pbp economy [days]` | The random bots' economy over the last days (7 unless you say) |
 | `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
-| `.pbp dungeons` | Bot dungeons: parties in the queue, runs going on, recent results, the world tick, dungeon quests |
+| `.pbp dungeons` | Bot dungeons: parties in the queue, runs going on, each level band's runs, recent results, the world tick, dungeon quests |
+| `.pbp dungeons bands` | The dungeons in each level band, with the runs each band has and its share |
 | `.pbp dungeons send <dungeon>` | Queues a party of bots for that dungeon now (its dungeon finder id, or part of its name) |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |
 
@@ -565,8 +577,8 @@ or hand in dungeon quests.
 
 See `CLAUDE.md` for the rules. The tests run without a server: the pricing,
 the text helpers, the ledger's words and sums, bot dungeons' choices (who goes,
-grey quests, wings, a full quest log), and checks that the conf matches the
-code.
+grey quests, wings, a full quest log, the level bands), and checks that the
+conf matches the code.
 
 ```bash
 bash tests/build.sh

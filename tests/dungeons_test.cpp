@@ -160,6 +160,75 @@ int main()
     EqS("hours", Duration(3600 + 5 * 60), "1h 05m");
     EqS("zero", Duration(0), "0s");
 
+    // ---- level bands -------------------------------------------------------------------------
+    {
+        auto names = [](std::vector<Band> const& bands)
+        {
+            std::string out;
+            for (Band const& b : bands)
+                out += (out.empty() ? "" : ",") + BandName(b);
+            return out;
+        };
+        std::string bad;
+        std::vector<Band> const bands = ParseBands("15-19,20-29,30-39,40-49,50-59,60-69,70-80", bad);
+        EqS("the realm's bands", names(bands), "15-19,20-29,30-39,40-49,50-59,60-69,70-80");
+        EqS("nothing bad in them", bad, "");
+        EqS("spaces and one level", names(ParseBands(" 15 - 19 , 80 ", bad)), "15-19,80");
+        EqS("bad ones left out", names(ParseBands("15-19,abc,30-20,20-,40-49", bad)), "15-19,40-49");
+        EqS("and named", bad, "abc, 30-20, 20-");
+        True("none", ParseBands("", bad).empty() && ParseBands("  ", bad).empty() && bad.empty());
+
+        EqS("the realm's shares", Ids32(ParseShares("1,1,1,1,1,1,4", 7, bad)), "1,1,1,1,1,1,4");
+        EqS("missing shares are 1", Ids32(ParseShares("2", 3, bad)), "2,1,1");
+        EqS("no shares at all: 1 each", Ids32(ParseShares("", 3, bad)), "1,1,1");
+        EqS("a zero stays", Ids32(ParseShares("0,3", 2, bad)), "0,3");
+        EqS("extra shares ignored", Ids32(ParseShares("1,2,3,4", 2, bad)), "1,2");
+        EqS("a bad share is 1", Ids32(ParseShares("x,3", 2, bad)), "1,3");
+        EqS("and named", bad, "x");
+
+        True("band of 15", BandOf(bands, 15) == 0);
+        True("band of 19", BandOf(bands, 19) == 0);
+        True("band of 20", BandOf(bands, 20) == 1);
+        True("band of 80", BandOf(bands, 80) == 6);
+        True("below every band", BandOf(bands, 13) == -1);
+        True("past every band", BandOf(bands, 81) == -1);
+        True("overlapping: the first", BandOf(ParseBands("10-30,20-40", bad), 25) == 0);
+
+        auto order = [](std::vector<uint32_t> const& runs, std::vector<uint32_t> const& shares)
+        {
+            std::string out;
+            for (size_t i : BandOrder(runs, shares))
+                out += (out.empty() ? "" : ",") + std::to_string(i);
+            return out;
+        };
+        std::vector<uint32_t> const shares = { 1, 1, 1, 1, 1, 1, 4 };
+        EqS("nothing running: the biggest share first, then up the levels",
+            order({ 0, 0, 0, 0, 0, 0, 0 }, shares), "6,0,1,2,3,4,5");
+        EqS("one band full of runs goes last", order({ 0, 5, 0, 0, 0, 0, 0 }, shares), "6,0,2,3,4,5,1");
+        EqS("every band its one: the rest to the big share",
+            order({ 1, 1, 1, 1, 1, 1, 1 }, shares), "6,0,1,2,3,4,5");
+        EqS("an empty band before a big share part-filled", order({ 1, 0, 1, 1, 1, 1, 1 }, shares), "1,6,0,2,3,4,5");
+        EqS("a part-filled big share before full bands", order({ 1, 1, 1, 1, 1, 1, 3 }, shares), "6,0,1,2,3,4,5");
+        EqS("all full: the big share grows first", order({ 1, 1, 1, 1, 1, 1, 4 }, shares), "6,0,1,2,3,4,5");
+        EqS("and then the rest", order({ 1, 1, 1, 1, 1, 1, 5 }, shares), "0,1,2,3,4,5,6");
+        EqS("no share: last of all", order({ 0, 0, 0 }, { 1, 0, 1 }), "0,2,1");
+        EqS("lent places: still last", order({ 0, 2, 0 }, { 2, 1, 1 }), "0,2,1");
+
+        // Ten places, the realm's shares, one band that can never make a party
+        // (40-49): the shares fill, its place is lent, and taken back first.
+        std::vector<uint32_t> runs(7, 0);
+        for (int place = 0; place < 10; ++place)
+            for (size_t b : BandOrder(runs, shares))
+                if (b != 3)
+                {
+                    ++runs[b];
+                    break;
+                }
+        EqS("ten places, 40-49 lent out", Ids32(runs), "1,1,1,0,1,1,5");
+        --runs[6];
+        EqS("a place frees: 40-49 first", std::to_string(BandOrder(runs, shares)[0]), "3");
+    }
+
     std::printf("%d/%d passed\n", g_checks - g_fails, g_checks);
     return g_fails ? 1 : 0;
 }

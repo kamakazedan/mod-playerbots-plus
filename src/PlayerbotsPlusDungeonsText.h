@@ -75,6 +75,41 @@ namespace PbpDungeons
 
     // "45s", "12m", "1h 05m".
     std::string Duration(uint32_t seconds);
+
+    // ---- level bands (BotDungeons.LevelBands) -------------------------------------------
+
+    // The dungeons whose level is from `low` to `high`.
+    struct Band
+    {
+        uint32_t low  = 0;
+        uint32_t high = 0;
+    };
+
+    // "15-19, 20-29,70-80" -> those bands, in that order ("80" is 80-80). What
+    // does not read as a band (not numbers, the high end below the low) is
+    // left out and named in `bad`, comma-separated.
+    std::vector<Band> ParseBands(std::string const& text, std::string& bad);
+
+    // "1,1,1,1,1,1,4" -> a share for each of `bands` bands: the number given,
+    // else 1, so every band has one unless it is given 0. What does not read
+    // as a number counts as 1 and is named in `bad`.
+    std::vector<uint32_t> ParseShares(std::string const& text, size_t bands, std::string& bad);
+
+    // Which band `level` is in: the first that holds it, -1 for none.
+    int BandOf(std::vector<Band> const& bands, uint32_t level);
+
+    // "15-19"; "80" for a band of one level.
+    std::string BandName(Band const& band);
+
+    // The bands in the order a free place is offered to them, given the runs
+    // each holds now and the share each is meant to hold: the one furthest
+    // under its share first (the fewest runs for its share), between equals
+    // the bigger share, then the lower band. A band at or over its share comes
+    // after every band under its own, and one with no share after all of
+    // them. So with as many places as the shares add up to, every band ends
+    // up with its share; a band that cannot make a party just then is passed
+    // over, and the next one in the order has its place until a run ends.
+    std::vector<size_t> BandOrder(std::vector<uint32_t> const& runs, std::vector<uint32_t> const& shares);
 }
 
 #endif // PLAYERBOTS_PLUS_DUNGEONS_TEXT_H

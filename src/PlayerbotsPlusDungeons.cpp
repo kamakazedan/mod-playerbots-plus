@@ -468,11 +468,66 @@ namespace
         return party;
     }
 
+    // ---- level bands (BotDungeons.LevelBands) ------------------------------------------
+
+    // The level a dungeon is banded by: the one the dungeon finder recommends.
+    uint32 BandLevel(PbpLfgDungeon const& d)
+    {
+        return d.targetLevel ? d.targetLevel : (d.minLevel + d.maxLevel) / 2;
+    }
+
+    // A dungeon's band, -1 for none: no bands, or its level in none of them.
+    int DungeonBand(uint32 lfgDungeon)
+    {
+        PbpLfgDungeon const* d = PbpDungeons_LfgDungeon(lfgDungeon);
+        return d ? PbpDungeons::BandOf(g_Pbp.dungeons.bands, BandLevel(*d)) : -1;
+    }
+
+    std::string BandText(int band)
+    {
+        return band < 0 ? std::string() : PbpDungeons::BandName(g_Pbp.dungeons.bands[size_t(band)]);
+    }
+
+    // The parties in the queue and the runs going on, by band; those whose
+    // dungeon is in none (playerbots' own, for a dungeon a player wanted) in
+    // `other`. Both count towards MaxRuns.
+    std::vector<uint32> RunsByBand(uint32& other)
+    {
+        std::vector<uint32> runs(g_Pbp.dungeons.bands.size(), 0);
+        other = 0;
+        auto add = [&](uint32 lfgDungeon)
+        {
+            int const band = DungeonBand(lfgDungeon);
+            if (band >= 0)
+                ++runs[size_t(band)];
+            else
+                ++other;
+        };
+        for (Queued const& q : g_queued)
+            add(q.dungeons.empty() ? 0 : *q.dungeons.begin());
+        for (auto const& [key, r] : g_runs)
+            add(r.lfgDungeon);
+        return runs;
+    }
+
+    // Why the last look found no party in a band, by band: "" when it found
+    // one (or has not looked at that band yet).
+    std::vector<std::string> g_bandWhy;
+
+    std::string ShortOf(uint32 const (&n)[3])
+    {
+        return "short of a tank " + std::to_string(n[0]) + ", a healer " + std::to_string(n[1]) + ", damage " +
+               std::to_string(n[2]);
+    }
+
     std::string What(PbpLfgDungeon const& d, uint32 quests)
     {
-        if (!quests)
-            return d.name;
-        return d.name + ", for " + std::to_string(quests) + (quests == 1 ? " quest" : " quests");
+        std::string out = d.name;
+        if (int const band = DungeonBand(d.id); band >= 0)
+            out += " (" + BandText(band) + ")";
+        if (quests)
+            out += ", for " + std::to_string(quests) + (quests == 1 ? " quest" : " quests");
+        return out;
     }
 
     std::string g_lastPlan;   // what the last look for a party found, for .pbp dungeons
@@ -515,16 +570,22 @@ namespace
         }
 
         // Every dungeon and side there is a party for, those with the most
-        // quest holders first (a shuffle first, so equals take turns).
+        // quest holders first (a shuffle first, so equals take turns). With
+        // level bands, a dungeon in none of them is not gone to.
+        bool const banded = !s.bands.empty();
         struct Option
         {
             PbpLfgDungeon const* dungeon = nullptr;
             TeamId team = TEAM_NEUTRAL;
             uint32 holders = 0;
+            int band = -1;
         };
         std::vector<Option> options;
         for (PbpLfgDungeon const& d : PbpDungeons_LfgDungeons())
         {
+            int const band = banded ? DungeonBand(d.id) : -1;
+            if (banded && band < 0)
+                continue;
             if (auto luck = g_luck.find(d.id); luck != g_luck.end() && now < luck->second.avoidUntil)
                 continue;
             for (TeamId team : { TEAM_ALLIANCE, TEAM_HORDE })
@@ -535,41 +596,71 @@ namespace
                         ++holders;
                 if (s.questRequired && !holders)
                     continue;
-                options.push_back({ &d, team, holders });
+                options.push_back({ &d, team, holders, band });
             }
         }
         std::shuffle(options.begin(), options.end(), Rng());
         std::stable_sort(options.begin(), options.end(),
                          [](Option const& a, Option const& b) { return a.holders > b.holders; });
 
+        // The bands in the order a free place is offered to them: the one
+        // furthest under its share first, and on down while a band can make no
+        // party (PbpDungeons::BandOrder). Without bands, one band of them all.
+        std::vector<int> bandOrder;
+        if (banded)
+        {
+            uint32 other = 0;
+            for (size_t band : PbpDungeons::BandOrder(RunsByBand(other), s.bandShares))
+                bandOrder.push_back(int(band));
+            g_bandWhy.resize(s.bands.size());
+        }
+        else
+            bandOrder.push_back(-1);
+
         // Why no party, where there is none: the role it is short of.
         uint32 shortOf[3] = { 0, 0, 0 };
-        for (Option const& o : options)
+        for (int band : bandOrder)
         {
-            uint32 quests = 0;
-            uint32 roles[3] = { 0, 0, 0 };
-            std::vector<uint64> const party = PartyFor(pool, o.team, *o.dungeon, s.questRequired, quests, &roles);
-            if (party.empty())
+            uint32 bandShort[3] = { 0, 0, 0 };
+            uint32 bandOptions = 0;
+            for (Option const& o : options)
             {
-                ++shortOf[!roles[0] ? 0 : !roles[1] ? 1 : 2];
-                continue;
+                if (o.band != band)
+                    continue;
+                ++bandOptions;
+                uint32 quests = 0;
+                uint32 roles[3] = { 0, 0, 0 };
+                std::vector<uint64> const party = PartyFor(pool, o.team, *o.dungeon, s.questRequired, quests, &roles);
+                if (party.empty())
+                {
+                    uint8 const role = !roles[0] ? 0 : !roles[1] ? 1 : 2;
+                    ++shortOf[role];
+                    ++bandShort[role];
+                    continue;
+                }
+                std::string why;
+                if (Queue(party, { o.dungeon->id }, What(*o.dungeon, quests), now, why))
+                {
+                    if (band >= 0)
+                        g_bandWhy[size_t(band)].clear();
+                    g_lastPlan = "queued " + What(*o.dungeon, quests);
+                    return;
+                }
+                if (g_PbpDebug)
+                    LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: no queue for {}: {}.",
+                             o.dungeon->name, why);
             }
-            std::string why;
-            if (Queue(party, { o.dungeon->id }, What(*o.dungeon, quests), now, why))
-            {
-                g_lastPlan = "queued " + What(*o.dungeon, quests);
-                return;
-            }
-            if (g_PbpDebug)
-                LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: no queue for {}: {}.",
-                         o.dungeon->name, why);
+            if (band >= 0)
+                g_bandWhy[size_t(band)] =
+                    bandOptions ? "no party, " + ShortOf(bandShort)
+                                : s.questRequired ? "nobody free holds a quest for its dungeons"
+                                                  : "none of its dungeons to go to just now";
         }
         g_lastPlan = std::to_string(pool.size()) + " bots free to go, " + std::to_string(holding) +
                      " of them holding dungeon quests; no party" +
                      (options.empty() ? std::string(": no dungeon anyone holds a quest for")
-                                      : " for " + std::to_string(options.size()) + " dungeon/side pairs (short of a "
-                                        "tank " + std::to_string(shortOf[0]) + ", a healer " +
-                                        std::to_string(shortOf[1]) + ", damage " + std::to_string(shortOf[2]) + ")");
+                                      : " for " + std::to_string(options.size()) + " dungeon/side pairs (" +
+                                        ShortOf(shortOf) + ")");
     }
 
     // ---- the queue -----------------------------------------------------------------------
@@ -1496,6 +1587,23 @@ std::vector<std::string> PbpDungeons_Status()
 
     if (!plan.empty())
         out.push_back(plan);
+    if (!s.bands.empty())
+    {
+        uint32 other = 0;
+        std::vector<uint32> const runs = RunsByBand(other);
+        std::string line;
+        for (size_t i = 0; i < s.bands.size(); ++i)
+        {
+            uint32 const share = i < s.bandShares.size() ? s.bandShares[i] : 1;
+            line += (line.empty() ? "" : ", ") + PbpDungeons::BandName(s.bands[i]) + " " + std::to_string(runs[i]) +
+                    "/" + std::to_string(share);
+            if (runs[i] < share && i < g_bandWhy.size() && !g_bandWhy[i].empty())
+                line += " (" + g_bandWhy[i] + ")";
+        }
+        if (other)
+            line += "; " + std::to_string(other) + " in no band";
+        out.push_back("  By level, now/share: " + line + ". .pbp dungeons bands lists them.");
+    }
     for (Queued const& q : g_queued)
     {
         std::string names;
@@ -1510,7 +1618,8 @@ std::vector<std::string> PbpDungeons_Status()
     }
     for (auto const& [key, r] : g_runs)
     {
-        std::string line = "  " + r.name + ": ";
+        int const band = DungeonBand(r.lfgDungeon);
+        std::string line = "  " + r.name + (band >= 0 ? " (" + BandText(band) + ")" : std::string()) + ": ";
         if (r.phase == Phase::Gathering)
             line += "getting everyone in (" + PbpDungeons::Duration(SecondsOf(now - r.since)) + ")";
         else if (r.phase == Phase::Leaving)
@@ -1567,6 +1676,44 @@ std::vector<std::string> PbpDungeons_Status()
                       std::to_string(s.questRuns) + " runs; " + std::to_string(q.walking) + " on their way now.");
     else
         out.push_back("  Dungeon quests: left to playerbots (BotDungeons.Quests = 0).");
+    return out;
+}
+
+std::vector<std::string> PbpDungeons_Bands()
+{
+    PbpBotDungeonSettings const& s = g_Pbp.dungeons;
+    if (s.bands.empty())
+        return { "|cff00ff00[Bot dungeons]|r no level bands (BotDungeons.LevelBands is empty): any dungeon, the "
+                 "ones the most free bots hold quests for first." };
+
+    // Each band's dungeons by level, then name.
+    std::vector<PbpLfgDungeon const*> dungeons;
+    for (PbpLfgDungeon const& d : PbpDungeons_LfgDungeons())
+        dungeons.push_back(&d);
+    std::sort(dungeons.begin(), dungeons.end(), [](PbpLfgDungeon const* a, PbpLfgDungeon const* b)
+    {
+        return BandLevel(*a) != BandLevel(*b) ? BandLevel(*a) < BandLevel(*b) : a->name < b->name;
+    });
+    std::vector<std::string> lists(s.bands.size());
+    std::string none;
+    for (PbpLfgDungeon const* d : dungeons)
+    {
+        int const band = DungeonBand(d->id);
+        std::string& list = band >= 0 ? lists[size_t(band)] : none;
+        list += (list.empty() ? "" : ", ") + d->name + " " + std::to_string(BandLevel(*d));
+    }
+
+    uint32 other = 0;
+    std::vector<uint32> const runs = RunsByBand(other);
+    std::vector<std::string> out;
+    out.push_back("|cff00ff00[Bot dungeons]|r by level -- each dungeon's is the one the dungeon finder recommends; "
+                  "runs now/share:");
+    for (size_t i = 0; i < s.bands.size(); ++i)
+        out.push_back("  " + PbpDungeons::BandName(s.bands[i]) + " (" + std::to_string(runs[i]) + "/" +
+                      std::to_string(i < s.bandShares.size() ? s.bandShares[i] : 1) + "): " +
+                      (lists[i].empty() ? std::string("no dungeon") : lists[i]));
+    if (!none.empty())
+        out.push_back("  In no band, so not gone to: " + none);
     return out;
 }
 
@@ -1687,6 +1834,11 @@ bool PbpDungeons_Busy(Player*)
 std::vector<std::string> PbpDungeons_Status()
 {
     return { "|cff00ff00[Bot dungeons]|r not in this build: it needs mod-dungeon-clear (DcBotRun.h)." };
+}
+
+std::vector<std::string> PbpDungeons_Bands()
+{
+    return PbpDungeons_Status();
 }
 
 std::string PbpDungeons_Send(std::string const&)

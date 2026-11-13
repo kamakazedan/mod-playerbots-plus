@@ -122,8 +122,9 @@ namespace
         {
             static ChatCommandTable dungeonsTable =
             {
-                { "",     HandleDungeons,     SEC_GAMEMASTER, Console::Yes },
-                { "send", HandleDungeonsSend, SEC_GAMEMASTER, Console::Yes },
+                { "",      HandleDungeons,      SEC_GAMEMASTER, Console::Yes },
+                { "bands", HandleDungeonsBands, SEC_GAMEMASTER, Console::Yes },
+                { "send",  HandleDungeonsSend,  SEC_GAMEMASTER, Console::Yes },
             };
             static ChatCommandTable pbpTable =
             {
@@ -280,6 +281,14 @@ namespace
         static bool HandleDungeons(ChatHandler* handler)
         {
             for (std::string const& line : PbpDungeons_Status())
+                handler->PSendSysMessage("{}", line);
+            return true;
+        }
+
+        // .pbp dungeons bands: the dungeons in each level band, and its runs.
+        static bool HandleDungeonsBands(ChatHandler* handler)
+        {
+            for (std::string const& line : PbpDungeons_Bands())
                 handler->PSendSysMessage("{}", line);
             return true;
         }

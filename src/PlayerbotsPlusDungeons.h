@@ -116,6 +116,10 @@ bool PbpDungeons_Busy(Player* bot);
 // .pbp dungeons: the lines to print.
 std::vector<std::string> PbpDungeons_Status();
 
+// .pbp dungeons bands: each level band's dungeons (BotDungeons.LevelBands),
+// with the runs it has now and its share. The lines to print.
+std::vector<std::string> PbpDungeons_Bands();
+
 // .pbp dungeons send <dungeon>: a party for that dungeon (its dungeon finder
 // id, or part of its name), queued now, whatever the checks that space runs
 // out would say, quest or no quest. The line to print.
