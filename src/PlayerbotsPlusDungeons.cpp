@@ -13,6 +13,17 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
+
+int64_t PbpDungeons_FreeMemoryMb()
+{
+    std::ifstream in("/proc/meminfo");
+    if (!in)
+        return -1;
+    std::string const text{ std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>() };
+    return PbpDungeons::MemAvailableMb(text);
+}
 
 #if PBP_BOT_DUNGEONS
 
@@ -552,6 +563,14 @@ namespace
                          " ms";
             return;
         }
+        // Each run is a dungeon instance more in memory. Unknown (no
+        // /proc/meminfo) is not short: startup says it is not checked.
+        if (s.minFreeMemoryMb)
+            if (int64 const freeMb = PbpDungeons_FreeMemoryMb(); freeMb >= 0 && freeMb < int64(s.minFreeMemoryMb))
+            {
+                g_lastPlan = "waiting: " + PbpDungeons::MemoryText(freeMb) + " of memory free";
+                return;
+            }
         if (!sLFGMgr->isOptionEnabled(lfg::LFG_OPTION_ENABLE_DUNGEON_FINDER))
         {
             g_lastPlan = "waiting: the dungeon finder is switched off";
@@ -1578,10 +1597,19 @@ std::vector<std::string> PbpDungeons_Status()
     std::string tick = std::to_string(sWorldUpdateTime.GetAverageUpdateTime()) + " ms";
     if (s.maxTickMs)
         tick += " (new parties up to " + std::to_string(s.maxTickMs) + " ms)";
+    std::string memory;
+    if (int64 const freeMb = PbpDungeons_FreeMemoryMb(); freeMb >= 0)
+    {
+        memory = "; memory free " + PbpDungeons::MemoryText(freeMb);
+        if (s.minFreeMemoryMb)
+            memory += " (new parties down to " + PbpDungeons::MemoryText(s.minFreeMemoryMb) + ")";
+    }
+    else if (s.minFreeMemoryMb)
+        memory = "; free memory not known here, so not checked";
     std::string const plan = g_lastPlan.empty() ? std::string() : "  Last look for a party: " + g_lastPlan + ".";
     out.push_back(std::string("|cff00ff00[Bot dungeons]|r ") + (on ? "on" : "off") + ": " +
                   std::to_string(g_queued.size()) + " in the queue, " + std::to_string(g_runs.size()) +
-                  " run(s) going on, up to " + std::to_string(s.maxRuns) + "; world tick " + tick + "; " +
+                  " run(s) going on, up to " + std::to_string(s.maxRuns) + "; world tick " + tick + memory + "; " +
                   (PlayerOnline() ? "players online" : "no player online") +
                   (s.questRequired ? "; only where a quest takes them" : "; quests or not"));
 

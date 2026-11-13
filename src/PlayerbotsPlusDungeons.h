@@ -116,6 +116,12 @@ bool PbpDungeons_Busy(Player* bot);
 // .pbp dungeons: the lines to print.
 std::vector<std::string> PbpDungeons_Status();
 
+// The memory this machine has available for new work, in MB: /proc/meminfo's
+// MemAvailable, which BotDungeons.MinFreeMemoryMB is held to. In a container
+// that is the host's (or the VM's) memory, not a limit set on the container.
+// -1 where there is no /proc/meminfo to read (not Linux).
+int64_t PbpDungeons_FreeMemoryMb();
+
 // .pbp dungeons bands: each level band's dungeons (BotDungeons.LevelBands),
 // with the runs it has now and its share. The lines to print.
 std::vector<std::string> PbpDungeons_Bands();

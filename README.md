@@ -483,14 +483,17 @@ only in a build with
 - **Loose ends.** A bot that logs in inside a dungeon it's no longer grouped
   for (the server went down mid-run) is sent back out.
 
-New parties wait while nobody is playing: when the last player logs off,
-the parties still in the queue leave it and the runs going on finish, and
-nothing new starts until someone logs in. They also wait while the world
-tick averages over 200 ms; there are 5 at most at once. `.pbp dungeons` shows
-what's going on, including the tick and each level band's runs, and
-`.pbp dungeons bands` the dungeons in each band. `.pbp dungeons send <dungeon>`
-queues a party for a dungeon now, quest or no quest. Settings:
-`PlayerbotsPlus.BotDungeons.*`.
+New parties wait while nobody is playing: when the last player logs off, the
+parties still in the queue leave it and the runs going on finish, and nothing
+new starts until someone logs in. They also wait while the world tick averages
+over 200 ms, and while the machine has less than 1 GB of memory available
+(`MinFreeMemoryMB`, read from `/proc/meminfo`): each run is a dungeon instance
+more in memory, and the tick says nothing of that until the machine runs out.
+There are 5 at most at once. `.pbp dungeons` shows what's going on, including
+the tick, the memory free and each level band's runs, and
+`.pbp dungeons bands` the dungeons in each band.
+`.pbp dungeons send <dungeon>` queues a party for a dungeon now, quest or no
+quest. Settings: `PlayerbotsPlus.BotDungeons.*`.
 
 ## With other modules
 
@@ -564,7 +567,7 @@ module at startup if the updater is off.
 | `.pbp status` | What it's doing: the auction house, hangouts (and how full each city is), stuck bots, fires, room to stand, revives, marks, pets, companions, duels, muted lines and the ledger |
 | `.pbp economy [days]` | The random bots' economy over the last days (7 unless you say) |
 | `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
-| `.pbp dungeons` | Bot dungeons: parties in the queue, runs going on, each level band's runs, recent results, the world tick, dungeon quests |
+| `.pbp dungeons` | Bot dungeons: parties in the queue, runs going on, each level band's runs, recent results, the world tick, the memory free, dungeon quests |
 | `.pbp dungeons bands` | The dungeons in each level band, with the runs each band has and its share |
 | `.pbp dungeons send <dungeon>` | Queues a party of bots for that dungeon now (its dungeon finder id, or part of its name) |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |

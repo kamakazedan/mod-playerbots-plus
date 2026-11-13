@@ -72,6 +72,7 @@ struct PbpBotDungeonSettings
     uint32_t checkSeconds         = 30;      // the planner looks for a party this often
     uint32_t maxRuns              = 5;       // parties in the queue and runs going on, together
     uint32_t maxTickMs            = 200;     // no new party while the world tick averages more; 0: no check
+    uint32_t minFreeMemoryMb      = 1024;    // ...nor while the machine has less memory available; 0: no check
     bool     needPlayerOnline     = true;    // ...nor while no player is online
     bool     questRequired        = true;    // a party only goes where one of it holds a quest
     uint32_t aloneMinutes         = 2;       // queued each alone this long (a player may be matched in), then as a party

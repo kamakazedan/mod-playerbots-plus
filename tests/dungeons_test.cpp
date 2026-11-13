@@ -227,6 +227,41 @@ int main()
         EqS("ten places, 40-49 lent out", Ids32(runs), "1,1,1,0,1,1,5");
         --runs[6];
         EqS("a place frees: 40-49 first", std::to_string(BandOrder(runs, shares)[0]), "3");
+
+        // Twenty places, two for 15-19 and three for each band after: every
+        // band ends up with its share.
+        std::vector<uint32_t> const twenty = ParseShares("2,3,3,3,3,3,3", 7, bad);
+        std::vector<uint32_t> filled(7, 0);
+        for (int place = 0; place < 20; ++place)
+            ++filled[BandOrder(filled, twenty)[0]];
+        EqS("twenty places: every share", Ids32(filled), "2,3,3,3,3,3,3");
+    }
+
+    // ---- free memory -------------------------------------------------------------------------
+    {
+        auto mb = [](std::string const& text) { return std::to_string(MemAvailableMb(text)); };
+        std::string const now = "MemTotal:       32617232 kB\n"
+                                "MemFree:         1048576 kB\n"
+                                "MemAvailable:   20185088 kB\n"
+                                "Buffers:          262144 kB\n"
+                                "Cached:         12582912 kB\n"
+                                "SwapCached:            0 kB\n";
+        EqS("MemAvailable", mb(now), "19712");
+        EqS("an old kernel: free, buffers and cache", mb("MemTotal: 8388608 kB\nMemFree: 1048576 kB\n"
+                                                         "Buffers: 524288 kB\nCached: 2097152 kB\n"),
+            "3584");
+        EqS("not the swap cache", mb("MemFree: 1024 kB\nSwapCached: 1048576 kB\n"), "1");
+        EqS("no last newline", mb("MemAvailable: 2048000 kB"), "2000");
+        EqS("neither", mb("MemTotal: 32617232 kB\n"), "-1");
+        EqS("nothing", mb(""), "-1");
+        EqS("not numbers", mb("MemAvailable: lots\n"), "-1");
+
+        EqS("under a GB", MemoryText(850), "850 MB");
+        EqS("a GB", MemoryText(1024), "1 GB");
+        EqS("four", MemoryText(4096), "4 GB");
+        EqS("and a half", MemoryText(1536), "1.5 GB");
+        EqS("a tenth", MemoryText(19712), "19.3 GB");
+        EqS("none", MemoryText(0), "0 MB");
     }
 
     std::printf("%d/%d passed\n", g_checks - g_fails, g_checks);

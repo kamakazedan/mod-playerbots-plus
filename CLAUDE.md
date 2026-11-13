@@ -133,6 +133,11 @@ otherwise. This module must still build and run without it; check both ways.
   `TargetLevel`, and the order bands are offered a place is
   `PbpDungeons::BandOrder` (pure, tested), from the runs and queued parties
   each band has (`RunsByBand`) against its share. Keep the choice there.
+- A new party waits while the world tick is slow (`MaxWorldTickMs`) or the
+  machine is short of memory (`MinFreeMemoryMB`): /proc/meminfo's
+  MemAvailable, parsed in the pure file and read by
+  `PbpDungeons_FreeMemoryMb`, -1 where there is none to read. Unknown is
+  never short: it holds nothing back, and startup says it is not checked.
 - Playerbots vetoes every dungeon finder offer with no player, self-bot or
   party in it (`PlayerbotsGlobalScript::CanCreateLfgProposal`), so five bots
   queued each on their own only ever go with a player. After `AloneMinutes`

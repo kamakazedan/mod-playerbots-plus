@@ -746,6 +746,7 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     d.checkSeconds        = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.CheckSeconds", 30), 5, 3600);
     d.maxRuns             = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.MaxRuns", 5), 100);
     d.maxTickMs           = U("PlayerbotsPlus.BotDungeons.MaxWorldTickMs", 200);
+    d.minFreeMemoryMb     = U("PlayerbotsPlus.BotDungeons.MinFreeMemoryMB", 1024);
     d.needPlayerOnline    = B("PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline", true);
     d.questRequired       = B("PlayerbotsPlus.BotDungeons.QuestRequired", true);
     d.queueMinutes        = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.QueueMinutes", 15), 1, 240);
@@ -835,13 +836,18 @@ void PlayerbotsPlus_LoadConfig(bool reload)
             bands += (bands.empty() ? "; by level " : ", ") + PbpDungeons::BandName(bd.bands[i]) + " x" +
                      std::to_string(i < bd.bandShares.size() ? bd.bandShares[i] : 1);
         LOG_INFO(where,
-                 "[Playerbots Plus] Bot dungeons on (up to {} at once{}{}{}; {}; dungeon quests {}).",
+                 "[Playerbots Plus] Bot dungeons on (up to {} at once{}{}{}{}; {}; dungeon quests {}).",
                  bd.maxRuns,
                  bd.maxTickMs ? ", while the world tick averages " + std::to_string(bd.maxTickMs) + " ms or less"
                               : std::string(),
+                 bd.minFreeMemoryMb ? ", while " + std::to_string(bd.minFreeMemoryMb) + " MB of memory or more is free"
+                                    : std::string(),
                  bd.needPlayerOnline ? ", only with a player online" : "", bands,
                  bd.questRequired ? "a party only goes where one of it holds a quest" : "quests or not",
                  bd.quests ? "fetched, kept, handed in" : "left to playerbots");
+        if (bd.minFreeMemoryMb && PbpDungeons_FreeMemoryMb() < 0)
+            LOG_WARN(where, "[Playerbots Plus] PlayerbotsPlus.BotDungeons.MinFreeMemoryMB is set, but there is no "
+                            "/proc/meminfo to read here: new parties do not wait for memory.");
     }
     else
         LOG_INFO(where, "[Playerbots Plus] Bot dungeons off.");

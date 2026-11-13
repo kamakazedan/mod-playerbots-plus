@@ -250,4 +250,57 @@ namespace PbpDungeons
         });
         return order;
     }
+
+    int64_t MemAvailableMb(std::string const& meminfo)
+    {
+        // "MemAvailable:   20123456 kB": the name, then the number of kB.
+        int64_t available = -1;
+        int64_t free = -1;
+        int64_t buffers = 0;
+        int64_t cached = 0;
+        size_t at = 0;
+        while (at < meminfo.size())
+        {
+            size_t const end = std::min(meminfo.find('\n', at), meminfo.size());
+            std::string const line = meminfo.substr(at, end - at);
+            at = end + 1;
+
+            size_t const colon = line.find(':');
+            if (colon == std::string::npos)
+                continue;
+            size_t digit = line.find_first_not_of(" \t", colon + 1);
+            if (digit == std::string::npos || !std::isdigit(static_cast<unsigned char>(line[digit])))
+                continue;
+            int64_t kb = 0;
+            for (; digit < line.size() && std::isdigit(static_cast<unsigned char>(line[digit])); ++digit)
+                if (kb < (int64_t(1) << 50))   // past a petabyte is not a real figure
+                    kb = kb * 10 + (line[digit] - '0');
+
+            std::string const name = line.substr(0, colon);
+            if (name == "MemAvailable")
+                available = kb;
+            else if (name == "MemFree")
+                free = kb;
+            else if (name == "Buffers")
+                buffers = kb;
+            else if (name == "Cached")
+                cached = kb;
+        }
+        if (available >= 0)
+            return available / 1024;
+        if (free >= 0)
+            return (free + buffers + cached) / 1024;
+        return -1;
+    }
+
+    std::string MemoryText(int64_t mb)
+    {
+        if (mb < 1024)
+            return std::to_string(mb) + " MB";
+        int64_t const tenths = (mb * 10 + 512) / 1024;
+        std::string out = std::to_string(tenths / 10);
+        if (tenths % 10)
+            out += "." + std::to_string(tenths % 10);
+        return out + " GB";
+    }
 }

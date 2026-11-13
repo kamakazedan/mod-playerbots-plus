@@ -110,6 +110,18 @@ namespace PbpDungeons
     // up with its share; a band that cannot make a party just then is passed
     // over, and the next one in the order has its place until a run ends.
     std::vector<size_t> BandOrder(std::vector<uint32_t> const& runs, std::vector<uint32_t> const& shares);
+
+    // ---- free memory (BotDungeons.MinFreeMemoryMB) -------------------------------------
+
+    // The memory available for new work, in MB, from the text of
+    // /proc/meminfo: its MemAvailable line, the kernel's own estimate, which
+    // counts the file cache it can let go of as available. From a kernel too
+    // old to have one (before 3.14), MemFree + Buffers + Cached. -1 when the
+    // text has neither.
+    int64_t MemAvailableMb(std::string const& meminfo);
+
+    // "850 MB", "4 GB", "19.2 GB" (a GB is 1024 MB, as /proc/meminfo counts).
+    std::string MemoryText(int64_t mb);
 }
 
 #endif // PLAYERBOTS_PLUS_DUNGEONS_TEXT_H

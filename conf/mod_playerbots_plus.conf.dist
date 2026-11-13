@@ -425,6 +425,20 @@ PlayerbotsPlus.BotDungeons.CheckSeconds = 30
 PlayerbotsPlus.BotDungeons.MaxRuns = 5
 PlayerbotsPlus.BotDungeons.MaxWorldTickMs = 200
 
+#    PlayerbotsPlus.BotDungeons.MinFreeMemoryMB
+#        No new party while the machine has less memory than this available
+#        for new work, in MB (0: no such check). Each run is a dungeon
+#        instance more in memory; the world tick says nothing of that until
+#        the machine runs out, and then the kernel stops the biggest process,
+#        the worldserver. Read from /proc/meminfo's MemAvailable, which counts
+#        the file cache the kernel can let go of as free (a VM's own memory
+#        graph may count it as used). In a container that is the host's or
+#        the VM's memory, not a limit set on the container. Runs going on
+#        carry on. Where there is no /proc/meminfo (not Linux) it is not
+#        checked, and startup says so. .pbp dungeons shows the memory free.
+#        Default: 1024
+PlayerbotsPlus.BotDungeons.MinFreeMemoryMB = 1024
+
 #    PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline
 #        No new party while nobody is playing: when the last player logs off,
 #        the parties still waiting in the queue leave it, and the runs going
