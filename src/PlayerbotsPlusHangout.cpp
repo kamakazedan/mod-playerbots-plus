@@ -353,7 +353,7 @@ namespace
     // enough over the zone line (the gates, from inside the city).
     bool Watched(const PbpHangoutSpot& s, uint32_t zone)
     {
-        return g_watched.count(WatchKey(s.map, zone)) || RealPlayerNear(s.map, s.x, s.y, s.z, 250.0f);
+        return g_watched.contains(WatchKey(s.map, zone)) || RealPlayerNear(s.map, s.x, s.y, s.z, 250.0f);
     }
 
     // In the spot's zone -- or, for one outside a city's gates, near it from
@@ -726,7 +726,7 @@ namespace
     // ---- bots fetched from elsewhere (Hangout.BringIn) --------------------------
 
     bool StillFree(Player* bot, const Visit& v);
-    void Arrived(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now);
+    void Arrived(Player* bot, PlayerbotAI* ai, Visit& v, Clock::time_point now);
 
     // A bot that may be fetched from wherever it is, for this spot: one of
     // playerbots' random bots, on its own, wanted by nobody, of the city's
@@ -1019,7 +1019,7 @@ namespace
                 Player* bot = fetchable[i];
                 fetchable[i] = fetchable.back();
                 fetchable.pop_back();
-                if (g_visits.count(bot->GetGUID().GetRawValue()))
+                if (g_visits.contains(bot->GetGUID().GetRawValue()))
                     continue;   // just sent to a spot in its own town
                 PlayerbotAI* ai = AiOf(bot);
                 if (!CanBringIn(bot, ai, *s, zone))
@@ -1077,7 +1077,7 @@ namespace
                 continue;
             if (fetching && !bot->GetTransport() && bot->GetMap() && !bot->GetMap()->Instanceable() &&
                 !bot->IsFlying() && !bot->HasUnitMovementFlag(MOVEMENTFLAG_FLYING) &&
-                !g_visits.count(bot->GetGUID().GetRawValue()))
+                !g_visits.contains(bot->GetGUID().GetRawValue()))
             {
                 auto cool = g_cooldown.find(bot->GetGUID().GetRawValue());
                 if (cool == g_cooldown.end() || now >= cool->second)
@@ -1105,7 +1105,7 @@ namespace
                 continue;
 
             const uint64_t raw = bot->GetGUID().GetRawValue();
-            if (g_visits.count(raw))
+            if (g_visits.contains(raw))
                 continue;
             auto cool = g_cooldown.find(raw);
             if (cool != g_cooldown.end() && now < cool->second)
@@ -1146,8 +1146,6 @@ namespace
     {
         return !Wanted(bot) && bot->GetMapId() == v.map && !bot->IsInFlight() && !bot->GetVehicle();
     }
-
-    void Arrived(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now);
 
     // On its way. False: it is not going there after all.
     bool Travel(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
@@ -1713,7 +1711,7 @@ void PbpHangout_MakeRoom(const std::string& spotKey, uint32_t count, const std::
 
 bool PbpHangout_Has(Player* bot)
 {
-    return bot && !g_visits.empty() && g_visits.count(bot->GetGUID().GetRawValue()) != 0;
+    return bot && !g_visits.empty() && g_visits.contains(bot->GetGUID().GetRawValue());
 }
 
 bool PbpHangout_SettledAt(Player* bot, const std::string& spotKey)
@@ -1781,7 +1779,7 @@ std::vector<PbpHangoutCity> PbpHangout_Cities()
         PbpHangoutCity& c = cities[at->second];
         c.room += RoomAt(s);
         c.share += s.capacity;
-        c.full += g_full.count(s.key) ? 1 : 0;
+        c.full += g_full.contains(s.key) ? 1 : 0;
         bySpot[s.key] = at->second;
     }
     for (const auto& [guid, v] : g_visits)

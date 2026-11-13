@@ -91,7 +91,7 @@ namespace
         if (!PbpSplitErrorLine(line, names, text))
             return {};
         for (std::string const& name : names)
-            if (!bots.names.count(name))
+            if (!bots.names.contains(name))
                 return {};
         return text;
     }
@@ -171,7 +171,7 @@ bool PbpMuteScript::CanPacketSend(WorldSession* session, WorldPacket const& pack
         return true;
 
     const std::shared_ptr<const Snapshot> snap = Current();
-    if (!snap->enable || (!system && !snap->bots.guids.count(packet.read<uint64>(5))))
+    if (!snap->enable || (!system && !snap->bots.guids.contains(packet.read<uint64>(5))))
         return true;
 
     const char* text = reinterpret_cast<const char*>(packet.contents() + kTextAt);

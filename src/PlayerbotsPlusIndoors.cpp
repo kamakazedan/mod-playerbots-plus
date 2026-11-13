@@ -114,7 +114,7 @@ void PbpIndoors_Update(uint32_t diff)
     }
     // Got off, outside again, or gone: forgotten.
     for (auto it = g_since.begin(); it != g_since.end();)
-        it = still.count(it->first) ? std::next(it) : g_since.erase(it);
+        it = still.contains(it->first) ? std::next(it) : g_since.erase(it);
 }
 
 PbpIndoorsStats PbpIndoors_GetStats()

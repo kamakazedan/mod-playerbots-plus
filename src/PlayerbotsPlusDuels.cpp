@@ -287,7 +287,7 @@ namespace
         {
             // (Its ground has to be loaded to find them a place there: the
             // crowd at the gates keeps it so.)
-            if (!s.capacity || s.map != p->GetMapId() || !DuelSpot(s.key) || g_noDuels.count(s.key) ||
+            if (!s.capacity || s.map != p->GetMapId() || !DuelSpot(s.key) || g_noDuels.contains(s.key) ||
                 !p->GetMap()->IsGridLoaded(s.x, s.y))
                 continue;
             const float d = p->GetExactDist2d(s.x, s.y);

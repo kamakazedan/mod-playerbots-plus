@@ -176,7 +176,7 @@ namespace
         {
             if (relations)
                 for (auto const& [entry, quest] : *relations)
-                    if (g_quests.count(quest))
+                    if (g_quests.contains(quest))
                         out[entry].push_back(quest);
         };
         collect(sObjectMgr->GetCreatureQuestRelationMap(), gives);
@@ -207,7 +207,7 @@ namespace
             if (!outdoors(data.mapid, data.phaseMask))
                 continue;
             for (uint32 entry : { data.id, data.id2, data.id3 })
-                if (entry && (gives.count(entry) || takes.count(entry)))
+                if (entry && (gives.contains(entry) || takes.contains(entry)))
                 {
                     CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(entry);
                     place({ data.mapid, data.posX, data.posY, data.posZ, entry, false, t ? t->faction : 0u }, gives,
@@ -215,7 +215,7 @@ namespace
                 }
         }
         for (auto const& [spawn, data] : sObjectMgr->GetAllGOData())
-            if (outdoors(data.mapid, data.phaseMask) && (goGives.count(data.id) || goTakes.count(data.id)))
+            if (outdoors(data.mapid, data.phaseMask) && (goGives.contains(data.id) || goTakes.contains(data.id)))
                 place({ data.mapid, data.posX, data.posY, data.posZ, data.id, true, 0u }, goGives, goTakes);
 
         LOG_INFO("module.playerbotsplus",
@@ -299,7 +299,7 @@ namespace
     bool Unreached(Player* bot, Spot const& spot)
     {
         auto it = g_unreached.find(bot->GetGUID().GetRawValue());
-        return it != g_unreached.end() && it->second.count(SpotKey(spot));
+        return it != g_unreached.end() && it->second.contains(SpotKey(spot));
     }
 
     uint32 GreyFor(Player* bot)
@@ -316,7 +316,7 @@ namespace
             return false;
         if (bot->GetQuestStatus(q.id) != QUEST_STATUS_NONE)
             return false;
-        if (auto it = g_gaveUp.find(bot->GetGUID().GetRawValue()); it != g_gaveUp.end() && it->second.count(q.id))
+        if (auto it = g_gaveUp.find(bot->GetGUID().GetRawValue()); it != g_gaveUp.end() && it->second.contains(q.id))
             return false;
         bool fits = false;
         for (uint32 lfg : q.lfg)
@@ -639,7 +639,7 @@ namespace
             QuestStatus const status = bot->GetQuestStatus(id);
             PbpDungeons::LogEntry e;
             e.quest = id;
-            e.keep = !quest || g_quests.count(id) || status == QUEST_STATUS_COMPLETE || id == doing;
+            e.keep = !quest || g_quests.contains(id) || status == QUEST_STATUS_COMPLETE || id == doing;
             e.failed = status == QUEST_STATUS_FAILED;
             e.grey = quest && PbpDungeons::Grey(quest->GetQuestLevel(), grey);
             e.otherZone = quest && quest->GetZoneOrSort() > 0 && quest->GetZoneOrSort() != zone;
@@ -715,7 +715,7 @@ namespace
         for (auto it = sRandomPlayerbotMgr.GetPlayerBotsBegin(); it != sRandomPlayerbotMgr.GetPlayerBotsEnd(); ++it)
         {
             Player* bot = it->second;
-            if (!bot || bot->GetLevel() < 10 || g_walks.count(bot->GetGUID().GetRawValue()))
+            if (!bot || bot->GetLevel() < 10 || g_walks.contains(bot->GetGUID().GetRawValue()))
                 continue;
             auto const looked = g_lookedAt.find(bot->GetGUID().GetRawValue());
             if (looked != g_lookedAt.end() && now - looked->second < std::chrono::minutes(s.questLookMinutes))
@@ -843,7 +843,7 @@ void PbpDungeonQuests_RunEnded(Player* bot, uint32_t lfgDungeon, std::vector<uin
 
 bool PbpDungeonQuests_Walking(Player* bot)
 {
-    return bot && g_walks.count(bot->GetGUID().GetRawValue());
+    return bot && g_walks.contains(bot->GetGUID().GetRawValue());
 }
 
 void PbpDungeonQuests_Update(uint32_t diff)

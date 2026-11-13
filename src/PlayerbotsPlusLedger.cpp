@@ -338,7 +338,7 @@ namespace
         if (it != g_who.end())
             return it->second;
         Who who = Who::Player;
-        if (Cfg().auctionBots.count(guid.GetCounter()))
+        if (Cfg().auctionBots.contains(guid.GetCounter()))
             who = Who::AuctionBot;
         else if (RandomAccount(sCharacterCache->GetCharacterAccountIdByGuid(guid)))
             who = Who::Bot;

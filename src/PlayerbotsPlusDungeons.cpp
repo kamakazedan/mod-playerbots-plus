@@ -857,7 +857,7 @@ namespace
     void TakeOn(Group* group, Clock::time_point now)
     {
         uint64 const key = group->GetGUID().GetRawValue();
-        if (g_runs.count(key) || !group->isLFGGroup() || group->isRaidGroup() || SomeonePlaying(group) ||
+        if (g_runs.contains(key) || !group->isLFGGroup() || group->isRaidGroup() || SomeonePlaying(group) ||
             !AllRandomBots(group))
             return;
         uint32 const dungeon = sLFGMgr->GetDungeon(group->GetGUID());
@@ -1107,7 +1107,7 @@ namespace
         std::lock_guard<std::mutex> lock(g_keepMutex);
         g_keepIn.swap(keep);
         for (auto it = g_keptSaid.begin(); it != g_keptSaid.end();)
-            it = g_keepIn.count(it->first) ? std::next(it) : g_keptSaid.erase(it);
+            it = g_keepIn.contains(it->first) ? std::next(it) : g_keptSaid.erase(it);
     }
 
     // Before the run's own end takes them out of the dungeon.
@@ -1341,7 +1341,7 @@ namespace
             Map* map = bot->GetMap();
             if (Group* group = bot->GetGroup())
             {
-                if (group->isLFGGroup() && !g_runs.count(group->GetGUID().GetRawValue()) && map &&
+                if (group->isLFGGroup() && !g_runs.contains(group->GetGUID().GetRawValue()) && map &&
                     map->IsDungeon() && !map->IsRaid())
                     TakeOn(group, now);
                 continue;
@@ -1368,7 +1368,7 @@ namespace
                      bot->GetName(), map->GetMapName());
         }
         for (auto it = g_strays.begin(); it != g_strays.end();)
-            it = stray.count(it->first) ? std::next(it) : g_strays.erase(it);
+            it = stray.contains(it->first) ? std::next(it) : g_strays.erase(it);
     }
 
     PbpLfgDungeon const* FindDungeon(std::string const& which)
@@ -1470,7 +1470,7 @@ bool PbpDungeons_Busy(Player* bot)
     if (!bot)
         return false;
     if (Group* group = bot->GetGroup())
-        if (g_runs.count(group->GetGUID().GetRawValue()))
+        if (g_runs.contains(group->GetGUID().GetRawValue()))
             return true;
     for (Queued const& q : g_queued)
         if (std::find(q.bots.begin(), q.bots.end(), bot->GetGUID()) != q.bots.end())

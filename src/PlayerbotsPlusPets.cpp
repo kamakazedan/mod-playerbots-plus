@@ -186,7 +186,7 @@ namespace
             const uint32_t number = pet->GetCharmInfo()->GetPetNumber();
             // Still the name it came with: never one somebody gave it (playerbots'
             // own "rename pet" leaves the game's renamed flag alone).
-            if (!tmpl || !CameWithName(pet, tmpl) || g_leftAlone.count(number))
+            if (!tmpl || !CameWithName(pet, tmpl) || g_leftAlone.contains(number))
                 continue;
 
             if (Mix(number, 1) % 100 >= g_PetNameChance)
@@ -433,7 +433,7 @@ namespace
         if (guid.IsEmpty())
             return nullptr;
         Creature* critter = ObjectAccessor::GetCreature(*bot, guid);
-        if (!critter || !critter->IsSummon() || !g_ourSpells.count(critter->GetUInt32Value(UNIT_CREATED_BY_SPELL)))
+        if (!critter || !critter->IsSummon() || !g_ourSpells.contains(critter->GetUInt32Value(UNIT_CREATED_BY_SPELL)))
             return nullptr;
         return critter;
     }
@@ -469,7 +469,7 @@ namespace
     // (`watched`); one that has one earned the achievement long ago.
     bool GuildWouldHear(Player* bot, std::unordered_set<uint32_t> const& watched)
     {
-        if (!bot->GetGuildId() || !watched.count(bot->GetGuildId()))
+        if (!bot->GetGuildId() || !watched.contains(bot->GetGuildId()))
             return false;
         for (Companion const& c : g_catalog)
             if (bot->HasSpell(c.spell))

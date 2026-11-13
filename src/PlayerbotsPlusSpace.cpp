@@ -266,7 +266,7 @@ void PbpSpace_Update(uint32_t diff)
             candidates.push_back({ bot, ai, now - s.since });
     }
     for (auto it = g_still.begin(); it != g_still.end();)
-        it = looked.count(it->first) ? std::next(it) : g_still.erase(it);
+        it = looked.contains(it->first) ? std::next(it) : g_still.erase(it);
 
     // Of two on one spot, the one that got there last steps aside: newcomers first.
     std::sort(candidates.begin(), candidates.end(),
@@ -283,7 +283,7 @@ void PbpSpace_Update(uint32_t diff)
         uint32_t in = 0;
         for (Unit* u : near)
         {
-            if (u == bot || leaving.count(u))
+            if (u == bot || leaving.contains(u))
                 continue;
             const float room = RoomFor(u, g_SpaceDistance);
             if (room > 0.0f && bot->GetExactDist(u) < room)

@@ -219,9 +219,9 @@ std::vector<uint32_t> PbpShareHangoutPlaces(std::vector<PbpSpotShare> const& spo
     uint64_t written = 0;
     for (size_t i = 0; i < spots.size(); ++i)
     {
-        if (!weights.count(spots[i].city))
+        if (!weights.contains(spots[i].city))
             continue;
-        if (!members.count(spots[i].city))
+        if (!members.contains(spots[i].city))
             cities.push_back(spots[i].city);
         members[spots[i].city].push_back(i);
         written += spots[i].capacity;

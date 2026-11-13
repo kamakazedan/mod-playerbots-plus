@@ -258,7 +258,7 @@ namespace
         if (bot->HasRestFlag(REST_FLAG_IN_CITY))
             return true;
         auto const& zones = Cfg().extraZones;
-        return !zones.empty() && (zones.count(bot->GetZoneId()) || zones.count(bot->GetAreaId()));
+        return !zones.empty() && (zones.contains(bot->GetZoneId()) || zones.contains(bot->GetAreaId()));
     }
 
     bool WithRealPlayer(Player* bot)
@@ -407,7 +407,7 @@ namespace
             DEADLY_POISON, DEADLY_POISON_II, DEADLY_POISON_III, DEADLY_POISON_IV, DEADLY_POISON_V,
             DEADLY_POISON_VI, DEADLY_POISON_VII, DEADLY_POISON_VIII, DEADLY_POISON_IX,
         };
-        return kGiven.count(proto->ItemId) != 0;
+        return kGiven.contains(proto->ItemId);
     }
 
     // Anything a vendor sells: a bot that has one bought it there (food,
@@ -429,7 +429,7 @@ namespace
             LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} different items are sold by vendors: bots never "
                      "put those up.", sold.size());
         }
-        return sold.count(entry) != 0;
+        return sold.contains(entry);
     }
 
     // Only what a bot looted or made goes up: never its free supplies, never
@@ -695,7 +695,7 @@ namespace
         auto const& m = Cfg();
         const uint64_t self = bot->GetGUID().GetRawValue();
 
-        const uint32_t up = idx.perOwner.count(self) ? idx.perOwner[self] : 0;
+        const uint32_t up = idx.perOwner.contains(self) ? idx.perOwner[self] : 0;
         if (up >= m.maxAuctionsPerBot)
         {
             r.notes.push_back(fmt::format("has {} auctions up already", up));
@@ -925,7 +925,7 @@ namespace
             if (!auction)
                 continue;
             ItemTemplate const* proto = sObjectMgr->GetItemTemplate(auction->item_template);
-            if (!proto || (c.gear && slotsFilled.count(WornWhere(proto))))
+            if (!proto || (c.gear && slotsFilled.contains(WornWhere(proto))))
                 continue;
 
             const uint32_t entry  = auction->item_template;
