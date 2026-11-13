@@ -537,16 +537,20 @@ this builds on.
   that quest meanwhile is told to come along. Then it goes with whoever came.
   With mod-ollama-chat, the asks and answers are said in General in each
   bot's own words.
-- **Doing it.** The party meets where its leader is, the rest walking over,
-  and does the quest: the leader's questing goes to it, the others follow and
-  fight with it, elites and all. Then the next group quest of the zone two of
-  them hold, those without it leaving, and so on until they've none left
-  together. A quest done is never gone back to.
+- **Doing it.** The party meets where its leader is, the rest walking over
+  from wherever they are in the zone (15 minutes), and does the quest. The
+  leader goes for what the quest is for, the named elite or whatever drops
+  what it asks for: walks up to it, pulls it, and the rest follow and fight
+  it with them. When it isn't about they wait where it spawns, the way people
+  camp a named mob. Then the next group quest of the zone two of them hold,
+  those without it leaving, and so on until they've none left together. A
+  quest done is never gone back to.
 - **Failing.** A wipe, 10 minutes at the quest's place with nothing moving
-  forward, or 15 minutes on the way there without getting there, is a failed
-  try. After 3 the quest is dropped and not taken again. A bot nobody came for
-  in the hour tries it alone, as many times, and anyone who asks about it then
-  is told to come along.
+  forward (a fight with what it's for counts), or 15 minutes on the way there
+  without getting there, is a failed try, and the log says why. After 3 the
+  quest is dropped and not taken again. A bot nobody came for in the hour
+  tries it alone, as many times, and anyone who asks about it then is told to
+  come along.
 - **Handing in.** Done, each hands it in where it's taken back, and one gone
   grey is dropped.
 - **Staying together.** A party member isn't teleported away while the party

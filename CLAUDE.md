@@ -206,11 +206,18 @@ more suggested players). Built without mod-dungeon-clear too.
   leader, then `AddMember`), stripped of the wander strategies so they follow
   it. Playerbots finds no master in a group of bots (`FindNewMaster`), so
   nothing resets them; `ResetStrategies` gives them back after.
-- At it: the leader's `rpgInfo` is set to do the quest (`ChangeToDoQuest`)
-  and kept there; playerbots' questing looks for a quest's place only within
-  1500 yards, so from further it walks there first. The rest follow, and
-  playerbots lets a party that follows its leader fight elites
-  (`can fight elite`). The kill credit and quest drops are the game's.
+- At it: the leader goes for what the quest is for -- what it asks to be
+  killed, or what drops what it asks for (`GetCreatureQuestItemList`, read
+  once with the spawns: `targets`, `lairs`): walked up to in sight, pulled
+  (`AttackStart` on it) from 30 yards, its spawn camped when it is not about.
+  Not left to playerbots' targeting: it skips an elite while `can fight
+  elite` is false (anyone in the group with full bags to sell: `should
+  sell,can sell`) and any mob five levels up, and the first 26 parties left
+  to its questing finished none. Only with nothing known of where they stand
+  is the leader's `rpgInfo` set to do the quest (`ChangeToDoQuest`).
+  Playerbots' questing looks for a quest's place only within 1500 yards, so
+  from further the leader walks there first. The rest follow and fight what
+  attacks the party. The kill credit and quest drops are the game's.
 - One leaving a group of two breaks the group up (`Group::RemoveMember`
   disbands it): look the group up afresh after every removal.
 - A party member being taken away by playerbots' level-up teleport (the

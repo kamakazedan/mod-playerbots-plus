@@ -647,16 +647,22 @@ PlayerbotsPlus.BotDungeons.KeepLogFree = 3
 #       without it, it all happens without a word.
 #     - The party meets where its leader is, the rest walking over and joining
 #       it as they get there (MeetMinutes: whoever is not there by then is
-#       left out), and does the quest: the leader's questing goes to it, the
-#       others follow and fight with it, elites and all. Then every other
-#       group quest of the zone two of them hold, those without it leaving;
-#       then it breaks up, and they ask again only after CooldownMinutes. A
-#       quest done is never gone back to.
+#       left out, and does not come for one again for CooldownMinutes), and
+#       does the quest. The leader goes for what it is for -- what it asks to
+#       be killed, or what drops what it asks for: walks up to it when it is
+#       in sight and pulls it, the others following and fighting with it,
+#       elites and all; waits where it stands (its spawn) when it is not
+#       about, the way people camp a named one, trying the next where several
+#       stand; and leaves it to playerbots' questing where none is known.
+#       Then every other group quest of the zone two of them hold, those
+#       without it leaving; then it breaks up, and they ask again only after
+#       CooldownMinutes. A quest done is never gone back to.
 #     - A try fails when the party wipes, when nothing moves forward for
-#       NoProgressMinutes once it is at the quest's place, or when it is not
-#       there after WalkMinutes on its way. After Attempts failed tries the
-#       quest is let go, and not taken again (counted while the server is
-#       up).
+#       NoProgressMinutes once it is at the quest's place (fighting what it
+#       is for counts), or when it is not there after WalkMinutes on its way.
+#       The log says why, with what the leader could see of what it is for.
+#       After Attempts failed tries the quest is let go, and not taken again
+#       (counted while the server is up).
 #     - Nobody came at all: it tries it alone, as many tries, and anyone who
 #       asks about it then is told to come along.
 #     - Done, each hands it in where it is taken back: playerbots' questing
@@ -721,9 +727,10 @@ PlayerbotsPlus.GroupQuests.AsksPerMinute = 4
 
 #    PlayerbotsPlus.GroupQuests.MeetMinutes
 #        How long a party has to get together where its leader is (1-60
-#        minutes); whoever is not there by then is left out.
-#        Default: 5
-PlayerbotsPlus.GroupQuests.MeetMinutes = 5
+#        minutes); whoever is not there by then is left out. They come from
+#        anywhere in the zone, on foot as often as not.
+#        Default: 15
+PlayerbotsPlus.GroupQuests.MeetMinutes = 15
 
 #    PlayerbotsPlus.GroupQuests.Attempts
 #    PlayerbotsPlus.GroupQuests.NoProgressMinutes

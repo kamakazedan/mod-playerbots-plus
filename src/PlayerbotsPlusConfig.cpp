@@ -797,7 +797,7 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     g.askMinutes        = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.AskMinutes", 15), 1, 240);
     g.askForMinutes     = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.AskForMinutes", 60), 0, 1440);
     g.asksPerMinute     = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.AsksPerMinute", 4), 1, 60);
-    g.meetMinutes       = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.MeetMinutes", 5), 1, 60);
+    g.meetMinutes       = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.MeetMinutes", 15), 1, 60);
     g.attempts          = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.Attempts", 3), 1, 20);
     g.noProgressMinutes = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.NoProgressMinutes", 10), 2, 120);
     g.cooldownMinutes   = std::min<uint32_t>(U("PlayerbotsPlus.GroupQuests.CooldownMinutes", 30), 1440);

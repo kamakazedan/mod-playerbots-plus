@@ -8,10 +8,14 @@
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusUtil.h"
 
+#include "CellImpl.h"
 #include "Creature.h"
+#include "CreatureAI.h"
 #include "DBCStores.h"
 #include "Formulas.h"
 #include "GameObject.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "GroupMgr.h"
 #include "LFGMgr.h"
@@ -36,6 +40,7 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <list>
 #include <map>
 #include <mutex>
 #include <random>
@@ -97,7 +102,14 @@ namespace
         float areaX = 0.0f;        // the middle of its first objective's map marker
         float areaY = 0.0f;
         std::vector<Spot> enders;  // who takes it back, out in the world
+        std::vector<uint32> targets;   // what it asks to be killed, or what drops what it asks for
+        std::vector<Spot> lairs;       // ...where those stand, on its map
     };
+
+    bool IsTarget(GroupQuest const& q, uint32 entry)
+    {
+        return std::find(q.targets.begin(), q.targets.end(), entry) != q.targets.end();
+    }
 
     struct Giver
     {
@@ -248,17 +260,57 @@ namespace
             MapEntry const* entry = sMapStore.LookupEntry(map);
             return entry && !entry->Instanceable() && (phaseMask & 1);
         };
+        // What each is for: the creatures it asks to be killed, and those that
+        // drop what it asks for (the server's own quest item lists).
+        std::unordered_map<uint32, std::vector<uint32>> forKill, forItem;
+        for (auto const& [id, q] : g_quests)
+            if (Quest const* quest = sObjectMgr->GetQuestTemplate(id))
+            {
+                for (uint32 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+                    if (quest->RequiredNpcOrGo[i] > 0)
+                        forKill[uint32(quest->RequiredNpcOrGo[i])].push_back(id);
+                for (uint32 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+                    if (quest->RequiredItemId[i])
+                        forItem[quest->RequiredItemId[i]].push_back(id);
+            }
+        auto questsFor = [&](uint32 entry)
+        {
+            std::vector<uint32> ids;
+            if (auto it = forKill.find(entry); it != forKill.end())
+                ids = it->second;
+            if (CreatureQuestItemList const* items = sObjectMgr->GetCreatureQuestItemList(entry))
+                for (uint32 item : *items)
+                    if (auto it = forItem.find(item); it != forItem.end())
+                        ids.insert(ids.end(), it->second.begin(), it->second.end());
+            return ids;
+        };
+        std::unordered_map<uint32, std::vector<uint32>> targetOf;   // creature entry -> quests it is for
         for (auto const& [spawn, data] : sObjectMgr->GetAllCreatureData())
         {
             if (!outdoors(data.mapid, data.phaseMask))
                 continue;
             for (uint32 entry : { data.id, data.id2, data.id3 })
-                if (entry && (gives.contains(entry) || takes.contains(entry)))
+            {
+                if (!entry)
+                    continue;
+                if (gives.contains(entry) || takes.contains(entry))
                 {
                     CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(entry);
                     place({ data.mapid, data.posX, data.posY, data.posZ, entry, false, t ? t->faction : 0u }, gives,
                           takes);
                 }
+                auto known = targetOf.find(entry);
+                if (known == targetOf.end())
+                    known = targetOf.emplace(entry, questsFor(entry)).first;
+                for (uint32 id : known->second)
+                {
+                    GroupQuest& q = g_quests[id];
+                    if (!IsTarget(q, entry))
+                        q.targets.push_back(entry);
+                    if (data.mapid == q.map)
+                        q.lairs.push_back({ data.mapid, data.posX, data.posY, data.posZ, entry, false, 0u });
+                }
+            }
         }
         for (auto const& [spawn, data] : sObjectMgr->GetAllGOData())
             if (outdoors(data.mapid, data.phaseMask) && (goGives.contains(data.id) || goTakes.contains(data.id)))
@@ -786,6 +838,10 @@ namespace
         bool down = false;                    // everyone dead: that try failed, until they are up again
         bool walking = false;                 // the leader on its way to the quest's place, since walkSince
         Clock::time_point walkSince;
+        bool wentAlone = false;               // nobody came, and it said so: not again for this party
+        size_t lair = SIZE_MAX;               // the lair of what it is for it is waiting at, since lairSince
+        Clock::time_point lairSince;
+        std::vector<size_t> emptyLairs;       // ...waited at with nothing turning up: the next one is tried
         std::vector<uint32> done;             // quests it did or gave up on: not gone back to
         std::unordered_set<uint64> arrived;   // Meeting: got to the leader
     };
@@ -1028,11 +1084,18 @@ namespace
         p.phaseSince = p.progressAt = p.nextStrip = now;
         p.progress = Progress(p);
         p.down = p.walking = false;
+        p.lair = SIZE_MAX;
+        p.emptyLairs.clear();
         Player* leader = InWorld(p.leader);
         if (!leader)
             return;
         if (p.solo)
         {
+            // Once: one who came for it and never got there leaves it at it
+            // alone again, not starting over.
+            if (p.wentAlone)
+                return;
+            p.wentAlone = true;
             ++g_stats.solos;
             Raise(PlayerbotsPlus::BotEventType::GroupQuestSolo, leader, nullptr, p);
             LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: nobody came for {} in {} -- {} tries "
@@ -1155,10 +1218,11 @@ namespace
         bool const all = p.arrived.size() >= p.members.size();
         if (!all && now - p.phaseSince < std::chrono::minutes(Cfg().meetMinutes))
             return;
-        // Whoever is not there by now is left out.
+        // Whoever is not there by now is left out, and does not come for it
+        // again for a while.
         for (uint64 m : std::vector<uint64>(p.members))
-            if (!p.arrived.contains(m))
-                Leave(p, m, false, now);
+            if (m != p.leader && !p.arrived.contains(m))
+                Leave(p, m, true, now);
         if (p.members.size() >= 2 && GroupOf(p.group))
         {
             Begin(p, now);
@@ -1193,9 +1257,8 @@ namespace
                     LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: {} let {} go after {} tries.",
                              bot->GetName(), TitleOf(p.quest), Cfg().attempts);
                 }
-        if (g_PbpDebug)
-            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: a try at {} failed -- {}.",
-                     TitleOf(p.quest), why);
+        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: a try at {} in {} failed -- {}.",
+                 TitleOf(p.quest), Zone(p.zone), why);
     }
 
     // The one who holds the quest still, and leads: the party's lead passes
@@ -1266,6 +1329,119 @@ namespace
         auto q = g_quests.find(next);
         p.target = PbpGroupQuests::PartySize(q != g_quests.end() ? q->second.suggested : 0, Cfg().partySize);
         Begin(p, now);
+    }
+
+    constexpr float kSightRange = 100.0f;   // what it is for, looked for around the leader
+    constexpr float kPullRange  = 30.0f;    // ...and pulled from, in sight
+
+    // One of what a party is for -- what its quest asks to be killed, or what
+    // drops what it asks for -- alive, one the leader may fight, and nobody
+    // else's: not tagged by someone outside the party, not fighting them.
+    struct TargetCheck
+    {
+        Player const* leader = nullptr;
+        GroupQuest const* quest = nullptr;
+
+        bool operator()(Creature* c) const
+        {
+            if (!c->IsAlive() || !c->IsInWorld() || c->IsEvadingAttacks() || !IsTarget(*quest, c->GetEntry()) ||
+                !leader->IsWithinDist(c, kSightRange) || !leader->IsValidAttackTarget(c))
+                return false;
+            if (c->hasLootRecipient() && !c->isTappedBy(leader))
+                return false;
+            if (Unit* victim = c->GetVictim(); c->IsInCombat() && victim)
+            {
+                Player const* who = victim->GetCharmerOrOwnerPlayerOrPlayerItself();
+                if (!who || (who != leader && !leader->IsInSameGroupWith(who)))
+                    return false;
+            }
+            return true;
+        }
+    };
+
+    Creature* NearestTarget(Player* leader, GroupQuest const& q)
+    {
+        if (q.targets.empty())
+            return nullptr;
+        std::list<Creature*> near;
+        TargetCheck check{ leader, &q };
+        Acore::CreatureListSearcher<TargetCheck> searcher(leader, near, check);
+        Cell::VisitObjects(leader, searcher, kSightRange);
+        Creature* best = nullptr;
+        float bestDist = 0.0f;
+        for (Creature* c : near)
+            if (float const d = leader->GetExactDist(c); !best || d < bestDist)
+            {
+                best = c;
+                bestDist = d;
+            }
+        return best;
+    }
+
+    // Where the nearest of them stands, on the leader's map, but for those
+    // in `skip` (all of them once every one is). `index` gets which.
+    Spot const* NearestLair(Player* leader, GroupQuest const& q, std::vector<size_t> const& skip = {},
+                            size_t* index = nullptr)
+    {
+        Spot const* best = nullptr;
+        float bestDist = 0.0f;
+        for (int pass = 0; pass < 2 && !best; ++pass)
+            for (size_t i = 0; i < q.lairs.size(); ++i)
+            {
+                Spot const& lair = q.lairs[i];
+                if (lair.map != leader->GetMapId() ||
+                    (pass == 0 && std::find(skip.begin(), skip.end(), i) != skip.end()))
+                    continue;
+                if (float const d = leader->GetExactDist2d(lair.x, lair.y); !best || d < bestDist)
+                {
+                    best = &lair;
+                    bestDist = d;
+                    if (index)
+                        *index = i;
+                }
+            }
+        return best;
+    }
+
+    std::string CreatureName(uint32 entry)
+    {
+        CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(entry);
+        return t ? t->Name : "entry " + std::to_string(entry);
+    }
+
+    // How it stood when a try failed, for the log: where the leader was and
+    // what it could see of what it is for.
+    std::string Sighting(Player* leader, GroupQuest const& q)
+    {
+        if (!leader)
+            return "the leader is gone";
+        if (leader->GetMapId() == q.map && leader->GetExactDist2d(q.areaX, q.areaY) > kQuestReach)
+            return "the leader " + std::to_string(uint32(leader->GetExactDist2d(q.areaX, q.areaY))) +
+                   " yd from the place";
+        if (q.targets.empty())
+            return "nothing it is for is known (playerbots' questing went about it)";
+        if (Creature* c = NearestTarget(leader, q))
+            return c->GetName() + " " + std::to_string(uint32(leader->GetExactDist(c))) + " yd from the leader" +
+                   (leader->IsWithinLOSInMap(c) ? "" : ", out of sight");
+        std::string names;
+        for (size_t i = 0; i < q.targets.size() && i < 3; ++i)
+            names += (names.empty() ? "" : "/") + CreatureName(q.targets[i]);
+        Spot const* lair = NearestLair(leader, q);
+        return "no " + names + " alive within " + std::to_string(uint32(kSightRange)) + " yd" +
+               (lair ? " (the nearest lair " + std::to_string(uint32(leader->GetExactDist2d(lair->x, lair->y))) +
+                           " yd away)"
+                     : "");
+    }
+
+    // The leader pulls it, as one does with a shot from range: it comes for
+    // the party, and everyone fights what attacks them -- an elite too, which
+    // playerbots' own choice of a target skips while anyone in the group has
+    // full bags to sell.
+    void Pull(Player* leader, Creature* target)
+    {
+        leader->SetFacingToObject(target);
+        if (target->IsAIEnabled && target->AI())
+            target->AI()->AttackStart(leader);
     }
 
     void Questing(Party& p, Clock::time_point now)
@@ -1404,15 +1580,21 @@ namespace
             }
         }
 
-        // Moving forward: anyone's count of what it asks for went up.
+        // Moving forward: anyone's count of what it asks for went up, or
+        // someone is fighting what it is for.
         uint64 const progress = Progress(p);
-        if (progress > p.progress || far)
+        bool atIt = false;
+        for (uint64 m : p.members)
+            if (Player* bot = InWorld(m); bot && bot->IsInCombat())
+                if (Unit* victim = bot->GetVictim(); victim && victim->IsCreature() && IsTarget(q, victim->GetEntry()))
+                    atIt = true;
+        if (progress > p.progress || far || atIt)
             p.progressAt = now;
         p.progress = progress;
         if (now - p.progressAt >= std::chrono::minutes(Cfg().noProgressMinutes))
         {
             p.progressAt = now;
-            FailTry(p, "nothing moved forward");
+            FailTry(p, "nothing moved forward: " + Sighting(leader, q));
             if (leader->GetQuestStatus(p.quest) != QUEST_STATUS_INCOMPLETE)
             {
                 Raise(PlayerbotsPlus::BotEventType::GroupQuestGiveUp, leader, nullptr, p);
@@ -1436,8 +1618,58 @@ namespace
                     ai->rpgInfo.ChangeToGoCamp(WorldPosition(q.map, q.areaX, q.areaY, z));
                 }
             }
+            else if (Creature* target = NearestTarget(leader, q))
+            {
+                // There it is: pulled once in reach and in sight, walked up
+                // to until then. One already fighting the party is theirs to
+                // finish: the leader only goes over.
+                bool const inReach = leader->GetExactDist(target) <= kPullRange && leader->IsWithinLOSInMap(target);
+                if (inReach && !target->IsInCombat())
+                {
+                    if (g_PbpDebug)
+                        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: {} pulls {} for {}.",
+                                 leader->GetName(), target->GetName(), TitleOf(p.quest));
+                    Pull(leader, target);
+                    p.progressAt = now;
+                }
+                else if (!inReach && !GoingTo(ai, target->GetMapId(), target->GetPositionX(), target->GetPositionY(),
+                                              target->GetPositionZ(), 15.0f))
+                    ai->rpgInfo.ChangeToGoCamp(WorldPosition(target->GetMapId(), target->GetPositionX(),
+                                                             target->GetPositionY(), target->GetPositionZ()));
+            }
+            else if (size_t index = SIZE_MAX; Spot const* lair = NearestLair(leader, q, p.emptyLairs, &index))
+            {
+                // Nowhere about: to where it stands, and wait there for it,
+                // the way people camp a named one. Where several stand, a
+                // few minutes at one with nothing turning up and it is on to
+                // the next.
+                if (leader->GetExactDist2d(lair->x, lair->y) > 20.0f)
+                {
+                    p.lair = SIZE_MAX;
+                    if (!GoingTo(ai, lair->map, lair->x, lair->y, lair->z, 15.0f))
+                        ai->rpgInfo.ChangeToGoCamp(WorldPosition(lair->map, lair->x, lair->y, lair->z));
+                }
+                else
+                {
+                    if (p.lair != index)
+                    {
+                        p.lair = index;
+                        p.lairSince = now;
+                    }
+                    else if (q.lairs.size() > 1 && now - p.lairSince >= std::chrono::minutes(3))
+                    {
+                        if (p.emptyLairs.size() + 1 >= q.lairs.size())
+                            p.emptyLairs.clear();
+                        p.emptyLairs.push_back(index);
+                        p.lair = SIZE_MAX;
+                    }
+                    if (!std::holds_alternative<NewRpgInfo::Rest>(ai->rpgInfo.data))
+                        ai->rpgInfo.ChangeToRest();
+                }
+            }
             else
             {
+                // Nothing known of where they stand: playerbots' own questing.
                 auto const* doing = std::get_if<NewRpgInfo::DoQuest>(&ai->rpgInfo.data);
                 if (!doing || doing->questId != p.quest)
                     if (Quest const* quest = sObjectMgr->GetQuestTemplate(p.quest))

@@ -31,10 +31,15 @@
 //     GroupQuests.AskForMinutes, questing as ever in between, and anyone
 //     asking about it then joins it; then it goes with whoever came;
 //   * the party meets where its leader is (GroupQuests.MeetMinutes), and
-//     does the quest: the leader's questing goes to it, the others follow
-//     and fight with it. Then every group quest of the zone two of them
-//     hold, the rest leaving as theirs run out; then it breaks up. A quest
-//     done is never gone back to;
+//     does the quest. The leader goes for what it is for (what it asks to be
+//     killed, or what drops what it asks for, from the server's quest item
+//     lists): walks up to it in sight and pulls it, the others following
+//     and fighting with it, elites too -- playerbots' own choice of a target
+//     skips an elite unless everyone's bags have room; waits where it
+//     stands when it is not about; leaves it to playerbots' questing when
+//     nothing is known of where they stand. Then every group quest of the
+//     zone two of them hold, the rest leaving as theirs run out; then it
+//     breaks up. A quest done is never gone back to;
 //   * a try fails when the party wipes, when nothing moves forward for
 //     GroupQuests.NoProgressMinutes once it is at the quest's place, or when
 //     it is not there after GroupQuests.WalkMinutes on its way.
