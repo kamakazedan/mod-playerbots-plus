@@ -174,6 +174,18 @@ otherwise. This module must still build and run without it; check both ways.
 - Walks for quests use playerbots' own "go camp" (`rpgInfo.ChangeToGoCamp`),
   as hangouts do: hangouts leave a bot on its way to a camp alone, and these
   leave a hanging-out one alone (`PbpHangout_Has`).
+- With nobody free to heal, one who does the damage heals instead
+  (`HealerStepIn`, picked in the pure `PickParty`). From the core's
+  `MinDualSpecLevel` it heals on its second spec: dual spec learned as a
+  trainer teaches it (spells 63680 and 63624, what the core's gossip casts),
+  the spec made playerbots' premade healing one (`InitTalentsBySpecNo`, then
+  `InitGlyphs`), `ResetStrategies`. Below that, playerbots' healing combat
+  strategy for the class, put back every look while the run goes on
+  (playerbots resets strategies for its own reasons). Playerbots never puts a
+  random bot on its second spec itself (only a player's `talents switch 2`),
+  so a random bot with no master and no group found on it is put back on its
+  first (`OwnSpec`, from `Release` and the sweep): that covers a run that
+  ended some other way, and a restart.
 - Playerbots empties a quest log with fewer than two slots free, dropping
   first what one cannot do alone: every dungeon quest. Keeping
   `KeepLogFree` slots free (dropping what a player would first) is what keeps

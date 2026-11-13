@@ -26,6 +26,18 @@ namespace PbpDungeons
 
     char const* RoleName(Role role);   // "tank", "healer", "damage"
 
+    // Whether one who does the damage could heal instead (a priest, druid,
+    // shaman or paladin), and whether its gear is a caster's: a shadow
+    // priest's, a balance druid's or an elemental shaman's has the stats a
+    // healer wants, a retribution paladin's, an enhancement shaman's or a
+    // cat's does not.
+    enum class StepIn : uint8_t
+    {
+        No,
+        Melee,
+        Caster
+    };
+
     // A bot the planner could send.
     struct Candidate
     {
@@ -33,15 +45,20 @@ namespace PbpDungeons
         Role     role   = Role::Damage;
         uint32_t level  = 0;
         uint32_t quests = 0;      // unfinished quests it holds for this dungeon
+        StepIn   stepIn = StepIn::No;
     };
 
     // A party for one dungeon: a tank, a healer and three to do the damage.
     // Those holding quests for it go first (the more the better), then
-    // whoever's level is closest to `target`, then whoever came first. Empty
-    // when a role cannot be filled, or, with `needQuest`, when nobody in it
-    // holds a quest for the dungeon. The tank comes first in what is returned,
-    // then the healer.
-    std::vector<uint64_t> PickParty(std::vector<Candidate> const& candidates, uint32_t target, bool needQuest);
+    // whoever's level is closest to `target`, then whoever came first. With
+    // `stepIn` and nobody among them who heals, one who does the damage and
+    // could heal does (BotDungeons.HealerStepIn): a caster before the rest,
+    // then in the same order, and three others do the damage. Empty when a
+    // role cannot be filled, or, with `needQuest`, when nobody in it holds a
+    // quest for the dungeon. The tank comes first in what is returned, then
+    // the healer.
+    std::vector<uint64_t> PickParty(std::vector<Candidate> const& candidates, uint32_t target, bool needQuest,
+                                    bool stepIn = false);
 
     // A quest of `questLevel` (-1 for one that is always the player's own
     // level) has gone grey for a character whose grey level is `greyLevel`

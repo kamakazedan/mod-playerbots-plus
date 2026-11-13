@@ -444,6 +444,18 @@ only in a build with
   offers a group, they say yes straight away, even mid-fight: playerbots
   turns an offer down for a bot that's fighting or dead, and one no cancels
   it for everyone.
+- **Short of healers.** Few random bots heal, so a band often has a tank and
+  damage free but nobody to heal. Then one who does the damage and could heal
+  does (`HealerStepIn`): a priest, druid, shaman or paladin, never a tank, and
+  casters first (shadow, balance, elemental), since their gear has what a
+  healer wants. It queues as the healer, keeps its own gear, and heals whoever
+  it ends up with, a player matched in included. From level 40 (the game's
+  `MinDualSpecLevel`) it heals on a second spec (`HealerDualSpec`): it learns
+  dual spec if it hasn't, as a trainer teaches it (no gold asked), its second
+  spec is made playerbots' premade healing spec for its class, and it switches
+  over as it gets to the dungeon and back when it leaves the group. Below 40
+  it does its best: the healing spells it has, in the talents it has, under
+  playerbots' healing strategies.
 - **The run.** A group of bots the dungeon finder made, with no player in it,
   is taken on in its dungeon. Anyone left outside is brought in, playerbots'
   wander-about strategies (grind, rpg) come off for the run, and
@@ -470,11 +482,12 @@ only in a build with
   (no kill, no pack cleared, no fight going on, not getting closer to the next
   boss), when it's stuck on something for 2 minutes, or after 2 hours. A tank
   that falls through the floor is put back beside the party after 20 seconds.
-- **After.** Everyone is brought back to life and leaves the group, which takes
-  them back where they queued from. They're unbound from the dungeon and get
-  their usual strategies back. They queue again after a cooldown, a longer one
-  after a failure. A dungeon whose runs keep failing is left alone for a while.
-  A quest that 4 runs of its dungeon haven't finished is dropped, and so is one
+- **After.** Everyone is brought back to life and leaves the group, which
+  takes them back where they queued from. They're unbound from the dungeon and
+  get their usual strategies back, and one that healed on its second spec is
+  back on its first. They queue again after a cooldown, a longer one after a
+  failure. A dungeon whose runs keep failing is left alone for a while. A
+  quest that 4 runs of its dungeon haven't finished is dropped, and so is one
   that goes grey.
 - **Spread over the levels.** The runs are shared out by level band
   (`LevelBands`, by the level the dungeon finder recommends for each

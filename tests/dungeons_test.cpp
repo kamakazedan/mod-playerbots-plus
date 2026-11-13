@@ -99,6 +99,38 @@ int main()
                                                            20, false)),
             "1,3,6,4,5");
     }
+    {
+        // Nobody who heals: one who does the damage and could heal does
+        // (HealerStepIn), a caster before the rest, then in the usual order.
+        std::vector<C> pool = {
+            { 1, Role::Tank, 20, 0 },
+            { 2, Role::Damage, 20, 0, StepIn::Melee },    // a retribution paladin, at the level
+            { 3, Role::Damage, 20, 0 },                   // a rogue
+            { 4, Role::Damage, 24, 0, StepIn::Caster },   // a shadow priest, further off
+            { 5, Role::Damage, 21, 0 },
+            { 6, Role::Damage, 22, 0 },
+        };
+        True("no healer, no step-in: no party", PickParty(pool, 20, false).empty());
+        EqS("the caster heals, the rest do the damage", Ids(PickParty(pool, 20, false, true)), "1,4,2,3,5");
+        pool[3].stepIn = StepIn::No;
+        EqS("no caster: the best placed melee heals", Ids(PickParty(pool, 20, false, true)), "1,2,3,5,6");
+        pool[3].stepIn = StepIn::Caster;
+        pool.push_back({ 7, Role::Damage, 26, 2, StepIn::Caster });   // an elemental shaman holding two quests
+        EqS("between casters, the quest holder", Ids(PickParty(pool, 20, false, true)), "1,7,2,3,5");
+
+        pool.push_back({ 8, Role::Healer, 25, 0 });
+        EqS("someone who heals: they do", Ids(PickParty(pool, 20, false, true)), "1,8,7,2,3");
+
+        std::vector<C> four = { { 1, Role::Tank, 20, 0 }, { 2, Role::Damage, 20, 0, StepIn::Caster },
+                                { 3, Role::Damage, 20, 0 }, { 4, Role::Damage, 20, 0 } };
+        True("a step-in leaves too few to do the damage: no party", PickParty(four, 20, false, true).empty());
+        std::vector<C> none = { { 1, Role::Tank, 20, 0 }, { 2, Role::Damage, 20, 0 }, { 3, Role::Damage, 20, 0 },
+                                { 4, Role::Damage, 20, 0 }, { 5, Role::Damage, 20, 0 } };
+        True("nobody who could heal: no party", PickParty(none, 20, false, true).empty());
+        std::vector<C> quest = { { 1, Role::Tank, 20, 0 }, { 2, Role::Damage, 20, 1, StepIn::Melee },
+                                 { 3, Role::Damage, 20, 0 }, { 4, Role::Damage, 20, 0 }, { 5, Role::Damage, 20, 0 } };
+        EqS("the step-in's quest makes it a quest party", Ids(PickParty(quest, 20, true, true)), "1,2,3,4,5");
+    }
     EqS("role names", std::string(RoleName(Role::Tank)) + RoleName(Role::Healer) + RoleName(Role::Damage),
         "tankhealerdamage");
 

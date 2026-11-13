@@ -18,7 +18,8 @@ namespace PbpDungeons
         }
     }
 
-    std::vector<uint64_t> PickParty(std::vector<Candidate> const& candidates, uint32_t target, bool needQuest)
+    std::vector<uint64_t> PickParty(std::vector<Candidate> const& candidates, uint32_t target, bool needQuest,
+                                    bool stepIn)
     {
         std::vector<size_t> order(candidates.size());
         std::iota(order.begin(), order.end(), size_t(0));
@@ -36,7 +37,7 @@ namespace PbpDungeons
 
         Candidate const* tank = nullptr;
         Candidate const* healer = nullptr;
-        std::vector<Candidate const*> damage;
+        std::vector<Candidate const*> damage;   // every one, in order: one of them may heal instead
         for (size_t i : order)
         {
             Candidate const& c = candidates[i];
@@ -44,11 +45,24 @@ namespace PbpDungeons
                 tank = &c;
             else if (c.role == Role::Healer && !healer)
                 healer = &c;
-            else if (c.role == Role::Damage && damage.size() < 3)
+            else if (c.role == Role::Damage)
                 damage.push_back(&c);
+        }
+        if (!healer && stepIn)
+        {
+            auto best = damage.end();
+            for (auto it = damage.begin(); it != damage.end(); ++it)
+                if ((*it)->stepIn != StepIn::No && (best == damage.end() || (*it)->stepIn > (*best)->stepIn))
+                    best = it;
+            if (best != damage.end())
+            {
+                healer = *best;
+                damage.erase(best);
+            }
         }
         if (!tank || !healer || damage.size() < 3)
             return {};
+        damage.resize(3);
 
         bool quest = tank->quests || healer->quests;
         for (Candidate const* c : damage)

@@ -757,6 +757,8 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     d.noProgressMinutes   = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.NoProgressMinutes", 10), 240);
     d.corpseRuns          = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.CorpseRuns", 5), 50);
     d.wipeRegroups        = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.WipeRegroups", 2), 10);
+    d.healerStepIn        = B("PlayerbotsPlus.BotDungeons.HealerStepIn", true);
+    d.healerDualSpec      = B("PlayerbotsPlus.BotDungeons.HealerDualSpec", true);
     d.maxRunMinutes       = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.MaxRunMinutes", 120), 10, 1440);
     d.lootSeconds         = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.LootSeconds", 30), 600);
     d.avoidAfterFailures  = U("PlayerbotsPlus.BotDungeons.AvoidAfterFailures", 3);
@@ -838,7 +840,8 @@ void PlayerbotsPlus_LoadConfig(bool reload)
             bands += (bands.empty() ? "; by level " : ", ") + PbpDungeons::BandName(bd.bands[i]) + " x" +
                      std::to_string(i < bd.bandShares.size() ? bd.bandShares[i] : 1);
         LOG_INFO(where,
-                 "[Playerbots Plus] Bot dungeons on (up to {} at once{}{}{}{}; {}; dungeon quests {}).",
+                 "[Playerbots Plus] Bot dungeons on (up to {} at once{}{}{}{}; {}; with nobody free to heal, {}; "
+                 "dungeon quests {}).",
                  bd.maxRuns,
                  bd.maxTickMs ? ", while the world tick averages " + std::to_string(bd.maxTickMs) + " ms or less"
                               : std::string(),
@@ -846,6 +849,9 @@ void PlayerbotsPlus_LoadConfig(bool reload)
                                     : std::string(),
                  bd.needPlayerOnline ? ", only with a player online" : "", bands,
                  bd.questRequired ? "a party only goes where one of it holds a quest" : "quests or not",
+                 !bd.healerStepIn    ? "no party"
+                 : bd.healerDualSpec ? "a damage dealer heals instead, on a second spec once it can have one"
+                                     : "a damage dealer heals instead, in its own talents",
                  bd.quests ? "fetched, kept, handed in" : "left to playerbots");
         if (bd.minFreeMemoryMb && PbpDungeons_FreeMemoryMb() < 0)
             LOG_WARN(where, "[Playerbots Plus] PlayerbotsPlus.BotDungeons.MinFreeMemoryMB is set, but there is no "

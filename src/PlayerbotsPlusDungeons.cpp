@@ -35,9 +35,13 @@ int64_t PbpDungeons_FreeMemoryMb()
 #include "Map.h"
 #include "ObjectAccessor.h"
 #include "PlayerbotAI.h"
+#include "PlayerbotAIConfig.h"
+#include "PlayerbotFactory.h"
 #include "Playerbots.h"
 #include "RandomPlayerbotMgr.h"
+#include "SpellAuraDefines.h"
 #include "UpdateTime.h"
+#include "World.h"
 #include "WorldSessionMgr.h"
 
 #include "Opcodes.h"
@@ -130,6 +134,42 @@ namespace
                 return spec == 0 ? Role::Tank : Role::Damage;
             default:
                 return Role::Damage;
+        }
+    }
+
+    // Whether one who does the damage could heal instead (BotDungeons.HealerStepIn):
+    // a priest, druid, shaman or paladin, never one who tanks; a caster's gear
+    // or not (PbpDungeons::StepIn). By the talents it has, as RoleOf.
+    PbpDungeons::StepIn StepInOf(Player* bot, Role role)
+    {
+        using PbpDungeons::StepIn;
+        if (role != Role::Damage)
+            return StepIn::No;
+        switch (bot->getClass())
+        {
+            case CLASS_PRIEST:
+                return StepIn::Caster;   // shadow
+            case CLASS_DRUID:            // balance, or a cat
+            case CLASS_SHAMAN:           // elemental, or enhancement
+                return AiFactory::GetPlayerSpecTab(bot) == 0 ? StepIn::Caster : StepIn::Melee;
+            case CLASS_PALADIN:
+                return StepIn::Melee;    // retribution
+            default:
+                return StepIn::No;
+        }
+    }
+
+    // "a shadow priest", of one who does the damage, for the log.
+    std::string DamageSpecText(Player* bot)
+    {
+        bool const first = AiFactory::GetPlayerSpecTab(bot) == 0;
+        switch (bot->getClass())
+        {
+            case CLASS_PRIEST:  return "a shadow priest";
+            case CLASS_DRUID:   return first ? "a balance druid" : "a feral druid";
+            case CLASS_SHAMAN:  return first ? "an elemental shaman" : "an enhancement shaman";
+            case CLASS_PALADIN: return "a retribution paladin";
+            default:            return "one who does the damage";
         }
     }
 
@@ -347,6 +387,227 @@ namespace
         return uint32(std::chrono::duration_cast<std::chrono::seconds>(d).count());
     }
 
+    // ---- healing instead (BotDungeons.HealerStepIn) -------------------------------------
+
+    // One who does the damage, queued to heal a party with nobody else to
+    // (PickParty), by guid: from the queue until it is out of a group again
+    // (Release, Sweep).
+    struct StepInState
+    {
+        bool healing = false;   // switched over: on its second spec, or under the healing strategies
+        bool respec = false;    // ...on its second spec
+        bool tried = false;     // the second spec tried for, out of a fight: once
+    };
+    std::unordered_map<uint64, StepInState> g_stepIns;
+
+    bool HealTree(uint8 cls, int tab)
+    {
+        switch (cls)
+        {
+            case CLASS_PRIEST:  return tab == 0 || tab == 1;   // discipline, holy
+            case CLASS_DRUID:   return tab == 2;               // restoration
+            case CLASS_SHAMAN:  return tab == 2;               // restoration
+            case CLASS_PALADIN: return tab == 0;               // holy
+            default:            return false;
+        }
+    }
+
+    // The tree one of playerbots' premade specs (Playerbots.PremadeSpecLink)
+    // puts most of its points in, at the highest level it has a link for. -1
+    // for none.
+    int PremadeTree(uint8 cls, int specNo)
+    {
+        if (cls >= MAX_CLASSES || specNo < 0 || specNo >= MAX_SPECNO)
+            return -1;
+        for (int level = 80; level > 0; --level)
+        {
+            std::vector<std::vector<uint32>> const& order = sPlayerbotAIConfig.ParsedSpecLinkOrder[cls][specNo][level];
+            if (order.empty())
+                continue;
+            uint32 points[3] = { 0, 0, 0 };
+            for (std::vector<uint32> const& talent : order)   // tree, row, column, rank
+                if (talent.size() >= 4 && talent[0] < 3)
+                    points[talent[0]] += talent[3];
+            int const tree = int(std::max_element(points, points + 3) - points);
+            return points[tree] ? tree : -1;
+        }
+        return -1;
+    }
+
+    // The premade spec a step-in of `cls` heals in: one with most of its
+    // points in a healing tree, a pve one before a pvp one, then the one
+    // playerbots gives its own bots most (RandomClassSpecProb). -1 for none.
+    int HealSpecNo(uint8 cls)
+    {
+        if (cls >= MAX_CLASSES)
+            return -1;
+        int best = -1;
+        bool bestPve = false;
+        uint32 bestShare = 0;
+        for (int i = 0; i < MAX_SPECNO; ++i)
+        {
+            std::string const& name = sPlayerbotAIConfig.PremadeSpecName[cls][i];
+            if (name.empty())
+                break;
+            if (!HealTree(cls, PremadeTree(cls, i)))
+                continue;
+            bool const pve = name.find("pve") != std::string::npos;
+            uint32 const share = sPlayerbotAIConfig.RandomClassSpecProb[cls][i];
+            if (best < 0 || (pve && !bestPve) || (pve == bestPve && share > bestShare))
+            {
+                best = i;
+                bestPve = pve;
+                bestShare = share;
+            }
+        }
+        return best;
+    }
+
+    // The strategies AiFactory gives a healer of the class in a group (of
+    // the tree, for a priest), for one healing in its own talents, and its
+    // damage dealing that comes off. A class's healing strategy takes the
+    // place of its damage one (the same kind: playerbots keeps one).
+    char const* HealStrategies(uint8 cls, int tree)
+    {
+        switch (cls)
+        {
+            case CLASS_PRIEST:  return tree == 1 ? "+holy heal,-shadow debuff,-shadow aoe"
+                                                 : "+disc,-shadow debuff,-shadow aoe";
+            case CLASS_DRUID:   return "+resto,-aoe,-feral charge";
+            case CLASS_SHAMAN:  return "+resto";
+            case CLASS_PALADIN: return "+holy,+bcast";
+            default:            return "";
+        }
+    }
+
+    bool CanRespec(Player* bot)
+    {
+        return g_Pbp.dungeons.healerDualSpec && HealSpecNo(bot->getClass()) >= 0 &&
+               bot->GetLevel() >= sWorld->getIntConfig(CONFIG_MIN_DUALSPEC_LEVEL);
+    }
+
+    // One who does the damage heals instead, once it is in the dungeon. From
+    // the level the game gives a second spec (MinDualSpecLevel in
+    // worldserver.conf, 40) it heals on that (BotDungeons.HealerDualSpec):
+    // dual spec learned if it has not been, as a trainer teaches it (no gold
+    // asked), its second spec made playerbots' premade healing spec for its
+    // class, with the glyphs, and its strategies the ones playerbots gives a
+    // healer of that spec. Not in a fight: the switch waits for the next look
+    // (KeepHealing), healing in its own talents until then. Below that level,
+    // or with no premade healing spec, it heals with the spells it has in the
+    // talents it has, under the healing strategies. Its gear stays its own.
+    // Out of its form first: there is no healing as a cat, a moonkin or in
+    // shadowform.
+    void StepInto(Player* bot, StepInState& si, std::string const& dungeon, bool again)
+    {
+        PlayerbotAI* ai = PbpAiOf(bot);
+        if (!ai)
+            return;
+        uint8 const cls = bot->getClass();
+        int const specNo = HealSpecNo(cls);
+        bool const respec = CanRespec(bot);
+        bot->RemoveAurasByType(SPELL_AURA_MOD_SHAPESHIFT);
+
+        if (respec && bot->IsAlive() && !bot->IsInCombat())
+        {
+            si.tried = true;
+            bool learned = false;
+            if (bot->GetSpecsCount() < 2)
+            {
+                // What a class trainer's "learn dual specialization" casts.
+                bot->CastSpell(bot, 63680, true, nullptr, nullptr, bot->GetGUID());
+                bot->CastSpell(bot, 63624, true, nullptr, nullptr, bot->GetGUID());
+                learned = bot->GetSpecsCount() >= 2;
+                if (learned)
+                    ++g_stats.dualSpecs;
+            }
+            if (bot->GetSpecsCount() >= 2)
+                bot->ActivateSpec(1);
+            if (bot->GetActiveSpec() == 1)
+            {
+                // Its second spec made the healing one, for its level now.
+                PlayerbotFactory::InitTalentsBySpecNo(bot, specNo, true);
+                PlayerbotFactory(bot, bot->GetLevel()).InitGlyphs(false);
+                ai->ResetStrategies();
+                si.healing = si.respec = true;
+                ++g_stats.respecs;
+                LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: {} (level {}) heals {} instead, "
+                         "on its second spec ({}{}).", bot->GetName(), bot->GetLevel(), dungeon,
+                         sPlayerbotAIConfig.PremadeSpecName[cls][specNo], learned ? ", dual spec learned" : "");
+                return;
+            }
+        }
+
+        ai->ChangeStrategy(HealStrategies(cls, PremadeTree(cls, specNo)), BOT_STATE_COMBAT);
+        bool const first = !si.healing;
+        si.healing = true;
+        if (first)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: {} (level {}) heals {} instead, {}.",
+                     bot->GetName(), bot->GetLevel(), dungeon,
+                     !respec   ? "in its own talents, with the healing spells it has"
+                     : si.tried ? "in its own talents: its second spec would not take"
+                                : "in its own talents until it is out of the fight, then on its second spec");
+        else if (again && g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: {}'s healing strategies were reset "
+                     "in {}: put back.", bot->GetName(), dungeon);
+    }
+
+    // Every second in the dungeon: healing. Switched over as it gets there;
+    // playerbots resets a bot's strategies for its own reasons, which puts
+    // the damage ones back on one healing in its own talents; one that came
+    // in during a fight switches to its second spec once out of it.
+    void KeepHealing(Player* bot, StepInState& si, std::string const& dungeon)
+    {
+        if (!bot->IsAlive())
+            return;
+        if (!si.healing || (!si.tried && CanRespec(bot) && !bot->IsInCombat()))
+            StepInto(bot, si, dungeon, false);
+        else if (!si.respec && !PlayerbotAI::IsHeal(bot))
+            StepInto(bot, si, dungeon, true);
+    }
+
+    // One that healed a party on its second spec, out of the group: back on
+    // its own -- with any talent point a level-up mid-run gave it spent the
+    // way playerbots spends one -- and no longer a step-in. Its strategies
+    // are the caller's to reset. Playerbots never puts a random bot on its
+    // second spec itself (only a player's "talents switch 2"), so one found
+    // there with no player over it is one of these, or one whose run ended
+    // with a restart.
+    void OwnSpec(Player* bot)
+    {
+        g_stepIns.erase(bot->GetGUID().GetRawValue());
+        if (bot->GetActiveSpec() == 0)
+            return;
+        bot->ActivateSpec(0);   // a tree of life goes with its talent
+        if (bot->GetActiveSpec() != 0)
+            return;
+        if (sPlayerbotAIConfig.AutoPickTalents && bot->GetFreeTalentPoints() > 0)
+            PlayerbotFactory(bot, bot->GetLevel()).InitTalentsTree(true, true, true);
+        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: {} is back on its own spec.",
+                 bot->GetName());
+    }
+
+    // Every second: each step-in in the dungeon of the dungeon finder group
+    // it was queued into heals there -- a run of bots, or a player's group
+    // if a player who queued for it was matched in: they get the healer
+    // they were matched with. Ahead of the runs' own look, so a run begins
+    // with its healer healing.
+    void WatchStepIns()
+    {
+        for (auto& [raw, si] : g_stepIns)
+        {
+            Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(raw));
+            if (!bot || bot->IsBeingTeleported())
+                continue;
+            Group* group = bot->GetGroup();
+            Map* map = bot->GetMap();
+            if (!group || !group->isLFGGroup() || !map || !map->IsDungeon() ||
+                bot->GetMapId() != sLFGMgr->GetDungeonMapId(group->GetGUID()))
+                continue;
+            KeepHealing(bot, si, NameOf(sLFGMgr->GetDungeon(group->GetGUID()), bot->GetMapId()));
+        }
+    }
+
     // ---- into the queue ----------------------------------------------------------------
 
     // Queues `party` (tank, healer, three damage dealers), each on its own, for
@@ -395,9 +656,18 @@ namespace
         g_queued.push_back(std::move(q));
         ++g_stats.queued;
 
+        // The one queued to heal does the damage: it heals instead (PickParty).
+        bool const stepIn = bots.size() > 1 && RoleOf(bots[1]) != Role::Healer;
+        if (stepIn)
+        {
+            g_stepIns[bots[1]->GetGUID().GetRawValue()] = StepInState{};
+            ++g_stats.stepIns;
+        }
+
         std::string names;
         for (size_t i = 0; i < bots.size(); ++i)
-            names += (i ? ", " : "") + bots[i]->GetName();
+            names += (i ? ", " : "") + bots[i]->GetName() +
+                     (i == 1 && stepIn ? " (" + DamageSpecText(bots[i]) + ", to heal)" : std::string());
         LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: queued {} -- {}.", what, names);
         return true;
     }
@@ -409,6 +679,7 @@ namespace
         TeamId team = TEAM_NEUTRAL;
         uint32 level = 0;
         Role role = Role::Damage;
+        PbpDungeons::StepIn stepIn = PbpDungeons::StepIn::No;
         std::vector<PbpDungeonQuestHold> holds;
 
         uint32 QuestsFor(uint32 lfgDungeon) const
@@ -440,6 +711,7 @@ namespace
             p.team = bot->GetTeamId();
             p.level = bot->GetLevel();
             p.role = RoleOf(bot);
+            p.stepIn = StepInOf(bot, p.role);
             if (quests)
                 p.holds = PbpDungeonQuests_Holds(bot);
             pool.push_back(std::move(p));
@@ -447,9 +719,12 @@ namespace
         return pool;
     }
 
-    // The party for `d` from `pool`'s bots of `team`: quest holders first.
+    // The party for `d` from `pool`'s bots of `team`: quest holders first,
+    // with `stepIn` one who does the damage to heal if nobody who heals can
+    // go (PickParty). In `roles`, how many of each role could go, and last,
+    // how many of those who do the damage could heal instead.
     std::vector<uint64> PartyFor(std::vector<Pooled> const& pool, TeamId team, PbpLfgDungeon const& d, bool needQuest,
-                                 uint32& questsHeld, uint32 (*roles)[3] = nullptr)
+                                 uint32& questsHeld, uint32 (*roles)[4] = nullptr, bool stepIn = false)
     {
         std::vector<PbpDungeons::Candidate> candidates;
         uint32 holderLevels = 0, holders = 0;
@@ -465,12 +740,16 @@ namespace
                 holderLevels += p.level;
                 ++holders;
             }
-            candidates.push_back({ p.guid, p.role, p.level, quests });
+            candidates.push_back({ p.guid, p.role, p.level, quests, p.stepIn });
             if (roles)
+            {
                 ++(*roles)[uint8(p.role)];
+                if (p.stepIn != PbpDungeons::StepIn::No)
+                    ++(*roles)[3];
+            }
         }
         uint32 const target = holders ? holderLevels / holders : d.targetLevel;
-        std::vector<uint64> party = PbpDungeons::PickParty(candidates, target, needQuest);
+        std::vector<uint64> party = PbpDungeons::PickParty(candidates, target, needQuest, stepIn);
         questsHeld = 0;
         for (uint64 id : party)
             for (Pooled const& p : pool)
@@ -642,32 +921,48 @@ namespace
         {
             uint32 bandShort[3] = { 0, 0, 0 };
             uint32 bandOptions = 0;
-            for (Option const& o : options)
+            // One who heals for any of the band's dungeons first; with nobody
+            // free to heal any of them, one who does the damage (HealerStepIn).
+            for (bool const stepIn : { false, true })
             {
-                if (o.band != band)
-                    continue;
-                ++bandOptions;
-                uint32 quests = 0;
-                uint32 roles[3] = { 0, 0, 0 };
-                std::vector<uint64> const party = PartyFor(pool, o.team, *o.dungeon, s.questRequired, quests, &roles);
-                if (party.empty())
+                if (stepIn && !s.healerStepIn)
+                    break;
+                bool const last = stepIn || !s.healerStepIn;
+                for (Option const& o : options)
                 {
-                    uint8 const role = !roles[0] ? 0 : !roles[1] ? 1 : 2;
-                    ++shortOf[role];
-                    ++bandShort[role];
-                    continue;
+                    if (o.band != band)
+                        continue;
+                    if (last)
+                        ++bandOptions;
+                    uint32 quests = 0;
+                    uint32 roles[4] = { 0, 0, 0, 0 };
+                    std::vector<uint64> const party =
+                        PartyFor(pool, o.team, *o.dungeon, s.questRequired, quests, &roles, stepIn);
+                    if (party.empty())
+                    {
+                        // With nobody to heal, one who does the damage could:
+                        // short of damage, then.
+                        bool const healer = roles[1] || (stepIn && roles[3]);
+                        uint8 const role = !roles[0] ? 0 : !healer ? 1 : 2;
+                        if (last)
+                        {
+                            ++shortOf[role];
+                            ++bandShort[role];
+                        }
+                        continue;
+                    }
+                    std::string why;
+                    if (Queue(party, { o.dungeon->id }, What(*o.dungeon, quests), now, why))
+                    {
+                        if (band >= 0)
+                            g_bandWhy[size_t(band)].clear();
+                        g_lastPlan = "queued " + What(*o.dungeon, quests);
+                        return;
+                    }
+                    if (g_PbpDebug)
+                        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: no queue for {}: {}.",
+                                 o.dungeon->name, why);
                 }
-                std::string why;
-                if (Queue(party, { o.dungeon->id }, What(*o.dungeon, quests), now, why))
-                {
-                    if (band >= 0)
-                        g_bandWhy[size_t(band)].clear();
-                    g_lastPlan = "queued " + What(*o.dungeon, quests);
-                    return;
-                }
-                if (g_PbpDebug)
-                    LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: no queue for {}: {}.",
-                             o.dungeon->name, why);
             }
             if (band >= 0)
                 g_bandWhy[size_t(band)] =
@@ -1337,7 +1632,11 @@ namespace
                 if (bot->GetMapId() == r.map && !bot->IsBeingTeleported())
                     bot->TeleportToEntryPoint();
                 if (PlayerbotAI* ai = PbpAiOf(bot); ai && !bot->GetGroup())
+                {
+                    if (!ai->GetMaster())
+                        OwnSpec(bot);   // one that healed instead: back on its own spec
                     ai->ResetStrategies();
+                }
             }
             sInstanceSaveMgr->PlayerUnbindInstance(guid, r.map, DUNGEON_DIFFICULTY_NORMAL, true);
             CoolDown(guid, r.cleared ? s.cooldownMinutes : s.failCooldownMinutes, now);
@@ -1447,6 +1746,10 @@ namespace
     void Sweep(Clock::time_point now)
     {
         std::unordered_set<uint64> stray;
+        std::unordered_set<uint64> queued;   // in a queue this made: the queue and its run see to them
+        for (Queued const& q : g_queued)
+            for (ObjectGuid guid : q.bots)
+                queued.insert(guid.GetRawValue());
         for (auto it = sRandomPlayerbotMgr.GetPlayerBotsBegin(); it != sRandomPlayerbotMgr.GetPlayerBotsEnd(); ++it)
         {
             Player* bot = it->second;
@@ -1460,10 +1763,22 @@ namespace
                     TakeOn(group, now);
                 continue;
             }
-            if (!map || !map->IsDungeon() || bot->InBattleground() || bot->InArena())
-                continue;
             PlayerbotAI* ai = PbpAiOf(bot);
             if (!ai || !ai->IsBotAI() || ai->GetMaster() || !sRandomPlayerbotMgr.IsRandomBot(bot))
+                continue;
+            // On its second spec with no group: one that healed a party
+            // instead, whose run ended some other way than its own end (a
+            // player joined, the group broke up) or with a restart. Back on
+            // its own, out of a fight -- not while in a queue: one there on
+            // its second spec was queued as the healer that spec makes it,
+            // and goes back on its first when that run is over.
+            if (bot->GetActiveSpec() != 0 && bot->IsAlive() && !bot->IsInCombat() &&
+                !queued.contains(bot->GetGUID().GetRawValue()))
+            {
+                OwnSpec(bot);
+                ai->ResetStrategies();
+            }
+            if (!map || !map->IsDungeon() || bot->InBattleground() || bot->InArena())
                 continue;
             uint64 const key = bot->GetGUID().GetRawValue();
             stray.insert(key);
@@ -1483,6 +1798,16 @@ namespace
         }
         for (auto it = g_strays.begin(); it != g_strays.end();)
             it = stray.contains(it->first) ? std::next(it) : g_strays.erase(it);
+
+        // A step-in neither in the queue nor in a group any more (the queue
+        // given up, logged out) is one no longer. One on its way into the
+        // dungeon is not in the world for a moment: still one.
+        for (auto it = g_stepIns.begin(); it != g_stepIns.end();)
+        {
+            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(it->first));
+            bool const still = bot && (bot->GetGroup() || queued.contains(it->first));
+            it = still ? std::next(it) : g_stepIns.erase(it);
+        }
     }
 
     PbpLfgDungeon const* FindDungeon(std::string const& which)
@@ -1556,6 +1881,7 @@ void PbpDungeons_Update(uint32_t diff)
         if (on && g_Pbp.dungeons.needPlayerOnline && !g_queued.empty() && !PlayerOnline())
             LeaveQueuesNobodyPlaying();
         WatchQueues(now);
+        WatchStepIns();
         WatchRuns(now, on);
     }
     if (!on)
@@ -1641,7 +1967,8 @@ std::vector<std::string> PbpDungeons_Status()
         std::string names;
         for (ObjectGuid guid : q.bots)
             if (Player* bot = ObjectAccessor::FindPlayer(guid))
-                names += (names.empty() ? "" : ", ") + bot->GetName();
+                names += (names.empty() ? "" : ", ") + bot->GetName() +
+                         (g_stepIns.contains(guid.GetRawValue()) ? " (to heal)" : "");
         std::string const together = q.party ? " (as a party for " +
                                                    PbpDungeons::Duration(SecondsOf(now - q.partySince)) + ")"
                                              : std::string();
@@ -1691,7 +2018,10 @@ std::vector<std::string> PbpDungeons_Status()
                   " group offers said yes to, " + std::to_string(st.rejoined) + " dropouts back in the queue), " +
                   std::to_string(st.runs) + " runs: " + std::to_string(st.cleared) +
                   " cleared, " + std::to_string(st.failed) + " failed, " + std::to_string(st.handedOver) +
-                  " joined by a player; " + std::to_string(st.keptIn) +
+                  " joined by a player; " + std::to_string(st.stepIns) +
+                  " parties with one who does the damage to heal (" + std::to_string(st.respecs) +
+                  " healed on a second spec, " + std::to_string(st.dualSpecs) + " learned dual spec for it); " +
+                  std::to_string(st.keptIn) +
                   " teleports out of a dungeon turned down (a level-up, mostly); " + std::to_string(st.keptDown) +
                   " deaths left where they fell for a rez (" +
                   std::to_string(st.rezzed) + " rezzes taken); " + std::to_string(st.sentOut) +
@@ -1763,7 +2093,8 @@ std::string PbpDungeons_Send(std::string const& which)
     for (TeamId team : { TEAM_ALLIANCE, TEAM_HORDE })
     {
         uint32 quests = 0;
-        std::vector<uint64> const party = PartyFor(pool, team, *d, false, quests);
+        std::vector<uint64> const party =
+            PartyFor(pool, team, *d, false, quests, nullptr, g_Pbp.dungeons.healerStepIn);
         if (!party.empty())
         {
             std::string why;
@@ -1772,13 +2103,18 @@ std::string PbpDungeons_Send(std::string const& which)
                        (team == TEAM_ALLIANCE ? "Alliance" : "Horde") + "): .pbp dungeons to follow it.";
             return "Could not queue for " + d->name + ": " + why + ".";
         }
-        uint32 n[3] = { 0, 0, 0 };
+        uint32 n[4] = { 0, 0, 0, 0 };
         for (Pooled const& p : pool)
             if (p.team == team && (p.QuestsFor(d->id) || FillerFits(*d, p.level)))
+            {
                 ++n[uint8(p.role)];
+                if (p.stepIn != PbpDungeons::StepIn::No)
+                    ++n[3];
+            }
         counts += std::string(counts.empty() ? "" : "; ") + (team == TEAM_ALLIANCE ? "Alliance" : "Horde") + " " +
                   std::to_string(n[0]) + " tank(s), " + std::to_string(n[1]) + " healer(s), " + std::to_string(n[2]) +
-                  " damage";
+                  " damage" +
+                  (g_Pbp.dungeons.healerStepIn ? " (" + std::to_string(n[3]) + " of them could heal)" : std::string());
     }
     return "No party for " + d->name + " (levels " + std::to_string(d->minLevel) + "-" + std::to_string(d->maxLevel) +
            "): free bots of a level for it -- " + counts + ".";

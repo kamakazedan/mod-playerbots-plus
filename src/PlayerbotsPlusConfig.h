@@ -83,6 +83,8 @@ struct PbpBotDungeonSettings
     uint32_t maxRunMinutes        = 120;     // and any run this long
     uint32_t corpseRuns           = 5;       // members nobody can rez, back in at the entrance, a run
     uint32_t wipeRegroups         = 2;       // wipes the party runs back in from, a run
+    bool     healerStepIn         = true;    // nobody free to heal: one who does the damage and could, does
+    bool     healerDualSpec       = true;    // ...on a second spec, from the level the game gives one
     uint32_t lootSeconds          = 30;      // after the last boss, before they leave
     uint32_t avoidAfterFailures   = 3;       // a dungeon whose runs failed this many times in a row...
     uint32_t avoidMinutes         = 120;     // ...is not gone to for this long

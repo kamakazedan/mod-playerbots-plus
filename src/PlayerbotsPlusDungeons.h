@@ -15,7 +15,10 @@
 //     (PlayerbotsPlusDungeonQuests gets them those), and queued for it, each
 //     on its own, as a player queues. Whoever the dungeon finder puts
 //     together goes: a player matched in makes it a player's group, and
-//     what happens there is theirs;
+//     what happens there is theirs. With nobody free to heal, a priest,
+//     druid, shaman or paladin who does the damage heals instead
+//     (BotDungeons.HealerStepIn): from level 40 on its second spec, made
+//     playerbots' premade healing one, and back on its first after;
 //   * a group of bots the dungeon finder made, with no player in it -- this
 //     one's, or one playerbots queued for a dungeon a player wanted -- is
 //     taken on once it is in its dungeon: stragglers are brought in, the
@@ -148,6 +151,9 @@ struct PbpDungeonsStats
     uint64_t rezzed    = 0;   // ...rezzes taken for them, as a player clicks Accept
     uint64_t offers    = 0;   // the dungeon finder's offers said yes to for a bot it queued
     uint64_t rejoined  = 0;   // bots that dropped out of the queue, put back in
+    uint64_t stepIns   = 0;   // parties queued with one who does the damage to heal (HealerStepIn)
+    uint64_t respecs   = 0;   // ...that healed on a second spec
+    uint64_t dualSpecs = 0;   // ...that learned dual spec for it
     uint32_t queuedNow = 0;   // parties in the queue now
     uint32_t runsNow   = 0;   // runs going on now
 };

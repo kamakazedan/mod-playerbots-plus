@@ -323,18 +323,19 @@ PlayerbotsPlus.Ledger.KeepDays = 90
 #   for a dungeon a player has queued for, and mod-dungeon-clear only starts
 #   a clear when a player says so; with this on:
 #
-#     - Every CheckSeconds a party is picked -- a tank, a healer and three to
-#       do the damage, of one side and a level for the dungeon, those holding
-#       quests for it first, for a dungeon of the level band furthest under
-#       its share of the runs (LevelBands) -- and each of them queues for it,
-#       as a player queues. A player who queues for it then can be matched in,
-#       which makes it a player's group, and what happens there is theirs, as
-#       it is in any group. Playerbots never lets the dungeon finder put bots
-#       together by themselves, so with nobody matched in after AloneMinutes
-#       the five leave the queue, make a party (the tank leads) and queue as
-#       one, which it lets be. Either way, the offer of a group is said yes to
-#       for them straight away: playerbots turns one down for a bot that is
-#       fighting.
+#     - Every CheckSeconds a party is picked -- a tank, a healer (with nobody
+#       free who heals, one who does the damage and could: HealerStepIn) and
+#       three to do the damage, of one side and a level for the dungeon, those
+#       holding quests for it first, for a dungeon of the level band furthest
+#       under its share of the runs (LevelBands) -- and each of them queues
+#       for it, as a player queues. A player who queues for it then can be
+#       matched in, which makes it a player's group, and what happens there is
+#       theirs, as it is in any group. Playerbots never lets the dungeon
+#       finder put bots together by themselves, so with nobody matched in
+#       after AloneMinutes the five leave the queue, make a party (the tank
+#       leads) and queue as one, which it lets be. Either way, the offer of a
+#       group is said yes to for them straight away: playerbots turns one down
+#       for a bot that is fighting.
 #     - A group of bots the dungeon finder made, with no player in it (one
 #       this queued, or one playerbots queued for a dungeon a player wanted),
 #       is taken on in its dungeon: anyone left outside is brought in, the
@@ -369,9 +370,10 @@ PlayerbotsPlus.Ledger.KeepDays = 90
 #     - Done, and the last boss looted (LootSeconds), or failed: everyone is
 #       brought back to life, leaves the group -- which takes them back where
 #       they queued from -- and is unbound from the dungeon, with their usual
-#       strategies back. They keep what they looted. They queue again after
-#       CooldownMinutes (FailCooldownMinutes after a failure); a dungeon whose
-#       runs fail AvoidAfterFailures times in a row is not gone to for
+#       strategies back (and spec: one that healed instead on its second spec
+#       is back on its first). They keep what they looted. They queue again
+#       after CooldownMinutes (FailCooldownMinutes after a failure); a dungeon
+#       whose runs fail AvoidAfterFailures times in a row is not gone to for
 #       AvoidMinutes.
 #     - A bot that logs in inside a dungeon it is no longer grouped for (the
 #       server went down mid-run) is sent back out after a minute.
@@ -460,6 +462,33 @@ PlayerbotsPlus.BotDungeons.OnlyWithPlayersOnline = 1
 #        nobody free holds a quest for gets no runs (LevelBands).
 #        Default: 1
 PlayerbotsPlus.BotDungeons.QuestRequired = 1
+
+#    PlayerbotsPlus.BotDungeons.HealerStepIn
+#    PlayerbotsPlus.BotDungeons.HealerDualSpec
+#        Few random bots heal, so a party is often short of a healer. With
+#        HealerStepIn, when nobody free who heals is of the dungeon's level,
+#        one who does the damage and could heal does: a priest, druid, shaman
+#        or paladin, never one who tanks -- a shadow priest, balance druid or
+#        elemental shaman first, a caster's gear having what a healer wants.
+#        It queues as the healer and keeps its own gear, and heals in the
+#        dungeon whoever it is grouped with: mod-dungeon-clear takes it for
+#        the run's healer, and a player matched in gets the healer they were
+#        matched with. With HealerDualSpec, one of the level the game gives a
+#        second spec at (MinDualSpecLevel in worldserver.conf, 40) heals on
+#        that: dual spec learned if it has not been, as a trainer teaches it
+#        (no gold asked), its second spec made playerbots' premade healing
+#        spec for its class (Playerbots.PremadeSpecName: a pve one, the one
+#        playerbots gives its own bots most) with its glyphs, switched to as
+#        it gets to the dungeon -- or out of the fight it came in in -- and
+#        back to its own spec once it is out of the group. Below that level,
+#        or with HealerDualSpec 0, it heals in the talents it has, with the
+#        healing spells it has, under playerbots' healing strategies for its
+#        class. A level-up mid-run upgrades its gear for the spec it is in
+#        (Playerbots.AutoUpgradeEquip), as it does for anyone. HealerStepIn 0:
+#        no party without one who heals.
+#        Default: 1, 1
+PlayerbotsPlus.BotDungeons.HealerStepIn = 1
+PlayerbotsPlus.BotDungeons.HealerDualSpec = 1
 
 #    PlayerbotsPlus.BotDungeons.AloneMinutes
 #        How long a party's bots wait in the queue each on their own, where a
