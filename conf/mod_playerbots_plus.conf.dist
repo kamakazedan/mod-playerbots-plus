@@ -652,9 +652,11 @@ PlayerbotsPlus.BotDungeons.KeepLogFree = 3
 #       group quest of the zone two of them hold, those without it leaving;
 #       then it breaks up, and they ask again only after CooldownMinutes. A
 #       quest done is never gone back to.
-#     - A try fails when the party wipes, or nothing moves forward for
-#       NoProgressMinutes. After Attempts failed tries the quest is let go,
-#       and not taken again (counted while the server is up).
+#     - A try fails when the party wipes, when nothing moves forward for
+#       NoProgressMinutes once it is at the quest's place, or when it is not
+#       there after WalkMinutes on its way. After Attempts failed tries the
+#       quest is let go, and not taken again (counted while the server is
+#       up).
 #     - Nobody came at all: it tries it alone, as many tries, and anyone who
 #       asks about it then is told to come along.
 #     - Done, each hands it in where it is taken back: playerbots' questing
