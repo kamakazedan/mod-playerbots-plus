@@ -786,6 +786,22 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     d.questRuns           = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.QuestRuns", 4), 1, 100);
     d.keepLogFree         = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.KeepLogFree", 3), 2, 10);
 
+    PbpGroupQuestSettings& g = s.groupQuests;
+    g.enable            = B("PlayerbotsPlus.GroupQuests.Enable", false);
+    g.range             = std::clamp(F("PlayerbotsPlus.GroupQuests.QuestRange", 1500.0f), 50.0f, 20000.0f);
+    g.walksPerMinute    = std::min<uint32_t>(U("PlayerbotsPlus.GroupQuests.WalksPerMinute", 10), 600);
+    g.walkMinutes       = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.WalkMinutes", 15), 1, 240);
+    g.lookMinutes       = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.LookMinutes", 20), 1, 1440);
+    g.keepLogFree       = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.KeepLogFree", 3), 2, 10);
+    g.partySize         = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.PartySize", 3), 2, 5);
+    g.askMinutes        = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.AskMinutes", 15), 1, 240);
+    g.askForMinutes     = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.AskForMinutes", 60), 0, 1440);
+    g.asksPerMinute     = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.AsksPerMinute", 4), 1, 60);
+    g.meetMinutes       = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.MeetMinutes", 5), 1, 60);
+    g.attempts          = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.Attempts", 3), 1, 20);
+    g.noProgressMinutes = std::clamp<uint32_t>(U("PlayerbotsPlus.GroupQuests.NoProgressMinutes", 10), 2, 120);
+    g.cooldownMinutes   = std::min<uint32_t>(U("PlayerbotsPlus.GroupQuests.CooldownMinutes", 30), 1440);
+
     g_Pbp = std::move(s);
 
     pbp::g_PbpDebug = B("PlayerbotsPlus.Debug", false);
@@ -864,6 +880,16 @@ void PlayerbotsPlus_LoadConfig(bool reload)
         LOG_WARN(where, "[Playerbots Plus] PlayerbotsPlus.BotDungeons.Enable is on, but this build has no "
                         "mod-dungeon-clear (DcBotRun.h): bot dungeons stay off.");
 #endif
+
+    PbpGroupQuestSettings const& gq = g_Pbp.groupQuests;
+    if (gq.enable)
+        LOG_INFO(where,
+                 "[Playerbots Plus] Group quests on (taken within {} yd; help asked for every {} min for {} min, "
+                 "parties of {} where a quest suggests none; {} tries, {} min with nothing moving forward is one).",
+                 uint32_t(gq.range), gq.askMinutes, gq.askForMinutes, gq.partySize, gq.attempts,
+                 gq.noProgressMinutes);
+    else
+        LOG_INFO(where, "[Playerbots Plus] Group quests off.");
 
     size_t names = 0;
     for (auto const& [family, list] : pbp::g_PetNames)

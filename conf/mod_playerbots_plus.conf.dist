@@ -612,6 +612,136 @@ PlayerbotsPlus.BotDungeons.KeepLogFree = 3
 
 ###############################################################################
 #
+#   GROUP QUESTS
+#
+#   Random bots take the quests marked Group, or that suggest a party, and
+#   get a party together to do them, the way players do. Playerbots' own
+#   questing takes only quests one can do alone: it never picks one of these
+#   up, it empties a full quest log starting with them, and a bot on its own
+#   never attacks an elite (in a party that follows its leader, it does). With
+#   this on:
+#
+#     - Every group quest done out in the world is known, from the server's
+#       own data: who gives it out and takes it back, where they stand, its
+#       zone, its level and the party it suggests. One with an objective a
+#       bot cannot do -- an escort, a spell to cast, an object to use,
+#       somewhere to find, someone to talk to, a timer, an item to use, a
+#       player to kill -- or with no map marker to go to is left out. Startup
+#       of the feature says how many.
+#     - Idle bots walk (playerbots' own "go camp") to the givers of those
+#       quests for the zone they are in, within QuestRange, and take the ones
+#       that suit them: not grey, at most three levels up, one the game lets
+#       them take. While they hold one, KeepLogFree quest log slots are kept
+#       free by letting go of what a player would first -- failed quests, grey
+#       ones, ones for other zones, the lowest -- never a group or dungeon
+#       quest, one done, or the one it is out doing. Playerbots' questing does
+#       not go off to do them alone.
+#     - A bot holding one in the zone asks for help with it in General, one
+#       quest at a time: the one the most others there hold. Others in the
+#       zone who hold it, not done, answer and come along; the one who asked
+#       leads, up to the party the quest suggests (PartySize where it
+#       suggests none). Short, it asks again every AskMinutes for
+#       AskForMinutes, each of them questing as ever in between, and anyone
+#       who asks about the quest meanwhile is told to come along. Then it goes
+#       with whoever came. The asks and answers are mod-ollama-chat's to say;
+#       without it, it all happens without a word.
+#     - The party meets where its leader is, the rest walking over and joining
+#       it as they get there (MeetMinutes: whoever is not there by then is
+#       left out), and does the quest: the leader's questing goes to it, the
+#       others follow and fight with it, elites and all. Then every other
+#       group quest of the zone two of them hold, those without it leaving;
+#       then it breaks up, and they ask again only after CooldownMinutes. A
+#       quest done is never gone back to.
+#     - A try fails when the party wipes, or nothing moves forward for
+#       NoProgressMinutes. After Attempts failed tries the quest is let go,
+#       and not taken again (counted while the server is up).
+#     - Nobody came at all: it tries it alone, as many tries, and anyone who
+#       asks about it then is told to come along.
+#     - Done, each hands it in where it is taken back: playerbots' questing
+#       gets a minute there, then it is handed in here, with the reward that
+#       suits the bot best. One gone grey is let go.
+#     - A party member is not teleported away from its party while it gets
+#       together or is at its quest: playerbots teleports a random bot that
+#       levels up to somewhere for its new level (AutoTeleportForLevel), a
+#       grouped one if it leads its group, the party's leader.
+#
+#   .pbp groupquests shows the parties and what they are doing. Bots in one
+#   are left alone by bot dungeons and city hangouts.
+#
+###############################################################################
+
+#    PlayerbotsPlus.GroupQuests.Enable
+#        Off by default. Switched off, every party lets its members go and
+#        the walks stop; the quests taken stay where they are.
+#        Default: 0
+PlayerbotsPlus.GroupQuests.Enable = 0
+
+#    PlayerbotsPlus.GroupQuests.QuestRange
+#    PlayerbotsPlus.GroupQuests.WalksPerMinute
+#    PlayerbotsPlus.GroupQuests.WalkMinutes
+#    PlayerbotsPlus.GroupQuests.LookMinutes
+#        How far a bot walks to a giver, in yards (50-20000; twice that to
+#        hand one in); how many bots are sent to take some or hand one in a
+#        minute, all told (0-600); how long a walk may take before it is given
+#        up (1-240 minutes; a party's walk to the quest's place too, which
+#        then counts as a failed try); and how often an idle bot is looked at
+#        for one to hand in, quests to take or help to ask for (1-1440
+#        minutes).
+#        Default: 1500, 10, 15, 20
+PlayerbotsPlus.GroupQuests.QuestRange = 1500
+PlayerbotsPlus.GroupQuests.WalksPerMinute = 10
+PlayerbotsPlus.GroupQuests.WalkMinutes = 15
+PlayerbotsPlus.GroupQuests.LookMinutes = 20
+
+#    PlayerbotsPlus.GroupQuests.KeepLogFree
+#        Quest log slots kept free while a bot holds a group quest (2-10).
+#        Playerbots clears out a log with fewer than two free, starting with
+#        the quests one cannot do alone.
+#        Default: 3
+PlayerbotsPlus.GroupQuests.KeepLogFree = 3
+
+#    PlayerbotsPlus.GroupQuests.PartySize
+#        The party a quest that suggests no number of players wants (2-5).
+#        One that does gets what it suggests.
+#        Default: 3
+PlayerbotsPlus.GroupQuests.PartySize = 3
+
+#    PlayerbotsPlus.GroupQuests.AskMinutes
+#    PlayerbotsPlus.GroupQuests.AskForMinutes
+#    PlayerbotsPlus.GroupQuests.AsksPerMinute
+#        Between one ask for help in General and the next (1-240 minutes);
+#        how long a bot asks before it goes with whoever came, or alone if
+#        nobody did (0-1440 minutes); and asks a minute, all told (1-60).
+#        Default: 15, 60, 4
+PlayerbotsPlus.GroupQuests.AskMinutes = 15
+PlayerbotsPlus.GroupQuests.AskForMinutes = 60
+PlayerbotsPlus.GroupQuests.AsksPerMinute = 4
+
+#    PlayerbotsPlus.GroupQuests.MeetMinutes
+#        How long a party has to get together where its leader is (1-60
+#        minutes); whoever is not there by then is left out.
+#        Default: 5
+PlayerbotsPlus.GroupQuests.MeetMinutes = 5
+
+#    PlayerbotsPlus.GroupQuests.Attempts
+#    PlayerbotsPlus.GroupQuests.NoProgressMinutes
+#        Failed tries at a quest, a party's or alone, before it is let go
+#        (1-20); and how long a try may go with nothing moving forward -- no
+#        kill or item it asks for, for anyone in the party -- before it has
+#        failed (2-120 minutes), counted from when they get to the quest's
+#        place. A wipe fails it at once.
+#        Default: 3, 10
+PlayerbotsPlus.GroupQuests.Attempts = 3
+PlayerbotsPlus.GroupQuests.NoProgressMinutes = 10
+
+#    PlayerbotsPlus.GroupQuests.CooldownMinutes
+#        After a party breaks up, before its members ask for help again
+#        (0-1440 minutes).
+#        Default: 30
+PlayerbotsPlus.GroupQuests.CooldownMinutes = 30
+
+###############################################################################
+#
 #   CITY HANGOUTS
 #
 #   On a real server everyone parks in the same places: the Trade District,

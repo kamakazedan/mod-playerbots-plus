@@ -3,6 +3,7 @@ tests/market_price_test
 tests/text_test
 tests/ledger_test
 tests/dungeons_test
+tests/groupquests_test
 
 # Editors
 .vscode/

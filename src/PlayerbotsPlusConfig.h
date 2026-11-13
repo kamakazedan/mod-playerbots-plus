@@ -100,12 +100,31 @@ struct PbpBotDungeonSettings
     uint32_t keepLogFree          = 3;       // quest log slots kept free while it holds a dungeon quest
 };
 
+struct PbpGroupQuestSettings
+{
+    bool     enable             = false;
+    float    range              = 1500.0f; // yards: the farthest a bot walks to a giver, or to hand one in
+    uint32_t walksPerMinute     = 10;      // bots sent to take some or hand one in, all told
+    uint32_t walkMinutes        = 15;      // a walk not there by then is given up
+    uint32_t lookMinutes        = 20;      // an idle bot is looked at for quests to take, hand in or ask about this often
+    uint32_t keepLogFree        = 3;       // quest log slots kept free while it holds one
+    uint32_t partySize          = 3;       // the party a quest that suggests no number of players wants
+    uint32_t askMinutes         = 15;      // between asks for help in General
+    uint32_t askForMinutes      = 60;      // it asks this long, then goes with whoever came, or alone
+    uint32_t asksPerMinute      = 4;       // asks in General, all told
+    uint32_t meetMinutes        = 5;       // a party gets together this long; whoever is not there is left out
+    uint32_t attempts           = 3;       // failed tries at a quest, a party's or alone, before it is let go
+    uint32_t noProgressMinutes  = 10;      // a try with nothing moving forward this long has failed
+    uint32_t cooldownMinutes    = 30;      // after a party, before it asks for help again
+};
+
 struct PbpSettings
 {
     bool                  enable = true;
     PbpMarketSettings     market;
     PbpLedgerSettings     ledger;
     PbpBotDungeonSettings dungeons;
+    PbpGroupQuestSettings groupQuests;
 };
 
 extern PbpSettings g_Pbp;

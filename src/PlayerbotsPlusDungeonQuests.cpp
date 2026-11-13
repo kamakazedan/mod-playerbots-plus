@@ -3,6 +3,7 @@
 #include "PlayerbotsPlusConfig.h"
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusDungeonsText.h"
+#include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusUtil.h"
 
@@ -341,7 +342,8 @@ namespace
             return false;
         if (!ai || !ai->IsBotAI() || ai->GetMaster() || !ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT))
             return false;
-        if (sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_NONE || PbpHangout_Has(bot) || PbpDungeons_Busy(bot))
+        if (sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_NONE || PbpHangout_Has(bot) || PbpDungeons_Busy(bot) ||
+            PbpGroupQuests_Busy(bot))
             return false;
         auto const& data = ai->rpgInfo.data;
         if (!std::holds_alternative<NewRpgInfo::Idle>(data) && !std::holds_alternative<NewRpgInfo::Rest>(data) &&
@@ -639,7 +641,8 @@ namespace
             QuestStatus const status = bot->GetQuestStatus(id);
             PbpDungeons::LogEntry e;
             e.quest = id;
-            e.keep = !quest || g_quests.contains(id) || status == QUEST_STATUS_COMPLETE || id == doing;
+            e.keep = !quest || g_quests.contains(id) || PbpGroupQuests_IsOne(id) || status == QUEST_STATUS_COMPLETE ||
+                     id == doing;
             e.failed = status == QUEST_STATUS_FAILED;
             e.grey = quest && PbpDungeons::Grey(quest->GetQuestLevel(), grey);
             e.otherZone = quest && quest->GetZoneOrSort() > 0 && quest->GetZoneOrSort() != zone;
@@ -846,6 +849,12 @@ bool PbpDungeonQuests_Walking(Player* bot)
     return bot && g_walks.contains(bot->GetGUID().GetRawValue());
 }
 
+bool PbpDungeonQuests_IsOne(uint32_t questId)
+{
+    Index();
+    return g_quests.contains(questId);
+}
+
 void PbpDungeonQuests_Update(uint32_t diff)
 {
     Index();
@@ -914,6 +923,11 @@ std::vector<uint32_t> PbpDungeonQuests_ForMap(Player*, uint32_t)
 void PbpDungeonQuests_RunEnded(Player*, uint32_t, std::vector<uint32_t> const&) { }
 
 bool PbpDungeonQuests_Walking(Player*)
+{
+    return false;
+}
+
+bool PbpDungeonQuests_IsOne(uint32_t)
 {
     return false;
 }

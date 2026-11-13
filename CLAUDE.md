@@ -191,14 +191,46 @@ otherwise. This module must still build and run without it; check both ways.
   `KeepLogFree` slots free (dropping what a player would first) is what keeps
   them; the world tick does it between the bot's own ticks.
 
+## Group quests
+
+`PlayerbotsPlusGroupQuests` gets random bots together for the quests
+playerbots' questing refuses (`IsQuestCapableDoing`: a Group type, or two or
+more suggested players). Built without mod-dungeon-clear too.
+
+- A party asking for help is only a list: everyone on it stays out of a
+  group, about its own questing, until it meets. In a group, playerbots has
+  members follow the leader, and bots are to keep questing as normal until
+  the party is ready.
+- Meeting: the leader rests (`ChangeToRest`), the rest walk over (`go camp`)
+  and are added to a group as they get there (`Group::Create` with the
+  leader, then `AddMember`), stripped of the wander strategies so they follow
+  it. Playerbots finds no master in a group of bots (`FindNewMaster`), so
+  nothing resets them; `ResetStrategies` gives them back after.
+- At it: the leader's `rpgInfo` is set to do the quest (`ChangeToDoQuest`)
+  and kept there; playerbots' questing looks for a quest's place only within
+  1500 yards, so from further it walks there first. The rest follow, and
+  playerbots lets a party that follows its leader fight elites
+  (`can fight elite`). The kill credit and quest drops are the game's.
+- One leaving a group of two breaks the group up (`Group::RemoveMember`
+  disbands it): look the group up afresh after every removal.
+- A party member being taken away by playerbots' level-up teleport (the
+  leader: `AutoTeleportForLevel` moves a grouped bot that leads) is turned
+  down (`PbpGroupQuestsTeleportScript`, on a list the world tick publishes).
+- Both quest log keepers keep both kinds of quest (`PbpGroupQuests_IsOne`,
+  `PbpDungeonQuests_IsOne`): one dropping the other's to make room would
+  undo it. Bot dungeons, dungeon-quest walks and hangouts leave a bot in a
+  group-quest party alone (`PbpGroupQuests_Busy`), and it leaves theirs.
+- What they say is mod-ollama-chat's: `BotEventType::GroupQuest*`.
+
 ## Pure files are tested
 
 `PlayerbotsPlusMarketPrice.{h,cpp}`, `PlayerbotsPlusText.{h,cpp}`,
-`PlayerbotsPlusLedgerText.{h,cpp}` and `PlayerbotsPlusDungeonsText.{h,cpp}`
-have no game types in them, so they can be tested without a server. Keep it
-that way: `tests/build.sh`. The text test also checks the conf against the
-code: every key the code reads is in the conf, and the default mute list,
-hangout spots, companion lists and pet names are the same in both.
+`PlayerbotsPlusLedgerText.{h,cpp}`, `PlayerbotsPlusDungeonsText.{h,cpp}` and
+`PlayerbotsPlusGroupQuestsText.{h,cpp}` have no game types in them, so they
+can be tested without a server. Keep it that way: `tests/build.sh`. The text
+test also checks the conf against the code: every key the code reads is in the
+conf, and the default mute list, hangout spots, companion lists and pet names
+are the same in both.
 
 ## Conventions
 

@@ -23,6 +23,7 @@ their own words.
 | [Muted bot lines](#muted-bot-lines) | Playerbots' stock whispers, like "Using [Hearthstone]", are dropped |
 | [The economy ledger](#the-economy-ledger) | Nothing new: it counts what the bots' economy does, day by day, to decide by |
 | [Bot dungeons](#bot-dungeons) | Take dungeon quests, queue through the dungeon finder and run the dungeon themselves, with nobody playing among them (needs mod-dungeon-clear) |
+| [Group quests](#group-quests) | Take the quests marked Group, ask for help with them in General, and do them together as a party |
 
 Each one can be switched off on its own. Every setting is documented in
 `conf/mod_playerbots_plus.conf.dist`.
@@ -513,6 +514,48 @@ the tick, the memory free and each level band's runs, and
 `.pbp dungeons send <dungeon>` queues a party for a dungeon now, quest or no
 quest. Settings: `PlayerbotsPlus.BotDungeons.*`.
 
+## Group quests
+
+Random bots take the quests marked Group, or that suggest a party, and get a
+party together for them the way players do. Off by default
+(`PlayerbotsPlus.GroupQuests.Enable`). Playerbots' own questing never takes
+these, drops them first when the quest log fills, and a bot on its own never
+attacks an elite. In a party that follows its leader it does, and that's what
+this builds on.
+
+- **Taking them.** Idle bots walk to the givers of group quests for the zone
+  they're in and take the ones that suit them: not grey, at most three levels
+  up. Quests with an objective a bot can't do (an escort, a spell to cast, an
+  object to use, somewhere to find, someone to talk to, a timer) are left
+  out. A few quest log slots are kept free while a bot holds one, and
+  playerbots doesn't go off to do it alone.
+- **Asking for help.** A bot holding one asks in General, one quest at a
+  time: the one most others in the zone hold. Others there who hold it answer
+  and come along, and the one who asked leads, up to the party the quest
+  suggests (3 if it suggests none). Short, it asks again every 15 minutes for
+  an hour, everyone questing as normal in between, and anyone who asks about
+  that quest meanwhile is told to come along. Then it goes with whoever came.
+  With mod-ollama-chat, the asks and answers are said in General in each
+  bot's own words.
+- **Doing it.** The party meets where its leader is, the rest walking over,
+  and does the quest: the leader's questing goes to it, the others follow and
+  fight with it, elites and all. Then the next group quest of the zone two of
+  them hold, those without it leaving, and so on until they've none left
+  together. A quest done is never gone back to.
+- **Failing.** A wipe, 10 minutes at the quest's place with nothing moving
+  forward, or 15 minutes on the way there without getting there, is a failed
+  try. After 3 the quest is dropped and not taken again. A bot nobody came for
+  in the hour tries it alone, as many times, and anyone who asks about it then
+  is told to come along.
+- **Handing in.** Done, each hands it in where it's taken back, and one gone
+  grey is dropped.
+- **Staying together.** A party member isn't teleported away while the party
+  gets together or is at its quest: playerbots teleports a bot that levels up
+  if it leads its group, and the party's leader levels as often as the rest.
+
+`.pbp groupquests` shows the parties and what each is doing. Settings:
+`PlayerbotsPlus.GroupQuests.*`.
+
 ## With other modules
 
 - **[mod-ah-bot-plus](https://github.com/NathanHandley/mod-ah-bot-plus):**
@@ -527,6 +570,8 @@ quest. Settings: `PlayerbotsPlus.BotDungeons.*`.
     An AFK one stays quiet until someone talks to it, then it's back.
   - A bot that was stuck on its mount knows it, and may laugh it off.
   - A rogue that can't sap the star says why in party.
+  - Bots asking for help with a group quest say so in General, and those who
+    have it answer.
   - A hunter knows its pet's name, and any bot knows what companion is
     following it, when someone asks or coos over it. Duels get a gg, and two
     bots chatting in the city may talk themselves into one and walk out to
@@ -588,6 +633,7 @@ module at startup if the updater is off.
 | `.pbp dungeons` | Bot dungeons: parties in the queue, runs going on, each level band's runs, recent results, the world tick, the memory free, dungeon quests |
 | `.pbp dungeons bands` | The dungeons in each level band, with the runs each band has and its share |
 | `.pbp dungeons send <dungeon>` | Queues a party of bots for that dungeon now (its dungeon finder id, or part of its name) |
+| `.pbp groupquests` | Group quests: the parties asking for help, getting together and at their quests, and what they've done |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |
 
 `PlayerbotsPlus.Debug = 1` logs more of what the bots do, such as each bot

@@ -29,7 +29,8 @@
 class Player;
 
 // 1: the market. 2: hangouts, bot events and OwnLine. 3: duels talked into.
-#define PLAYERBOTS_PLUS_API_VERSION 3
+// 4: group quests (BotEvent's GroupQuest* types, quest and need).
+#define PLAYERBOTS_PLUS_API_VERSION 4
 
 namespace PlayerbotsPlus
 {
@@ -110,6 +111,16 @@ namespace PlayerbotsPlus
         SapWrongType,    // ...on a mob Sap does not work on
         SapNoStealth,    // ...and it could not go into stealth in time, or lost it on the way
         SapFailed,       // ...and it tried, and the sap did not work
+        // Group quests (PlayerbotsPlus.GroupQuests.*). Said in the zone's
+        // General channel unless it says otherwise; `quest` is the quest.
+        GroupQuestAsk,     // it wants help with the quest: `need` more of them (`have` so far, itself too)
+        GroupQuestAnswer,  // ...one who has it too says it will come (`other`: the one who asked)
+        GroupQuestInvite,  // ...the one leading a party for it tells one who asked to come along
+                           //    (`other`: who asked; `have`: how many it has now, the one asking too)
+        GroupQuestGo,      // a party for it has got together and goes (`have` of them): its leader
+        GroupQuestDone,    // ...and did it: its leader
+        GroupQuestGiveUp,  // ...or gave up on it after its tries (alone, `have` is 1): its leader
+        GroupQuestSolo,    // nobody came for it in the time it asked: it tries it alone
     };
 
     struct BotEvent
@@ -121,6 +132,9 @@ namespace PlayerbotsPlus
         std::string  verb;     // StuckMount: "mine", "pick", "skin", "open" or "loot"
         std::string  zone;     // where it happened
         std::string  detail;   // Sap*: why, said to the bot ("you have not trained Sap", "it is immune to Sap")
+        uint32_t     quest = 0;   // GroupQuest*: the quest
+        uint32_t     need  = 0;   // GroupQuestAsk: how many more it wants
+        uint32_t     have  = 0;   // GroupQuestAsk, Go, GiveUp: how many there are, it too
     };
 
     using BotEventListener = std::function<void(BotEvent const&)>;

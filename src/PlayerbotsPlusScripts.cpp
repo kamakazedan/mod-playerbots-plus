@@ -2,6 +2,7 @@
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusFire.h"
+#include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusIndoors.h"
 #include "PlayerbotsPlusLedger.h"
@@ -57,6 +58,8 @@ namespace
             // Bot dungeons as well: switched off, the queues they made are
             // left, and the runs going on finish and let their party go.
             PbpDungeons_Update(diff);
+            // Group quests: switched off, their parties let their members go.
+            PbpGroupQuests_Update(diff);
             PbpStuck_Update(diff);
             PbpIndoors_Update(diff);
             PbpFire_Update(diff);
@@ -130,6 +133,7 @@ namespace
             {
                 { "status", HandleStatus, SEC_GAMEMASTER,    Console::Yes },
                 { "dungeons", dungeonsTable },
+                { "groupquests", HandleGroupQuests, SEC_GAMEMASTER, Console::Yes },
                 { "economy", HandleEconomy, SEC_GAMEMASTER,  Console::Yes },
                 { "visit",  HandleVisit,  SEC_GAMEMASTER,    Console::No  },
                 { "fires",  HandleFires,  SEC_GAMEMASTER,    Console::No  },
@@ -273,7 +277,21 @@ namespace
                                      onOff(s.enable && s.dungeons.enable), bd.queuedNow, bd.runsNow, bd.runs,
                                      bd.cleared, bd.failed);
 
+            PbpGroupQuestsStats const gq = PbpGroupQuests_GetStats();
+            handler->PSendSysMessage("Group quests: {} - {} parties now; {} went since startup ({} alone), {} "
+                                     "quests done. .pbp groupquests shows them.",
+                                     onOff(s.enable && s.groupQuests.enable), gq.partiesNow, gq.parties, gq.solos,
+                                     gq.done);
+
             handler->SendSysMessage("Select a random bot and type .pbp visit to send it to the auction house now.");
+            return true;
+        }
+
+        // .pbp groupquests: random bots getting parties together for group quests.
+        static bool HandleGroupQuests(ChatHandler* handler)
+        {
+            for (std::string const& line : PbpGroupQuests_Status())
+                handler->PSendSysMessage("{}", line);
             return true;
         }
 
@@ -380,6 +398,7 @@ void Addmod_playerbots_plusScripts()
     new PbpStuckScript();
     new PbpFireScript();
     new PbpMuteScript();
+    new PbpGroupQuestsTeleportScript();
 #if PBP_BOT_DUNGEONS
     new PbpDungeonsPacketScript();
     new PbpDungeonsTeleportScript();

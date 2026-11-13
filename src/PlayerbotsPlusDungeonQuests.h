@@ -65,6 +65,9 @@ void PbpDungeonQuests_RunEnded(Player* bot, uint32_t lfgDungeon, std::vector<uin
 // quests: whatever else wants it leaves it be (the walk only).
 bool PbpDungeonQuests_Walking(Player* bot);
 
+// One of the dungeon quests this knows: a quest log keeper keeps it.
+bool PbpDungeonQuests_IsOne(uint32_t questId);
+
 // World tick, from PbpDungeons_Update while bot dungeons are on.
 void PbpDungeonQuests_Update(uint32_t diff);
 

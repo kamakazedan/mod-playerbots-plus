@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusConfig.h"
 #include "PlayerbotsPlusFire.h"
+#include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusText.h"
 #include "PlayerbotsPlusUtil.h"
@@ -622,13 +623,14 @@ namespace
     }
 
     // Something wants the bot's own AI right now: an invite to answer (a
-    // group, a guild, an arena team), a trade, a duel, a queue, a fight. A
-    // held AI would see none of it.
+    // group, a guild, an arena team), a trade, a duel, a queue, a fight, a
+    // party it is getting together for a group quest. A held AI would see
+    // none of it.
     bool Wanted(Player* bot)
     {
         return !bot->IsAlive() || bot->IsInCombat() || bot->GetGroup() || bot->GetGroupInvite() ||
                bot->GetTradeData() || bot->duel || bot->GetGuildIdInvited() || bot->GetArenaTeamIdInvited() ||
-               Queued(bot);
+               Queued(bot) || PbpGroupQuests_Busy(bot);
     }
 
     // Done with it: whatever this changed goes back, and its AI runs again
