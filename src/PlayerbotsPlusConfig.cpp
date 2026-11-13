@@ -755,6 +755,8 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     d.cooldownMinutes     = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.CooldownMinutes", 15), 1440);
     d.failCooldownMinutes = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.FailCooldownMinutes", 30), 1440);
     d.noProgressMinutes   = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.NoProgressMinutes", 10), 240);
+    d.corpseRuns          = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.CorpseRuns", 5), 50);
+    d.wipeRegroups        = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.WipeRegroups", 2), 10);
     d.maxRunMinutes       = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.MaxRunMinutes", 120), 10, 1440);
     d.lootSeconds         = std::min<uint32_t>(U("PlayerbotsPlus.BotDungeons.LootSeconds", 30), 600);
     d.avoidAfterFailures  = U("PlayerbotsPlus.BotDungeons.AvoidAfterFailures", 3);

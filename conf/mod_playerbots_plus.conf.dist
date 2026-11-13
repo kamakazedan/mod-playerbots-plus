@@ -358,10 +358,14 @@ PlayerbotsPlus.Ledger.KeepDays = 90
 #     - A member releasing anyway, leaving the dungeon or logging out during
 #       a clear goes to the log with how and where, and how everyone stood
 #       when a run fails (each death and rez too, with Debug on).
-#     - The run fails when the whole party dies with nobody to rez, when
-#       nothing has moved forward for NoProgressMinutes (no kill, no pack
-#       cleared, no fight going on, not getting closer to the next boss), when
-#       it stays stuck on something for two minutes, or after MaxRunMinutes.
+#     - Deaths are got over the way a party would (CorpseRuns, WipeRegroups):
+#       a member nobody left can rez comes back in at the entrance and catches
+#       up, and a party that wipes runs back in together and tries again.
+#     - The run fails when the whole party dies once WipeRegroups are spent,
+#       when someone nobody can rez dies once CorpseRuns are, when nothing has
+#       moved forward for NoProgressMinutes (no kill, no pack cleared, no
+#       fight going on, not getting closer to the next boss), when it stays
+#       stuck on something for two minutes, or after MaxRunMinutes.
 #     - Done, and the last boss looted (LootSeconds), or failed: everyone is
 #       brought back to life, leaves the group -- which takes them back where
 #       they queued from -- and is unbound from the dungeon, with their usual
@@ -488,6 +492,21 @@ PlayerbotsPlus.BotDungeons.FailCooldownMinutes = 30
 #        Default: 10, 120
 PlayerbotsPlus.BotDungeons.NoProgressMinutes = 10
 PlayerbotsPlus.BotDungeons.MaxRunMinutes = 120
+
+#    PlayerbotsPlus.BotDungeons.CorpseRuns
+#    PlayerbotsPlus.BotDungeons.WipeRegroups
+#        Deaths got over the way a party would, this many times a run. A
+#        member who dies with nobody left who can rez them, or whom nobody
+#        managed to rez in time, comes back in at the dungeon's entrance at
+#        half health and mana and is brought back to the tank: a corpse run
+#        (0-50). A party that wipes is brought back to life at the entrance
+#        together and carries on from there (0-10). Past them, a wipe or a
+#        death nobody can rez ends the run, as 0 always does. The walk back
+#        is not counted as nothing moving forward. Needs a mod-dungeon-clear
+#        with DC_BOT_RUN_API 2; an older one ends the run at the first.
+#        Default: 5, 2
+PlayerbotsPlus.BotDungeons.CorpseRuns = 5
+PlayerbotsPlus.BotDungeons.WipeRegroups = 2
 
 #    PlayerbotsPlus.BotDungeons.LootSeconds
 #        After the last boss, how long before they leave. The clear itself

@@ -451,8 +451,12 @@ only in a build with
   talk to (mod-ollama-chat keeps its bots quiet in such a run too).
 - **Deaths.** A bot that dies lies where it fell until someone rezzes it, the
   tank included, and takes the rez the moment it's offered. Mod-dungeon-clear
-  sends a healer over once the fight is done, and calls the run off if nobody
-  left can rez.
+  sends a healer over once the fight is done. If nobody left can rez it (or
+  nobody manages to in time), it does what a player would and runs back: it
+  comes back in at the entrance at half health and mana and catches up, up to
+  5 times a run (`CorpseRuns`). A party that wipes runs back in together and
+  tries again, up to twice a run (`WipeRegroups`). Bot-only runs failed mostly
+  on deaths before this: 16 of 17 one afternoon of twenty runs at once.
 - **Staying in.** Playerbots teleports a random bot that levels up to
   somewhere for its new level (`Playerbots.AutoTeleportForLevel`), and a
   grouped bot only if it leads the group: the tank, in a bot dungeon. That's
@@ -461,10 +465,11 @@ only in a build with
   `.tele` included). A bot that releases anyway, leaves the dungeon or logs
   out during a clear goes in the log, and so does how everyone stood when a
   run fails.
-- **When it fails.** A run ends when the whole party dies with nobody to rez,
-  when nothing has moved forward for 10 minutes (no kill, no pack cleared, no
-  fight going on, not getting closer to the next boss), when it's stuck on
-  something for 2 minutes, or after 2 hours.
+- **When it fails.** A run ends when the party wipes or someone nobody can rez
+  dies once those are used up, when nothing has moved forward for 10 minutes
+  (no kill, no pack cleared, no fight going on, not getting closer to the next
+  boss), when it's stuck on something for 2 minutes, or after 2 hours. A tank
+  that falls through the floor is put back beside the party after 20 seconds.
 - **After.** Everyone is brought back to life and leaves the group, which takes
   them back where they queued from. They're unbound from the dungeon and get
   their usual strategies back. They queue again after a cooldown, a longer one

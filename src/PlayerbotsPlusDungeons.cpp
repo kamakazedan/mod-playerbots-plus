@@ -995,6 +995,10 @@ namespace
         DcBotRun::Limits limits;
         limits.noProgressS = s.noProgressMinutes * 60;
         limits.overallS = s.maxRunMinutes * 60;
+#if DC_BOT_RUN_API >= 2
+        limits.corpseRuns = s.corpseRuns;
+        limits.wipeRegroups = s.wipeRegroups;
+#endif
         return limits;
     }
 
