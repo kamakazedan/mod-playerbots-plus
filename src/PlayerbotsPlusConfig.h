@@ -116,6 +116,7 @@ struct PbpGroupQuestSettings
     uint32_t meetMinutes        = 15;      // a party gets together this long; whoever is not there is left out
     uint32_t attempts           = 3;       // failed tries at a quest, a party's or alone, before it is let go
     uint32_t noProgressMinutes  = 10;      // a try with nothing moving forward this long has failed
+    uint32_t deaths             = 3;       // one of a party dying this often in a try fails it, and they break up
     uint32_t cooldownMinutes    = 30;      // after a party, before it asks for help again
 };
 

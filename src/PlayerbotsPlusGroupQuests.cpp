@@ -30,6 +30,7 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 
+#include "AiObjectContext.h"
 #include "NewRpgInfo.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
@@ -104,6 +105,7 @@ namespace
         std::vector<Spot> enders;  // who takes it back, out in the world
         std::vector<uint32> targets;   // what it asks to be killed, or what drops what it asks for
         std::vector<Spot> lairs;       // ...where those stand, on its map
+        bool elite = false;            // ...one of them an elite (or a boss)
     };
 
     bool IsTarget(GroupQuest const& q, uint32 entry)
@@ -306,7 +308,13 @@ namespace
                 {
                     GroupQuest& q = g_quests[id];
                     if (!IsTarget(q, entry))
+                    {
                         q.targets.push_back(entry);
+                        CreatureTemplate const* t = sObjectMgr->GetCreatureTemplate(entry);
+                        if (t && (t->rank == CREATURE_ELITE_ELITE || t->rank == CREATURE_ELITE_RAREELITE ||
+                                  t->rank == CREATURE_ELITE_WORLDBOSS))
+                            q.elite = true;
+                    }
                     if (data.mapid == q.map)
                         q.lairs.push_back({ data.mapid, data.posX, data.posY, data.posZ, entry, false, 0u });
                 }
@@ -410,6 +418,62 @@ namespace
         uint64 const key = bot->GetGUID().GetRawValue();
         return bot->GetQuestStatus(q.id) == QUEST_STATUS_INCOMPLETE && !GaveUp(key, q.id) &&
                Tries(key, q.id) < Cfg().attempts && !PbpDungeons::Grey(q.level, GreyFor(bot));
+    }
+
+    // Up to it: a quest with an elite to kill is taken on at its level or
+    // above, as people do. Three a level or two under it kept dying, and the
+    // one who pulled was refreshed out of the party by playerbots.
+    bool UpTo(Player* bot, GroupQuest const& q)
+    {
+        if (!q.elite)
+            return true;
+        Quest const* quest = sObjectMgr->GetQuestTemplate(q.id);
+        int32 const level = quest ? bot->GetQuestLevel(quest) : q.level;
+        return int32(bot->GetLevel()) >= level;
+    }
+
+    // Playerbots refreshes a bot that has died five times without gaining
+    // anything (FindCorpseAction: Revive, then Refresh), and a refresh takes
+    // it out of its group. A party member's count of that is kept at none;
+    // the party counts its deaths itself (GroupQuests.Deaths).
+    void Spare(Player* bot)
+    {
+        PlayerbotAI* ai = PbpAiOf(bot);
+        AiObjectContext* ctx = ai ? ai->GetAiObjectContext() : nullptr;
+        if (!ctx)
+            return;
+        if (Value<uint32>* count = ctx->GetValue<uint32>("death count"); count && count->Get())
+            count->Set(0);
+    }
+
+    // What a bot is about, in a few words, for the log.
+    std::string Doing(Player* bot)
+    {
+        if (!bot->IsAlive())
+            return "dead";
+        if (bot->IsInCombat())
+            return "fighting";
+        if (bot->IsInFlight())
+            return "on a flight";
+        PlayerbotAI* ai = PbpAiOf(bot);
+        if (!ai)
+            return "no AI";
+        auto const& d = ai->rpgInfo.data;
+        if (std::holds_alternative<NewRpgInfo::GoCamp>(d))
+            return "walking over";
+        if (std::holds_alternative<NewRpgInfo::Rest>(d))
+            return "waiting";
+        if (std::holds_alternative<NewRpgInfo::DoQuest>(d))
+            return "questing";
+        if (std::holds_alternative<NewRpgInfo::GoGrind>(d) || std::holds_alternative<NewRpgInfo::WanderRandom>(d))
+            return "grinding";
+        if (std::holds_alternative<NewRpgInfo::WanderNpc>(d))
+            return "at an NPC";
+        if (std::holds_alternative<NewRpgInfo::TravelFlight>(d))
+            return "off to a flight master";
+        if (std::holds_alternative<NewRpgInfo::DoGather>(d))
+            return "gathering";
+        return "idle";
     }
 
     // One of playerbots' random bots with nobody over it, out in the world and
@@ -851,7 +915,12 @@ namespace
         Clock::time_point since, lastAsk, phaseSince, progressAt, nextStrip;
         uint32 asks = 0;
         uint64 progress = 0;
-        bool down = false;                    // everyone dead: that try failed, until they are up again
+        std::unordered_map<uint64, uint32> deaths;   // Questing: each one's deaths this try
+        std::unordered_set<uint64> lying;            // ...and who lies dead now
+        uint32 fightSecs = 0, deadSecs = 0;   // Questing: since progressAt, the leader fighting, lying dead
+        float walked = 0.0f;                  // ...and walking, yards
+        uint32 lastMap = UINT32_MAX;          // ...where it was a tick ago
+        float lastX = 0.0f, lastY = 0.0f;
         bool walking = false;                 // the leader on its way to the quest's place, since walkSince
         Clock::time_point walkSince;
         bool wentAlone = false;               // nobody came, and it said so: not again for this party
@@ -1054,7 +1123,8 @@ namespace
         if (zone == g_holding.end())
             return;
         auto holders = zone->second.find(p.quest);
-        if (holders == zone->second.end())
+        auto const quest = g_quests.find(p.quest);
+        if (holders == zone->second.end() || quest == g_quests.end())
             return;
         std::vector<Player*> could;
         for (uint64 raw : holders->second)
@@ -1070,7 +1140,7 @@ namespace
             }
             Player* bot = InWorld(raw);
             if (bot && bot->IsAlive() && !bot->GetGroup() && !bot->GetGroupInvite() && bot->GetZoneId() == p.zone &&
-                StillIn(bot, p))
+                StillIn(bot, p) && UpTo(bot, quest->second))
                 could.push_back(bot);
         }
         int32 const level = int32(leader->GetLevel());
@@ -1123,13 +1193,26 @@ namespace
         return sum;
     }
 
+    // Something moved forward (or a try starts): the clock for one with
+    // nothing moving forward starts again, and so does what the log says of
+    // how the leader spent it.
+    void Moved(Party& p, Clock::time_point now)
+    {
+        p.progressAt = now;
+        p.fightSecs = p.deadSecs = 0;
+        p.walked = 0.0f;
+    }
+
     // Under way: the leader's questing goes to it, the rest follow.
     void Begin(Party& p, Clock::time_point now)
     {
         p.phase = Phase::Questing;
-        p.phaseSince = p.progressAt = p.nextStrip = now;
+        p.phaseSince = p.nextStrip = now;
+        Moved(p, now);
         p.progress = Progress(p);
-        p.down = p.walking = false;
+        p.deaths.clear();
+        p.lying.clear();
+        p.walking = false;
         p.lair = SIZE_MAX;
         p.emptyLairs.clear();
         Player* leader = InWorld(p.leader);
@@ -1208,6 +1291,9 @@ namespace
         if (leader->IsAlive() && !leader->IsInCombat() && leaderAi &&
             !std::holds_alternative<NewRpgInfo::Rest>(leaderAi->rpgInfo.data))
             leaderAi->rpgInfo.ChangeToRest();   // it waits where it is
+        for (uint64 m : p.members)
+            if (Player* bot = InWorld(m))
+                Spare(bot);
 
         std::vector<uint64> const members = p.members;
         for (uint64 m : members)
@@ -1265,10 +1351,20 @@ namespace
         if (!all && now - p.phaseSince < std::chrono::minutes(Cfg().meetMinutes))
             return;
         // Whoever is not there by now is left out, and does not come for it
-        // again for a while.
+        // again for a while. The log says where each was, and at what.
+        std::string late;
         for (uint64 m : std::vector<uint64>(p.members))
             if (m != p.leader && !p.arrived.contains(m))
+            {
+                if (Player* bot = InWorld(m))
+                    late += (late.empty() ? "" : ", ") + bot->GetName() + " " +
+                            std::to_string(uint32(bot->GetExactDist(leader))) + " yd away (" + Doing(bot) + ")";
                 Leave(p, m, true, now);
+            }
+        if (!late.empty())
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: getting together for {} in {} took "
+                     "longer than {} min, {} waiting -- left out: {}.",
+                     TitleOf(p.quest), Zone(p.zone), Cfg().meetMinutes, leader->GetName(), late);
         if (p.members.size() >= 2 && GroupOf(p.group))
         {
             Begin(p, now);
@@ -1480,15 +1576,38 @@ namespace
                      : "");
     }
 
-    // The leader pulls it, as one does with a shot from range: it comes for
-    // the party, and everyone fights what attacks them -- an elite too, which
+    // Who pulls: the party's tank (playerbots' own reading of who tanks), up
+    // and with them, so what it is for goes for the one who can take it; or
+    // the leader. The leader pulling everything had the elite kill it again
+    // and again.
+    Player* Puller(Party const& p, Player* leader)
+    {
+        if (p.solo || PlayerbotAI::IsTank(leader))
+            return leader;
+        for (uint64 m : p.members)
+            if (Player* bot = InWorld(m); bot && bot != leader && bot->IsAlive() &&
+                bot->IsWithinDistInMap(leader, 40.0f) && PlayerbotAI::IsTank(bot))
+                return bot;
+        return leader;
+    }
+
+    // Pulled, as one does with a shot from range: it comes for the puller,
+    // and everyone fights what attacks them -- an elite too, which
     // playerbots' own choice of a target skips while anyone in the group has
     // full bags to sell.
-    void Pull(Player* leader, Creature* target)
+    void Pull(Player* puller, Creature* target)
     {
-        leader->SetFacingToObject(target);
+        puller->SetFacingToObject(target);
         if (target->IsAIEnabled && target->AI())
-            target->AI()->AttackStart(leader);
+            target->AI()->AttackStart(puller);
+    }
+
+    // How the leader spent a try with nothing moving forward, for the log.
+    std::string Spent(Party const& p, Player* leader)
+    {
+        return "; the leader (" + Doing(leader) + ") fought " + PbpDungeons::Duration(p.fightSecs) + " of it, lay " +
+               "dead " + PbpDungeons::Duration(p.deadSecs) + " and walked " + std::to_string(uint32(p.walked)) +
+               " yd";
     }
 
     void Questing(Party& p, Clock::time_point now)
@@ -1570,36 +1689,43 @@ namespace
                 return;
         }
 
-        // Everyone down: that try failed; the next starts when they are up.
+        // Deaths. All of them down at once, or one of them down Deaths times
+        // in this try: too much for them as they are. The try has failed and
+        // they break up for now; each may come back to it later -- higher, or
+        // with others -- until its tries are used up. (Playerbots' own count,
+        // which would refresh one out of the party, is kept at none: Spare.)
+        uint64 worst = 0;
+        uint32 most = 0;
         bool anyUp = false;
         for (uint64 m : p.members)
-            if (Player* bot = InWorld(m); bot && bot->IsAlive())
-                anyUp = true;
-        if (!anyUp)
-        {
-            if (!p.down)
+            if (Player* bot = InWorld(m))
             {
-                p.down = true;
-                FailTry(p, p.solo ? "it died" : "the party wiped");
+                Spare(bot);
+                if (bot->IsAlive())
+                {
+                    anyUp = true;
+                    p.lying.erase(m);
+                }
+                else if (p.lying.insert(m).second)
+                    ++p.deaths[m];
+                if (auto const n = p.deaths.find(m); n != p.deaths.end() && n->second > most)
+                {
+                    most = n->second;
+                    worst = m;
+                }
             }
+        if (!anyUp || most >= Cfg().deaths)
+        {
+            std::string why = p.solo ? "it died" : "the party wiped";
+            if (anyUp)
+            {
+                Player* who = InWorld(worst);
+                why = (who ? who->GetName() : std::string("one of them")) + " died " + std::to_string(most) +
+                      " times";
+            }
+            FailTry(p, why + ": too much for them for now");
+            Dissolve(p.id, "too much for them for now", true, now);
             return;
-        }
-        if (p.down)
-        {
-            bool allUp = true;
-            for (uint64 m : p.members)
-                if (Player* bot = InWorld(m); bot && !bot->IsAlive())
-                    allUp = false;
-            if (!allUp)
-                return;
-            p.down = p.walking = false;
-            p.progressAt = now;
-            if (leader->GetQuestStatus(p.quest) != QUEST_STATUS_INCOMPLETE)
-            {
-                Raise(PlayerbotsPlus::BotEventType::GroupQuestGiveUp, leader, nullptr, p);
-                NextQuest(p, now);   // it let it go after its last try
-                return;
-            }
         }
 
         // Playerbots' questing finds a quest's place only within 1500 yards:
@@ -1627,6 +1753,18 @@ namespace
             }
         }
 
+        // How the leader spends the try, for the log if it fails.
+        if (!leader->IsAlive())
+            ++p.deadSecs;
+        else if (leader->IsInCombat())
+            ++p.fightSecs;
+        if (p.lastMap == leader->GetMapId())
+            if (float const step = leader->GetExactDist2d(p.lastX, p.lastY); step < 60.0f)
+                p.walked += step;   // not a teleport
+        p.lastMap = leader->GetMapId();
+        p.lastX = leader->GetPositionX();
+        p.lastY = leader->GetPositionY();
+
         // Moving forward: anyone's count of what it asks for went up, or
         // someone is fighting what it is for.
         uint64 const progress = Progress(p);
@@ -1636,12 +1774,13 @@ namespace
                 if (Unit* victim = bot->GetVictim(); victim && victim->IsCreature() && IsTarget(q, victim->GetEntry()))
                     atIt = true;
         if (progress > p.progress || far || atIt)
-            p.progressAt = now;
+            Moved(p, now);
         p.progress = progress;
         if (now - p.progressAt >= std::chrono::minutes(Cfg().noProgressMinutes))
         {
-            p.progressAt = now;
-            FailTry(p, "nothing moved forward: " + Sighting(leader, q));
+            std::string const why = "nothing moved forward: " + Sighting(leader, q) + Spent(p, leader);
+            Moved(p, now);
+            FailTry(p, why);
             if (leader->GetQuestStatus(p.quest) != QUEST_STATUS_INCOMPLETE)
             {
                 Raise(PlayerbotsPlus::BotEventType::GroupQuestGiveUp, leader, nullptr, p);
@@ -1675,11 +1814,12 @@ namespace
                 bool const inReach = leader->GetExactDist(target) <= kPullRange && leader->IsWithinLOSInMap(target);
                 if (inReach && !target->IsInCombat())
                 {
+                    Player* puller = Puller(p, leader);
                     if (g_PbpDebug)
                         LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: {} pulls {} for {}.",
-                                 leader->GetName(), target->GetName(), TitleOf(p.quest));
-                    Pull(leader, target);
-                    p.progressAt = now;
+                                 puller->GetName(), target->GetName(), TitleOf(p.quest));
+                    Pull(puller, target);
+                    Moved(p, now);
                 }
                 else if (!inReach && !GoingTo(ai, target->GetMapId(), target->GetPositionX(), target->GetPositionY(),
                                               target->GetPositionZ(), 15.0f))
@@ -1847,7 +1987,7 @@ namespace
         for (uint32 id : zoneQuests->second)
         {
             GroupQuest const& q = g_quests[id];
-            if (!StillAt(bot, q))
+            if (!StillAt(bot, q) || !UpTo(bot, q))
                 continue;
             uint32 others = 0;
             if (holding != g_holding.end())

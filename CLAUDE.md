@@ -305,7 +305,28 @@ more suggested players). Built without mod-dungeon-clear too.
   `PbpDungeonQuests_IsOne`): one dropping the other's to make room would
   undo it. Bot dungeons, dungeon-quest walks and hangouts leave a bot in a
   group-quest party alone (`PbpGroupQuests_Busy`), and it leaves theirs.
+- Playerbots revives and refreshes a bot that has died five times without
+  gaining anything (`FindCorpseAction`), and `Refresh` leaves its group: the
+  Gath'Ilzogg party lost its leader so. A party member's "death count" is
+  kept at none (`Spare`), and the party counts deaths itself: a wipe, or one
+  dying `GroupQuests.Deaths` times in a try, fails it and breaks the party
+  up for now. The party's tank pulls (`PlayerbotAI::IsTank`), and a quest
+  with an elite to kill is asked for and answered only at its level (`UpTo`).
 - What they say is mod-ollama-chat's: `BotEventType::GroupQuest*`.
+
+## Feet on the ground
+
+Playerbots' grind spots are a 50-yard grid with the height rounded to 50
+(`TravelMgr`'s level cache), its arrival check is within 10 yards in 3D, and
+`MoveFarTo` teleports a bot "stuck" for 90 seconds to its destination: a bot
+under a spot in the air ended up hanging there, and its next walk glided down.
+`PlayerbotsPlusGround` moves a `GoGrind` destination on that grid onto a
+creature's spawn in its square, and brings down a random bot it finds in the
+air on two looks (`MoveFall`, then the fall settled by hand as playerbots'
+`CompleteDismount` does: a bot has no client to land it). Where it stands is
+judged by what a fall would land on (`GetMapHeight` with `MAX_FALL_DISTANCE`,
+trees and planks included), the game's kept floor (`GetFloorZ`) only being
+the cheap first look. Never the falling flag: a bot can be left with it.
 
 ## Pure files are tested
 

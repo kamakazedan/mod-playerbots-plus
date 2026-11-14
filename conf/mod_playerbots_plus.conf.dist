@@ -710,19 +710,23 @@ PlayerbotsPlus.BotDungeons.KeepLogFree = 3
 #       left out, and does not come for one again for CooldownMinutes), and
 #       does the quest. The leader goes for what it is for -- what it asks to
 #       be killed, or what drops what it asks for: walks up to it when it is
-#       in sight and pulls it, the others following and fighting with it,
-#       elites and all; waits where it stands (its spawn) when it is not
-#       about, the way people camp a named one, trying the next where several
-#       stand; and leaves it to playerbots' questing where none is known.
+#       in sight, and the party's tank pulls it (the leader, with none), the
+#       others following and fighting with it, elites and all; waits where it
+#       stands (its spawn) when it is not about, the way people camp a named
+#       one, trying the next where several stand; and leaves it to
+#       playerbots' questing where none is known.
 #       Then every other group quest of the zone two of them hold, those
 #       without it leaving; then it breaks up, and they ask again only after
 #       CooldownMinutes. A quest done is never gone back to.
-#     - A try fails when the party wipes, when nothing moves forward for
-#       NoProgressMinutes once it is at the quest's place (fighting what it
-#       is for counts), or when it is not there after WalkMinutes on its way.
-#       The log says why, with what the leader could see of what it is for.
-#       After Attempts failed tries the quest is let go, and not taken again
-#       (counted while the server is up).
+#     - A quest with an elite to kill is asked for and answered only by bots
+#       at its level or above, as people take them on.
+#     - A try fails when the party wipes or one of them dies Deaths times in
+#       it (and then the party breaks up for now), when nothing moves forward
+#       for NoProgressMinutes once it is at the quest's place (fighting what
+#       it is for counts), or when it is not there after WalkMinutes on its
+#       way. The log says why, with what the leader could see of what it is
+#       for. After Attempts failed tries the quest is let go, and not taken
+#       again (counted while the server is up).
 #     - Nobody came at all: it tries it alone, as many tries, and anyone who
 #       asks about it then is told to come along.
 #     - Done, each hands it in where it is taken back: playerbots' questing
@@ -787,8 +791,9 @@ PlayerbotsPlus.GroupQuests.AsksPerMinute = 4
 
 #    PlayerbotsPlus.GroupQuests.MeetMinutes
 #        How long a party has to get together where its leader is (1-60
-#        minutes); whoever is not there by then is left out. They come from
-#        anywhere in the zone, on foot as often as not.
+#        minutes); whoever is not there by then is left out, and the log says
+#        where each of them was and at what. They come from anywhere in the
+#        zone, on foot as often as not.
 #        Default: 15
 PlayerbotsPlus.GroupQuests.MeetMinutes = 15
 
@@ -798,10 +803,24 @@ PlayerbotsPlus.GroupQuests.MeetMinutes = 15
 #        (1-20); and how long a try may go with nothing moving forward -- no
 #        kill or item it asks for, for anyone in the party -- before it has
 #        failed (2-120 minutes), counted from when they get to the quest's
-#        place. A wipe fails it at once.
+#        place. The log then says what the leader could see of what it is
+#        for, and how long of it it spent fighting, lying dead, and how far it
+#        walked.
 #        Default: 3, 10
 PlayerbotsPlus.GroupQuests.Attempts = 3
 PlayerbotsPlus.GroupQuests.NoProgressMinutes = 10
+
+#    PlayerbotsPlus.GroupQuests.Deaths
+#        A try also fails when one of the party has died this many times in
+#        it, or when they all lie dead at once (1-20): either way it is too
+#        much for them as they are, and the party breaks up for now. Each may
+#        come back to it later, higher or with others, until its Attempts are
+#        used up. Playerbots refreshes a bot that has died five times without
+#        gaining anything, and a refresh takes it out of its group, so while
+#        a bot is in a party getting together or at its quest that count of
+#        playerbots' is kept at none, and this one counts instead.
+#        Default: 3
+PlayerbotsPlus.GroupQuests.Deaths = 3
 
 #    PlayerbotsPlus.GroupQuests.CooldownMinutes
 #        After a party breaks up, before its members ask for help again

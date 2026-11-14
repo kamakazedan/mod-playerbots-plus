@@ -622,40 +622,46 @@ this builds on.
 - **Taking them.** Idle bots walk to the givers of group quests for the zone
   they're in and take the ones that suit them: not grey, at most three levels
   up. Quests with an objective a bot can't do (an escort, a spell to cast, an
-  object to use, somewhere to find, someone to talk to, a timer) are left
-  out. A few quest log slots are kept free while a bot holds one, and
-  playerbots doesn't go off to do it alone.
-- **Asking for help.** A bot holding one asks in General, one quest at a
-  time: the one most others in the zone hold. Others there who hold it answer
-  and come along, and the one who asked leads, up to the party the quest
-  suggests (3 if it suggests none). Short, it asks again every 15 minutes for
-  an hour, everyone questing as normal in between, and anyone who asks about
-  that quest meanwhile is told to come along. Then it goes with whoever came.
-  With mod-ollama-chat, the asks and answers are said in General in each
-  bot's own words.
+  object to use, somewhere to find, someone to talk to, a timer) are left out.
+  A few quest log slots are kept free while a bot holds one, and playerbots
+  doesn't go off to do it alone.
+- **Asking for help.** A bot holding one asks in General, one quest at a time:
+  the one most others in the zone hold. Others there who hold it answer and
+  come along, and the one who asked leads, up to the party the quest suggests
+  (3 if it suggests none). A quest with an elite to kill is asked for and
+  answered only by bots at its level or above. Short, it asks again every 15
+  minutes for an hour, everyone questing as normal in between, and anyone who
+  asks about that quest meanwhile is told to come along. Then it goes with
+  whoever came. With mod-ollama-chat, the asks and answers are said in General
+  in each bot's own words.
 - **Doing it.** The party meets where its leader is, the rest walking over
   from wherever they are in the zone (15 minutes), and does the quest. The
   leader goes for what the quest is for, the named elite or whatever drops
-  what it asks for: walks up to it, pulls it, and the rest follow and fight
-  it with them. When it isn't about they wait where it spawns, the way people
-  camp a named mob. Then the next group quest of the zone two of them hold,
-  those without it leaving, and so on until they've none left together. A
-  quest done is never gone back to.
-- **Failing.** A wipe, 10 minutes at the quest's place with nothing moving
-  forward (a fight with what it's for counts), or 15 minutes on the way there
-  without getting there, is a failed try, and the log says why. After 3 the
-  quest is dropped and not taken again. A bot nobody came for in the hour
-  tries it alone, as many times, and anyone who asks about it then is told to
-  come along.
+  what it asks for: walks up to it, the party's tank pulls it (the leader if
+  there's none), and the rest follow and fight it with them. When it isn't
+  about they wait where it spawns, the way people camp a named mob. Then the
+  next group quest of the zone two of them hold, those without it leaving, and
+  so on until they've none left together. A quest done is never gone back to.
+- **Failing.** A wipe, one of them dying 3 times, 10 minutes at the quest's
+  place with nothing moving forward (a fight with what it's for counts), or 15
+  minutes on the way there without getting there, is a failed try, and the log
+  says why (and, for one going nowhere, how long the leader spent fighting,
+  lying dead, and how far it walked). After a wipe or the deaths it's too much
+  for them as they are: the party breaks up, and each may come back to it
+  later. After 3 failed tries the quest is dropped and not taken again. A bot
+  nobody came for in the hour tries it alone, as many times, and anyone who
+  asks about it then is told to come along.
 - **Handing in.** Done, each hands it in where it's taken back, and one gone
   grey is dropped.
-- **Staying together.** A party member isn't teleported away while the party
-  gets together or is at its quest, nor a bot walking to take or hand one in:
-  playerbots teleports a bot that levels up if it leads its group, and the
-  party's leader levels as often as the rest. A teleport to the party's own
-  places (what the quest is for, the leader they're meeting, the giver) still
-  goes: that's playerbots putting a bot that got stuck on its way where it was
-  going.
+- **Staying together.** Playerbots "refreshes" a bot that has died five times
+  without gaining anything, which takes it out of its group: while a bot is in
+  a party, that count is kept at nothing and the party counts deaths itself. A
+  party member isn't teleported away while the party gets together or is at
+  its quest, nor a bot walking to take or hand one in: playerbots teleports a
+  bot that levels up if it leads its group, and the party's leader levels as
+  often as the rest. A teleport to the party's own places (what the quest is
+  for, the leader they're meeting, the giver) still goes: that's playerbots
+  putting a bot that got stuck on its way where it was going.
 - **On its way.** The leader goes straight for what the quest is for, not
   after every mob it passes or chatting to whoever's about on the way, and
   still fights whatever attacks the party.
