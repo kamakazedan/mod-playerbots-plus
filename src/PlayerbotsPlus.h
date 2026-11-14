@@ -35,7 +35,8 @@ class Player;
 // 6: city life by temperament (SetTemperamentProvider), showing off
 // (BotEventType::CityShowOff, CityCalmDown).
 // 7: what things are worth (ItemWorth) and how rarely they drop (DropChance).
-#define PLAYERBOTS_PLUS_API_VERSION 7
+// 8: where things drop (DropSourcesOf).
+#define PLAYERBOTS_PLUS_API_VERSION 8
 
 namespace PlayerbotsPlus
 {
@@ -77,6 +78,24 @@ namespace PlayerbotsPlus
     // the best chest's. 0 when nothing drops it. From the world's own loot
     // tables, worked out at startup.
     double DropChance(uint32_t itemId);
+
+    // Where it drops, for someone asking where to find it: how many kinds of
+    // creature drop it and how many of them the world has, the levels most of
+    // those are, the likeliest three to (a creature of each, with the chance
+    // a kill of it gives it), and whether a chest gives it too. False when
+    // nothing drops it.
+    struct DropSources
+    {
+        uint32_t kinds    = 0;        // kinds of creature (loot tables) that drop it
+        uint32_t spawns   = 0;        // how many of those creatures the world has
+        uint32_t minLevel = 0;        // the levels most of them are; 0 when none is out in the world
+        uint32_t maxLevel = 0;
+        uint32_t creature[3]  = {};   // creature entries, the likeliest first; 0: no more
+        double   chancePct[3] = {};   // ...the chance a kill of each gives it, percent
+        double   bestPct  = 0.0;      // the most any one creature or chest gives it, percent
+        bool     chests   = false;    // a chest or a fishing hole gives it too
+    };
+    bool DropSourcesOf(uint32_t itemId, DropSources& out);
 
     // ---- City hangouts (PlayerbotsPlus.Hangout.*)
 

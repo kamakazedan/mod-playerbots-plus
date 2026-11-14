@@ -74,7 +74,8 @@ of 0.0068% (once in about 14,700 kills) are worth more, steeply: half that
 chance is 5 times the price, a fifth of it 26 times. Lil Timmy's Peashooter, a
 level 16 blue gun that drops about once in 20,800 kills, comes out at about
 5g 45s. With mod-ollama-chat, bots in Trade chat use the same worth, and say
-when something is a rare drop.
+when something is a rare drop. Asked where to find something, they say what
+drops it, about what level those are and how rarely, from the same tables.
 
 Bots never list what playerbots gives them for free. Playerbots hands every
 random bot ammo, food and drink, potions, class reagents, sharpening stones,

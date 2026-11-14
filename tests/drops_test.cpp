@@ -25,6 +25,16 @@ namespace
         }
     }
 
+    void Check(char const* what, bool ok)
+    {
+        ++g_checks;
+        if (!ok)
+        {
+            ++g_fails;
+            std::printf("FAIL %s\n", what);
+        }
+    }
+
     void Eq(char const* what, uint64_t got, uint64_t want)
     {
         ++g_checks;
@@ -144,6 +154,74 @@ int main()
         Near("...and a creature's is the typical", PbpDrops::Rarity(at(1)), at(1).typical);
         Near("the box itself", at(50).best, 0.5f);
         Near("never dropped: nothing", at(999).best, 0.0);
+    }
+
+    // ---- where it drops from ------------------------------------------------------------------
+    {
+        Tables refs;
+        refs[100] = { Item(10, 0.0f, 1), Item(11, 0.0f, 1) };
+        Tables boxes;
+        boxes[50] = { Item(1, 10.0f) };
+        const Table low   = { Item(1, 2.0f) };
+        const Table mid   = { Item(1, 4.0f), Ref(100, 1.0f) };
+        const Table high  = { Item(1, 2.0f), Item(50, 50.0f) };
+        const Table rare  = { Item(1, 30.0f) };
+        const Table chest = { Item(1, 1.0f), Item(10, 5.0f), Item(12, 5.0f) };
+        const Table two   = { Item(2, 2.0f) };
+        const Table one   = { Item(2, 1.0f) };
+        auto src = [](Table const& t, uint32_t many, uint32_t id, float level, bool isChest = false)
+        {
+            PbpDrops::Source s;
+            s.table = &t;
+            s.many  = many;
+            s.id    = id;
+            s.level = level;
+            s.chest = isChest;
+            return s;
+        };
+        const auto drops = PbpDrops::Drops({ src(low, 600, 1, 10.0f), src(mid, 300, 2, 14.0f),
+                                             src(high, 300, 3, 18.0f), src(rare, 0, 4, 12.0f),
+                                             src(chest, 0, 5, 0.0f, true), src(two, 100, 7, 30.0f),
+                                             src(two, 400, 8, 30.0f), src(two, 400, 6, 30.0f),
+                                             src(one, 900, 9, 30.0f) },
+                                           refs, boxes);
+        auto from = [&drops](uint32_t item)
+        {
+            auto it = drops.find(item);
+            return it == drops.end() ? PbpDrops::From{} : it->second.from;
+        };
+        const PbpDrops::From f = from(1);
+        Eq("four kinds of creature", f.kinds, 4);
+        Eq("...this many of them", f.many, 1200);
+        Check("...and a chest", f.chests);
+        Eq("the likeliest first: one nobody spawns, at 30%", f.top[0], 4);
+        Near("...its chance", f.topChance[0], 0.30f);
+        Eq("then one with a box it can be in", f.top[1], 3);
+        Near("...the box counted", f.topChance[1], float(1.0 - 0.98 * (1.0 - 0.5 * 0.1)));
+        Eq("then the next", f.top[2], 2);
+        uint32_t lo = 0, hi = 0;
+        Check("levels known", PbpDrops::Levels(f, lo, hi));
+        // 600 at 10, 300 at 14, 300 at 18: the middle 13, give or take 3.3
+        Eq("from", lo, 10);
+        Eq("to", hi, 16);
+
+        const PbpDrops::From t = from(2);
+        Eq("as likely: the commoner first", t.top[0], 6);
+        Eq("...as common: by id", t.top[1], 8);
+        Eq("...then the rarer", t.top[2], 7);
+        Eq("a less likely one is not in it", t.kinds, 4);
+
+        const PbpDrops::From r = from(10);
+        Eq("by a reference: the one kind", r.kinds, 1);
+        Eq("...the one that has it", r.top[0], 2);
+        Eq("...and no more", r.top[1], 0);
+        Check("...and the chest's", r.chests);
+        Check("levels of one kind", PbpDrops::Levels(r, lo, hi) && lo == 14 && hi == 14);
+        Check("never dropped: no levels", !PbpDrops::Levels(from(999), lo, hi) && lo == 0 && hi == 0);
+        Check("none of them out in the world: no levels",
+              !PbpDrops::Levels(PbpDrops::Drops({ src(rare, 0, 4, 12.0f) }, refs, boxes)[1].from, lo, hi));
+        Check("the reference's other one: no chest", from(11).kinds == 1 && !from(11).chests);
+        Check("only a chest: no creature", from(12).kinds == 0 && from(12).top[0] == 0 && from(12).chests);
     }
 
     // ---- how often, for a person ----------------------------------------------------------

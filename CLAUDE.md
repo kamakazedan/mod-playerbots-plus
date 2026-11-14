@@ -177,7 +177,11 @@ a few odd mobs (the Peashooter's eleven with a 0.5% roll of a table of ten),
 and on a steep curve that noise made two blues of a band 20 times apart.
 
 `PlayerbotsPlus::ItemWorth` and `DropChance` (API 7) give mod-ollama-chat the
-same worth for Trade chat, so the two never disagree.
+same worth for Trade chat, so the two never disagree. `DropSourcesOf` (API 8)
+says where a thing drops -- how many kinds of creature, how many of them the
+world has, the levels most of them are, the likeliest three -- from the same
+sums (`Drop::from`, the likeliest kept by chance, the commoner first), so a
+bot asked where to find something answers from the loot tables.
 
 ## Bot dungeons and mod-dungeon-clear
 

@@ -67,6 +67,26 @@ namespace PlayerbotsPlus
         return PbpDrops_ChancePct(itemId);
     }
 
+    bool DropSourcesOf(uint32_t itemId, DropSources& out)
+    {
+        out = {};
+        PbpDropsFrom from;
+        if (!PbpDrops_Sources(itemId, from))
+            return false;
+        out.kinds    = from.kinds;
+        out.spawns   = from.spawns;
+        out.minLevel = from.minLevel;
+        out.maxLevel = from.maxLevel;
+        for (size_t i = 0; i < 3; ++i)
+        {
+            out.creature[i]  = from.creature[i];
+            out.chancePct[i] = from.chancePct[i];
+        }
+        out.bestPct = from.bestPct;
+        out.chests  = from.chests;
+        return true;
+    }
+
     void CityBusy(Player* bot, uint32_t seconds)
     {
         PbpHangout_Busy(bot, seconds);

@@ -19,6 +19,7 @@
 namespace
 {
     std::unordered_map<uint32_t, PbpDrops::Drop> g_drops;
+    std::unordered_map<uint32_t, uint32_t>       g_lootCreature;   // a creature loot id -> the commonest creature with it
     PbpDropsStats                                g_dropStats;
 
     // A loot table's rows, by entry, as the core reads them
@@ -58,6 +59,7 @@ void PbpDrops_Load()
 {
     const uint32 start = getMSTime();
     g_drops.clear();
+    g_lootCreature.clear();
     g_dropStats = {};
 
     // How many of each creature the world has: a spawn that may be one of
@@ -72,13 +74,33 @@ void PbpDrops_Load()
     }
 
     // The creatures' loot tables in use, with how many of those creatures
-    // there are; the chests' and fishing holes'.
-    std::unordered_map<uint32_t, uint32_t> creatureLoot;   // loot id: how many
+    // there are and what level they are; the chests' and fishing holes'.
+    struct Use
+    {
+        uint32_t many      = 0;     // in sixths, as spawned
+        double   levels    = 0.0;   // level x how many
+        double   plain     = 0.0;   // level, of each kind: for one nobody spawns
+        uint32_t kinds     = 0;
+        uint32_t commonest = 0;     // the creature with the most of them
+        uint32_t most      = 0;
+    };
+    std::unordered_map<uint32_t, Use> creatureLoot;   // loot id
     for (auto const& [entry, t] : *sObjectMgr->GetCreatureTemplates())
         if (t.lootid)
         {
             auto it = spawned.find(entry);
-            creatureLoot[t.lootid] += it == spawned.end() ? 0 : it->second;
+            const uint32_t many  = it == spawned.end() ? 0 : it->second;
+            const double   level = (double(t.minlevel) + double(t.maxlevel)) / 2.0;
+            Use& u = creatureLoot[t.lootid];
+            u.many   += many;
+            u.levels += level * many;
+            u.plain  += level;
+            ++u.kinds;
+            if (!u.commonest || many > u.most || (many == u.most && entry < u.commonest))
+            {
+                u.commonest = entry;
+                u.most      = many;
+            }
         }
     std::unordered_set<uint32_t> chestLoot;
     for (auto const& [entry, t] : *sObjectMgr->GetGameObjectTemplates())
@@ -97,9 +119,24 @@ void PbpDrops_Load()
     std::vector<PbpDrops::Source> sources;
     sources.reserve(creatures.size() + chests.size());
     for (auto const& [loot, table] : creatures)
-        sources.push_back({ &table, creatureLoot[loot] });
+    {
+        Use const& u = creatureLoot[loot];
+        PbpDrops::Source source;
+        source.table = &table;
+        source.many  = u.many;
+        source.id    = loot;
+        source.level = float(u.many ? u.levels / u.many : (u.kinds ? u.plain / u.kinds : 0.0));
+        sources.push_back(source);
+        g_lootCreature[loot] = u.commonest;
+    }
     for (auto const& [loot, table] : chests)
-        sources.push_back({ &table, 0 });
+    {
+        PbpDrops::Source source;
+        source.table = &table;
+        source.id    = loot;
+        source.chest = true;
+        sources.push_back(source);
+    }
 
     g_drops = PbpDrops::Drops(sources, references, containers);
 
@@ -121,6 +158,31 @@ double PbpDrops_BestPct(uint32_t itemId)
 {
     auto it = g_drops.find(itemId);
     return it == g_drops.end() ? 0.0 : double(it->second.best) * 100.0;
+}
+
+bool PbpDrops_Sources(uint32_t itemId, PbpDropsFrom& out)
+{
+    out = {};
+    auto it = g_drops.find(itemId);
+    if (it == g_drops.end())
+        return false;
+    PbpDrops::Drop const& d = it->second;
+    out.kinds   = d.from.kinds;
+    out.spawns  = (d.from.many + 3) / 6;   // spawned counts sixths
+    out.chests  = d.from.chests;
+    out.bestPct = double(d.best) * 100.0;
+    PbpDrops::Levels(d.from, out.minLevel, out.maxLevel);
+    size_t n = 0;
+    for (size_t i = 0; i < 3 && d.from.top[i]; ++i)
+    {
+        auto creature = g_lootCreature.find(d.from.top[i]);
+        if (creature == g_lootCreature.end() || !creature->second)
+            continue;
+        out.creature[n]  = creature->second;
+        out.chancePct[n] = double(d.from.topChance[i]) * 100.0;
+        ++n;
+    }
+    return true;
 }
 
 PbpDropsStats PbpDrops_GetStats()

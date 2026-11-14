@@ -125,17 +125,48 @@ namespace PbpDrops
         std::unordered_map<uint32_t, Chances> opened;   // a container: what one gives
         struct Sum
         {
-            double best  = 0.0;
-            double total = 0.0;   // chance x how many
-            double many  = 0.0;
+            double   best  = 0.0;
+            double   total = 0.0;   // chance x how many
+            double   many  = 0.0;
+            From     from;
+            uint32_t topMany[3] = {};   // how many of each of from.top: of two as likely, the commoner first
         };
         std::unordered_map<uint32_t, Sum> sums;
-        auto note = [&sums](uint32_t item, double chance, uint32_t many)
+        auto note = [&sums](uint32_t item, double chance, Source const& source)
         {
             Sum& s = sums[item];
             s.best = std::max(s.best, chance);
-            s.total += chance * many;
-            s.many += many;
+            s.total += chance * source.many;
+            s.many += source.many;
+            From& f = s.from;
+            if (source.chest)
+            {
+                f.chests = true;
+                return;
+            }
+            ++f.kinds;
+            f.many += source.many;
+            f.levelSum += double(source.level) * source.many;
+            f.levelSq  += double(source.level) * source.level * source.many;
+            for (size_t i = 0; i < 3; ++i)
+            {
+                const bool same   = float(chance) == f.topChance[i];
+                const bool better = !f.top[i] || float(chance) > f.topChance[i] ||
+                                    (same && source.many > s.topMany[i]) ||
+                                    (same && source.many == s.topMany[i] && source.id < f.top[i]);
+                if (!better)
+                    continue;
+                for (size_t j = 2; j > i; --j)
+                {
+                    f.top[j]       = f.top[j - 1];
+                    f.topChance[j] = f.topChance[j - 1];
+                    s.topMany[j]   = s.topMany[j - 1];
+                }
+                f.top[i]       = source.id;
+                f.topChance[i] = float(chance);
+                s.topMany[i]   = source.many;
+                break;
+            }
         };
 
         for (Source const& source : sources)
@@ -167,10 +198,10 @@ namespace PbpDrops
                     total = 1.0 - (1.0 - chance) * more->second;
                     inside.erase(more);
                 }
-                note(item, total, source.many);
+                note(item, total, source);
             }
             for (auto const& [thing, miss] : inside)
-                note(thing, 1.0 - miss, source.many);
+                note(thing, 1.0 - miss, source);
         }
 
         std::unordered_map<uint32_t, Drop> out;
@@ -180,9 +211,22 @@ namespace PbpDrops
             Drop d;
             d.best    = float(s.best);
             d.typical = s.many > 0.0 ? float(s.total / s.many) : 0.0f;
+            d.from    = s.from;
             out.emplace(item, d);
         }
         return out;
+    }
+
+    bool Levels(From const& from, uint32_t& lo, uint32_t& hi)
+    {
+        lo = hi = 0;
+        if (!from.many)
+            return false;
+        const double mean   = from.levelSum / from.many;
+        const double spread = std::sqrt(std::max(0.0, from.levelSq / from.many - mean * mean));
+        lo = uint32_t(std::max(1.0, std::round(mean - spread)));
+        hi = uint32_t(std::max(double(lo), std::round(mean + spread)));
+        return true;
     }
 
     uint64_t OneIn(double chance)

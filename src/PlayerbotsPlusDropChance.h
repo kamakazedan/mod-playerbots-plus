@@ -58,17 +58,35 @@ namespace PbpDrops
     };
 
     // Where things drop from: a creature's loot (`many`: how many of those
-    // creatures the world has), or a chest's (`many` 0).
+    // creatures the world has), or a chest's (`chest`, `many` 0).
     struct Source
     {
         Table const* table = nullptr;
         uint32_t     many  = 0;
+        uint32_t     id    = 0;       // the caller's name for it (a creature's loot id), for From::top
+        float        level = 0.0f;    // a creature's level (over all of them, by how many)
+        bool         chest = false;   // a chest or a fishing hole rather than a creature
+    };
+
+    // Where something drops from among the creatures, for someone asking
+    // where to find it: how many kinds, how many of them the world has, what
+    // level they are, and the likeliest few.
+    struct From
+    {
+        uint32_t kinds    = 0;      // creature sources that can give it
+        uint32_t many     = 0;      // ...how many such creatures the world has
+        double   levelSum = 0.0;    // ...their level times how many of them, added up
+        double   levelSq  = 0.0;    // ...and of its square: with levelSum, the middle and the spread
+        uint32_t top[3]   = {};     // the source ids likeliest to give it, likeliest first (0: none)
+        float    topChance[3] = {}; // ...the chance a kill of each gives it
+        bool     chests   = false;  // a chest or a fishing hole gives it too
     };
 
     struct Drop
     {
         float best    = 0.0f;   // the most any one source gives it, per kill or chest
         float typical = 0.0f;   // per kill of a creature that can drop it, over all the world has of them; 0: none there
+        From  from;
     };
 
     // How likely each item is to drop from `sources`. A container one gives
@@ -86,6 +104,11 @@ namespace PbpDrops
 
     // "1 in 2,000": how often, for a person. 0 when it never drops.
     uint64_t OneIn(double chance);
+
+    // The levels most of the creatures that drop it are (the middle, give or
+    // take the spread, by how many of them the world has), at least 1. False
+    // when none of them is out in the world.
+    bool Levels(From const& from, uint32_t& lo, uint32_t& hi);
 }
 
 #endif // PLAYERBOTS_PLUS_DROP_CHANCE_H
