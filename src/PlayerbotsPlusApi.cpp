@@ -61,6 +61,21 @@ namespace PlayerbotsPlus
         return PbpDuels_Go(a, b);
     }
 
+    void CityBusy(Player* bot, uint32_t seconds)
+    {
+        PbpHangout_Busy(bot, seconds);
+    }
+
+    void CitySpoke(Player* speaker)
+    {
+        PbpHangout_Spoke(speaker);
+    }
+
+    void CityGather(std::vector<Player*> const& bots, uint32_t seconds)
+    {
+        PbpHangout_Gather(bots, seconds);
+    }
+
     void AddBotEventListener(BotEventListener listener)
     {
         if (listener)

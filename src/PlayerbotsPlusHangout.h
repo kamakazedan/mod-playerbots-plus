@@ -51,10 +51,21 @@ class Player;
 // PlayerbotsPlusDuels.h), which is what the crowd there is for: its AI fights
 // it out, gets its breath back, and it goes back to its place. A spot like
 // that also takes in people from just inside the city (bots fetched from
-// elsewhere arrive at the city's inn and walk out through the gate). When its time is up it stands and goes about its business,
-// and does not hang out again for Hangout.CooldownMinutes. Switching it off
-// lets everyone go at once; if this stopped running altogether, the hold
-// would run out within five seconds.
+// elsewhere arrive at the city's inn and walk out through the gate). When
+// its time is up it stands and goes about its business, and does not hang
+// out again for Hangout.CooldownMinutes. Switching it off lets everyone go at
+// once; if this stopped running altogether, the hold would run out within
+// five seconds.
+//
+// City life (PlayerbotsPlus.CityLife.*): near a real player the crowd is not
+// a painting. Each settled bot gets a temper (stays put, shuffles, can't keep
+// still) and, free and near someone real, now and then takes a step, hops,
+// looks round, walks off to a banker, an auctioneer or a mailbox, or goes
+// fishing at the water's edge; a few wander over to look at someone's rare
+// mount; someone starts a dance and others join in (a real player dancing
+// too); some of those fetched fly in to the city's flight master, and some
+// of those leaving fly out. What a chat module does (talking, emoting, two
+// bots chatting) it says through PbpHangout_Busy, _Spoke and _Gather.
 //
 // World thread only: PbpHangout_Update runs in the world update, while the
 // map threads (and every bot's AI) are idle.
@@ -117,6 +128,14 @@ bool PbpHangout_SettledAt(Player* bot, const std::string& spotKey);
 // Hanging out, or on its way to: whatever else wants the bot leaves it be.
 bool PbpHangout_Has(Player* bot);
 
+// City life, as a chat module tells it (PlayerbotsPlus.h's CityBusy,
+// CitySpoke, CityGather): talking or emoting for `seconds` (0: done), it is
+// left where it is; someone spoke in /say, so some near them look round;
+// these are about to talk, so they stand together first.
+void PbpHangout_Busy(Player* bot, uint32_t seconds);
+void PbpHangout_Spoke(Player* speaker);
+void PbpHangout_Gather(std::vector<Player*> const& bots, uint32_t seconds);
+
 // How full each city is: its spots taken together, by the city their names
 // end with ("outside the bank in Thunder Bluff" -> "Thunder Bluff").
 struct PbpHangoutCity
@@ -154,6 +173,24 @@ struct PbpHangoutStats
     uint64_t duels     = 0;   // duels fought at the gates without leaving the crowd
     uint64_t foundFull = 0;   // times a spot was found full (its room went elsewhere for a while)
     uint64_t redirected = 0;  // fetched, no room at the spot: on to another spot in the city
+    // City life (CityLife.*)
+    uint64_t steps     = 0;   // stepped to another place at their spot
+    uint64_t turns     = 0;   // looked round (someone near, someone speaking)
+    uint64_t hops      = 0;   // little bouts of hopping
+    uint64_t gawks     = 0;   // rare mounts looked at
+    uint64_t gawkers   = 0;   // ...by this many, all told
+    uint64_t dances    = 0;   // dance parties started
+    uint64_t danced    = 0;   // ...joined, someone's own dance too
+    uint64_t gathered  = 0;   // walked over to who they were about to talk to
+    uint64_t errands   = 0;   // off to a banker, an auctioneer or a mailbox
+    uint64_t errandsDone = 0; // ...and got there
+    uint64_t flewIn    = 0;   // fetched by flight path
+    uint64_t landed    = 0;   // ...and landed in the city
+    uint64_t flewOut   = 0;   // left by flight path
+    uint64_t fished    = 0;   // went fishing at the water's edge
+    uint64_t casts     = 0;   // ...lines cast
+    uint32_t fishPlaces = 0;  // places to fish from, found so far
+    uint32_t services  = 0;   // bankers, auctioneers and mailboxes found so far
     uint32_t hanging   = 0;   // there now
     uint32_t away      = 0;   // ...of whom AFK
     uint32_t duelling  = 0;   // ...of whom in a duel or just out of one

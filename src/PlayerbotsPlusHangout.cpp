@@ -1,4 +1,6 @@
 #include "PlayerbotsPlusHangout.h"
+#include "PlayerbotsPlus.h"
+#include "PlayerbotsPlusCityLifeText.h"
 #include "PlayerbotsPlusConfig.h"
 #include "PlayerbotsPlusFire.h"
 #include "PlayerbotsPlusGroupQuests.h"
@@ -6,12 +8,15 @@
 #include "PlayerbotsPlusText.h"
 #include "PlayerbotsPlusUtil.h"
 
+#include "Bag.h"
 #include "CellImpl.h"
 #include "DBCStores.h"
 #include "GameObject.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
+#include "Item.h"
+#include "ItemPackets.h"
 #include "LFGMgr.h"
 #include "Log.h"
 #include "Map.h"
@@ -20,10 +25,17 @@
 #include "MoveSpline.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
+#include "Opcodes.h"
 #include "PathGenerator.h"
 #include "Player.h"
 #include "SpellAuraDefines.h"
+#include "SpellAuraEffects.h"
+#include "SpellInfo.h"
+#include "SpellMgr.h"
 #include "Timer.h"
+#include "World.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 #include "Event.h"
 #include "NewRpgInfo.h"
@@ -31,6 +43,8 @@
 #include "PlayerbotAIConfig.h"
 #include "PlayerbotMgr.h"
 #include "RandomPlayerbotMgr.h"
+#include "TravelMgr.h"
+#include "TravelNode.h"
 
 #include <fmt/core.h>
 
@@ -87,7 +101,19 @@ namespace
         Travel,     // playerbots' "go camp" is taking it there
         Approach,   // the last few steps, to its own place in the crowd
         Settled,
-        Duelling    // at the gates: in a duel, or getting its breath back after one, its own AI running
+        Duelling,   // at the gates: in a duel, or getting its breath back after one, its own AI running
+        Flying,     // fetched: flying in to the city by its flight path (CityLife.FlyInChance), its own AI flying it
+        Errand      // off to a banker, an auctioneer or a mailbox in the city, and then on (CityLife.Errand*)
+    };
+
+    // What city life (CityLife.*) has it doing besides standing about.
+    enum class Act : uint8_t
+    {
+        None,
+        Gawking,    // over looking at someone's rare mount
+        Dancing,    // dancing, in a dance party or with someone dancing (or about to join one)
+        Chatting,   // over by who it is talking to in /say (a chat module's)
+        Fishing     // at the water's edge with a line out
     };
 
     struct Visit
@@ -124,6 +150,37 @@ namespace
         bool              viaInn    = false;  // ...in at an inn, to walk over from
         uint32_t          fromMap   = 0;      // ...from here
         float             fromX = 0.0f, fromY = 0.0f, fromZ = 0.0f, fromO = 0.0f;
+
+        // City life (CityLife.*)
+        PbpCityLife::Temper temper = PbpCityLife::Temper::Shuffler;
+        bool              lifeSet     = false;   // its temper rolled (at its first settle here)
+        Clock::time_point nextFidget{};
+        Clock::time_point nextTurn{};
+        uint32_t          hops        = 0;       // hops left in this little bout
+        Clock::time_point nextHop{};
+        Clock::time_point busyUntil{};           // a chat module has it talking or emoting
+        ObjectGuid        turnTo;                // someone spoke near it: it looks round at them at turnAt
+        Clock::time_point turnAt{};
+        Act               act         = Act::None;
+        ObjectGuid        actWith;               // the rider, the one dancing, the one it talks to
+        Clock::time_point actUntil{};
+        Clock::time_point danceJoinAt{};         // a dance it is to join: when it goes over
+        bool              danceJoined = false;
+        bool              danceSaid   = false;   // ...and it was told it joined (CityDance)
+        bool              away        = false;   // off its own place for the act: back to hx, hy, hz after
+        float             hx = 0.0f, hy = 0.0f, hz = 0.0f;
+        uint8_t           errandStep  = 0;       // Errand: 0 on its way, 1 at it
+        float             ex = 0.0f, ey = 0.0f, ez = 0.0f;   // ...where it stands
+        float             efx = 0.0f, efy = 0.0f;             // ...what it faces
+        Clock::time_point errandSince{};
+        Clock::time_point errandUntil{};
+        bool              errandFaced = false;
+        float             fishO       = 0.0f;    // Fishing: facing the water
+        ObjectGuid        oldMain, oldOff;       // ...its weapons, back in its hands after
+        bool              poleOn      = false;
+        Clock::time_point nextCast{};
+        uint32_t          castFails   = 0;
+        Clock::time_point flewAt{};              // Flying: last seen in the air
     };
 
     std::unordered_map<uint64_t, Visit>             g_visits;     // by bot guid
@@ -198,6 +255,14 @@ namespace
         static std::mt19937 rng{ std::random_device{}() };
         return rng;
     }
+
+    // City life (below): what Let, Settle, Stay and BringIn call of it.
+    void PutAwayPole(Player* bot, Visit& v);
+    void LifeSettle(Player* bot, PlayerbotAI* ai, Visit& v, Clock::time_point now);
+    void RaiseDance(Player* bot, Unit* with);
+    bool FlyIn(Player* bot, PlayerbotAI* ai, const PbpHangoutSpot& s, uint32_t zone, Clock::time_point now);
+    bool FlyInOne(const PbpHangoutSpot& s, uint32_t zone, std::vector<Player*>& fetchable, Clock::time_point now);
+    bool FlyOut(Player* bot, PlayerbotAI* ai);
 
     float Frand(float lo, float hi)
     {
@@ -597,6 +662,10 @@ namespace
 
     const char* Doing(const Visit& v, Player* bot)
     {
+        if (v.act == Act::Fishing)
+            return "fishing at the water's edge";
+        if (v.act == Act::Dancing && v.danceJoined)
+            return "dancing";
         switch (v.posture)
         {
             case Posture::Mounted: return bot->IsMounted() ? "sat on your mount" : "standing about";
@@ -639,6 +708,11 @@ namespace
     {
         if (!bot)
             return;
+        // Not left dancing, or holding a fishing pole.
+        if (v.act == Act::Dancing && bot->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE)
+            bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
+        PutAwayPole(bot, v);
+        v.act = Act::None;
         if (v.afkSet && bot->isAFK())
             bot->ToggleAFK();
         v.afkSet = false;
@@ -1007,6 +1081,13 @@ namespace
             if (!budget || fetchable.empty())
                 break;
             const bool watched = Watched(*s, zone);
+            // Some come in by flight path, the way people come in, while
+            // someone is about to see them land.
+            if (watched && g_LifeEnable && Roll(g_LifeFlyInChance) && FlyInOne(*s, zone, fetchable, now))
+            {
+                --budget;
+                continue;
+            }
             if (watched && InnsFor(*s, zone).empty())
                 continue;   // no inn to come in at: only while nobody is there
             if (watched)
@@ -1268,8 +1349,9 @@ namespace
         v.phase     = Phase::Settled;
         v.settledAt = now;
         v.nextLook  = now + std::chrono::seconds(g_HangoutCheckSeconds);
+        LifeSettle(bot, ai, v, now);
         if (v.until != Clock::time_point{})
-            return;   // back from a duel: the rest of its time here
+            return;   // back from a duel, a step, an errand: the rest of its time here
         const uint32_t lo = g_HangoutStayMinutesMin * 60, hi = std::max(lo, g_HangoutStayMinutesMax * 60);
         v.until = now + std::chrono::seconds(std::uniform_int_distribution<uint32_t>(lo, hi)(Rng()));
         ++g_stats.settled;
@@ -1467,13 +1549,1336 @@ namespace
             ++g_stats.movedOn;
             Let(bot, ai, v, true, now);
             const bool back = v.broughtIn && SendBack(bot, ai, v);
+            // Off by flight path, some of them, the way people leave a city.
+            const bool flies = !back && g_LifeEnable && Roll(g_LifeFlyOutChance) && FlyOut(bot, ai);
             if (g_PbpDebug)
                 LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} is done hanging out at {}{}.", bot->GetName(),
-                         v.spotName, back ? ", and goes back where it came from" : "");
+                         v.spotName, back ? ", and goes back where it came from" : flies ? ", and flies out" : "");
             return false;
         }
         ai->rpgInfo.startT = getMSTime();   // playerbots' rest is 30 seconds; it is still resting
         return true;
+    }
+
+    // ---- city life (PlayerbotsPlus.CityLife.*) ----------------------------------------
+    //
+    // A crowd that stands stock still for half an hour is a painting. People
+    // in a city shift about, look round at whoever speaks or walks up, hop on
+    // the spot, wander over to look at someone's rare mount, start a dance by
+    // the bank, nip off to the mailbox or the auctioneer, fly in and out, and
+    // fish in the canals. All of it only near a real player: nobody sees the
+    // rest, and it costs nothing there.
+
+    using PbpCityLife::Temper;
+
+    std::vector<Player*> g_lifeWatchers;   // real players in the world, as of this look
+
+    // A city, here: a zone with hangout spots in it.
+    bool CityZone(uint32_t map, uint32_t zone)
+    {
+        for (const PbpHangoutSpot& s : g_HangoutSpots)
+            if (s.map == map && ZoneOf(s) == zone)
+                return true;
+        return false;
+    }
+
+    Clock::duration Secs(uint32_t lo, uint32_t hi)
+    {
+        return std::chrono::seconds(PbpCityLife::Between(lo, hi, Frand(0.0f, 1.0f)));
+    }
+
+    bool NearWatcher(WorldObject const* who, float range)
+    {
+        for (Player* p : g_lifeWatchers)
+            if (p->GetMapId() == who->GetMapId() && p->GetExactDistSq(who) <= range * range)
+                return true;
+        return false;
+    }
+
+    // Someone else's place, at any spot.
+    bool TakenByOther(uint32_t map, float x, float y, float minDist, uint64_t self)
+    {
+        for (const auto& [guid, v] : g_visits)
+            if (guid != self && v.map == map && std::hypot(v.x - x, v.y - y) < minDist)
+                return true;
+        return false;
+    }
+
+    void ScheduleFidget(Visit& v, const Clock::time_point now)
+    {
+        if (v.temper == Temper::Parked)
+            v.nextFidget = now + std::chrono::hours(24);
+        else if (v.temper == Temper::Restless)
+            v.nextFidget = now + Secs(g_LifeRestlessMinSeconds, g_LifeRestlessMaxSeconds);
+        else
+            v.nextFidget = now + Secs(g_LifeShuffleMinSeconds, g_LifeShuffleMaxSeconds);
+    }
+
+    // Ground to stand on near (fromX, fromY, fromZ), `minDist`..`maxDist`
+    // away at about `angle` (give or take half `spread`): on that floor, out
+    // of the water and any fire, in sight of where it is measured from,
+    // nobody's place and nobody in it, with a way to it -- and, for one on
+    // its mount, out in the open. `inSpot`: inside the spot too.
+    bool PlaceNear(Player* bot, const Visit& v, float fromX, float fromY, float fromZ, float minDist, float maxDist,
+                   float angle, float spread, bool inSpot, float& outX, float& outY, float& outZ)
+    {
+        Map* map = bot->GetMap();
+        const uint32_t phase = bot->GetPhaseMask();
+        const uint64_t self = bot->GetGUID().GetRawValue();
+        for (int tries = 0; tries < 10; ++tries)
+        {
+            const float a = angle + Frand(-spread / 2.0f, spread / 2.0f);
+            const float d = Frand(minDist, maxDist);
+            const float x = fromX + d * std::cos(a);
+            const float y = fromY + d * std::sin(a);
+            if (inSpot && std::hypot(x - v.cx, y - v.cy) > v.radius + 3.0f)
+                continue;
+            const float z = map->GetHeight(phase, x, y, fromZ + 2.0f, true, 4.0f);
+            if (z <= INVALID_HEIGHT || std::fabs(z - fromZ) > 1.5f || map->IsInWater(phase, x, y, z, 2.0f))
+                continue;
+            if (!map->isInLineOfSight(fromX, fromY, fromZ + 1.5f, x, y, z + 1.5f, phase, kSightChecks,
+                                      VMAP::ModelIgnoreFlags::Nothing))
+                continue;
+            if (TakenByOther(v.map, x, y, 2.0f, self) || PbpSpace_Crowded(map, bot, x, y, z, 2.0f, bot) ||
+                PbpFire_Burns(bot, x, y, z, 1.0f + (v.posture == Posture::Mounted ? PbpFire_MountRoom() : 0.0f)))
+                continue;
+            if (v.posture == Posture::Mounted)
+            {
+                PositionFullTerrainStatus there;
+                map->GetFullTerrainStatusForPosition(phase, x, y, z, bot->GetCollisionHeight(), there);
+                if (!there.outdoors)
+                    continue;
+            }
+            PathGenerator path(bot);
+            path.CalculatePath(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), x, y, z, false);
+            G3D::Vector3 const& end = path.GetActualEndPosition();
+            if (!(path.GetPathType() & PATHFIND_NORMAL) ||
+                (path.GetPathType() & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT)) ||
+                std::hypot(end.x - x, end.y - y) > 1.0f)
+                continue;
+            outX = x;
+            outY = y;
+            outZ = z;
+            return true;
+        }
+        return false;
+    }
+
+    // To a new place -- a step, or over to someone -- as it was: on its mount
+    // if it was, sat down again there if it was. Its own AI stays held.
+    void Shift(Player* bot, PlayerbotAI* ai, Visit& v, float x, float y, float z, bool walk,
+               const Clock::time_point now)
+    {
+        v.x = x;
+        v.y = y;
+        v.z = z;
+        if (bot->IsSitState())
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
+        if (bot->GetUInt32Value(UNIT_NPC_EMOTESTATE))
+            bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);   // nobody slides along dancing
+        v.phase         = Phase::Approach;
+        v.approachStart = now;
+        ai->SetNextCheckDelay(kHoldMs);
+        bot->GetMotionMaster()->MovePoint(kPointId, x, y, z, walk ? FORCED_MOVEMENT_WALK : FORCED_MOVEMENT_NONE);
+    }
+
+    // ---- fishing ------------------------------------------------------------------------
+
+    constexpr uint32_t kFishingPole = 6256;
+
+    // Fishing, the best rank it knows (Grand Master down to Apprentice). 0: none.
+    uint32_t FishingSpell(Player* bot)
+    {
+        for (uint32_t id : { 51294u, 33095u, 18248u, 7732u, 7731u, 7620u })
+            if (bot->HasSpell(id))
+                return id;
+        return 0;
+    }
+
+    bool IsPole(Item* item)
+    {
+        ItemTemplate const* proto = item ? item->GetTemplate() : nullptr;
+        return proto && proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE;
+    }
+
+    // The game's own way to put something on: what the client sends.
+    void EquipTo(Player* bot, Item* item, uint8_t slot)
+    {
+        WorldPacket packet(CMSG_AUTOEQUIP_ITEM_SLOT, 9);
+        packet << item->GetGUID() << slot;
+        WorldPackets::Item::AutoEquipItemSlot equip(std::move(packet));
+        equip.Read();
+        bot->GetSession()->HandleAutoEquipItemSlotOpcode(equip);
+    }
+
+    // A pole in its hands: one from its bags, or a plain one (a random bot
+    // gets one the way playerbots gives it one). What it held goes back
+    // after (PutAwayPole). False: it could not.
+    bool TakeOutPole(Player* bot, Visit& v)
+    {
+        Item* main = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
+        if (IsPole(main))
+            return true;
+        auto findPole = [bot]() -> Item*
+        {
+            for (uint8_t slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+                if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot); IsPole(item))
+                    return item;
+            for (uint8_t bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
+                if (Bag* b = bot->GetBagByPos(bag))
+                    for (uint32_t j = 0; j < b->GetBagSize(); ++j)
+                        if (Item* item = b->GetItemByPos(j); IsPole(item))
+                            return item;
+            return nullptr;
+        };
+        Item* pole = findPole();
+        if (!pole && bot->StoreNewItemInBestSlots(kFishingPole, 1))
+            pole = findPole();
+        if (!pole)
+            return false;   // no room in its bags for one
+        Item* off = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
+        v.oldMain = main ? main->GetGUID() : ObjectGuid::Empty;
+        v.oldOff  = off ? off->GetGUID() : ObjectGuid::Empty;
+        EquipTo(bot, pole, EQUIPMENT_SLOT_MAINHAND);
+        v.poleOn = IsPole(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND));
+        return v.poleOn;
+    }
+
+    // Its own weapons back in its hands, as it had them.
+    void PutAwayPole(Player* bot, Visit& v)
+    {
+        if (!v.poleOn)
+            return;
+        v.poleOn = false;
+        if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
+            bot->InterruptNonMeleeSpells(false);
+        if (Item* main = v.oldMain ? bot->GetItemByGuid(v.oldMain) : nullptr; main && !main->IsEquipped())
+            EquipTo(bot, main, EQUIPMENT_SLOT_MAINHAND);
+        if (Item* off = v.oldOff ? bot->GetItemByGuid(v.oldOff) : nullptr; off && !off->IsEquipped())
+            EquipTo(bot, off, EQUIPMENT_SLOT_OFFHAND);
+        v.oldMain.Clear();
+        v.oldOff.Clear();
+    }
+
+    // Where people fish in a city: ground at a water's edge near a spot,
+    // looking out over water 10-20 yards off -- where a cast line lands --
+    // deep enough to fish, in sight. Found from the map's own water, once per
+    // spot, while someone is near enough for it to be loaded.
+    struct FishPlace
+    {
+        uint32_t map = 0;
+        float    x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;
+    };
+    std::unordered_map<std::string, std::vector<FishPlace>> g_fishPlaces;   // by spot key, once looked
+
+    bool Fishable(Map* map, float x, float y, float standZ)
+    {
+        constexpr uint8_t kFishWater = MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN | MAP_LIQUID_TYPE_SLIME;
+        LiquidData const liquid = map->GetLiquidData(PHASEMASK_NORMAL, x, y, standZ + 2.0f, 2.0f, kFishWater);
+        if (liquid.Status == LIQUID_MAP_NO_WATER || liquid.Level <= INVALID_HEIGHT)
+            return false;
+        return liquid.Level - liquid.DepthLevel >= 1.0f && liquid.Level < standZ + 1.0f && liquid.Level > standZ - 12.0f;
+    }
+
+    const std::vector<FishPlace>& FishPlacesAt(const PbpHangoutSpot& s, Player* near)
+    {
+        auto it = g_fishPlaces.find(s.key);
+        if (it != g_fishPlaces.end())
+            return it->second;
+        std::vector<FishPlace>& found = g_fishPlaces[s.key];
+        Map* map = near->GetMap();
+        if (!g_LifeFish || !g_LifeFishPlaces || !map || map->GetId() != s.map)
+            return found;
+        const float reach = s.radius + 30.0f;
+        std::vector<FishPlace> edges;
+        for (float dx = -reach; dx <= reach; dx += 5.0f)
+            for (float dy = -reach; dy <= reach; dy += 5.0f)
+            {
+                const float x = s.x + dx, y = s.y + dy;
+                if (std::hypot(dx, dy) > reach)
+                    continue;
+                const float z = map->GetHeight(PHASEMASK_NORMAL, x, y, s.z + 5.0f, true, 12.0f);
+                if (z <= INVALID_HEIGHT || std::fabs(z - s.z) > 12.0f ||
+                    map->IsInWater(PHASEMASK_NORMAL, x, y, z, 2.0f))
+                    continue;
+                float bestO = 0.0f;
+                int best = 0;
+                for (int d = 0; d < 12; ++d)
+                {
+                    const float o = kTwoPi * float(d) / 12.0f;
+                    if (!Fishable(map, x + 15.0f * std::cos(o), y + 15.0f * std::sin(o), z))
+                        continue;   // the middle of where a line lands: dry, and so the rest most likely
+                    int wet = 1;
+                    for (float r : { 11.0f, 18.0f, 20.0f })
+                        wet += Fishable(map, x + r * std::cos(o), y + r * std::sin(o), z) ? 1 : 0;
+                    if (wet > best)
+                    {
+                        best = wet;
+                        bestO = o;
+                    }
+                }
+                if (best < 4)
+                    continue;
+                const float wx = x + 15.0f * std::cos(bestO), wy = y + 15.0f * std::sin(bestO);
+                LiquidData const surface = map->GetLiquidData(PHASEMASK_NORMAL, wx, wy, z + 2.0f, 2.0f, {});
+                if (!map->isInLineOfSight(x, y, z + 1.8f, wx, wy, surface.Level + 0.3f, PHASEMASK_NORMAL,
+                                          LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing))
+                    continue;
+                edges.push_back({ s.map, x, y, z, bestO });
+            }
+        // The nearest to the spot first, a few yards apart, one there is a way to.
+        std::sort(edges.begin(), edges.end(), [&s](const FishPlace& a, const FishPlace& b)
+                  { return std::hypot(a.x - s.x, a.y - s.y) < std::hypot(b.x - s.x, b.y - s.y); });
+        for (const FishPlace& e : edges)
+        {
+            if (found.size() >= g_LifeFishPlaces)
+                break;
+            if (std::any_of(found.begin(), found.end(),
+                            [&e](const FishPlace& f) { return std::hypot(f.x - e.x, f.y - e.y) < 6.0f; }))
+                continue;
+            PathGenerator path(near);
+            path.CalculatePath(s.x, s.y, s.z, e.x, e.y, e.z, false);
+            if (!(path.GetPathType() & PATHFIND_NORMAL) ||
+                (path.GetPathType() & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE | PATHFIND_SHORTCUT)))
+                continue;
+            found.push_back(e);
+        }
+        if (!found.empty())
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] City life: {} place{} to fish from by {}.",
+                     found.size(), found.size() == 1 ? "" : "s", s.name);
+        return found;
+    }
+
+    // ---- errands ------------------------------------------------------------------------
+
+    // A banker, an auctioneer or a mailbox in a city: where one stands at it,
+    // and what one faces. Found from the spawns, once per zone.
+    struct Service
+    {
+        uint32_t map = 0;
+        float    x = 0.0f, y = 0.0f, z = 0.0f;   // the NPC or the mailbox
+        float    o = 0.0f;                       // ...an NPC's facing
+        bool     mailbox = false;
+        uint32_t faction = 0;                    // an NPC's: the other side's are not used
+    };
+    std::unordered_map<uint32_t, std::vector<Service>> g_services;   // by zone, once looked
+
+    const std::vector<Service>& ServicesIn(uint32_t mapId, uint32_t zone)
+    {
+        auto it = g_services.find(zone);
+        if (it != g_services.end())
+            return it->second;
+        std::vector<Service>& found = g_services[zone];
+        Map* base = sMapMgr->FindBaseMap(mapId);
+        if (!base)
+            return found;
+        std::vector<PbpHangoutSpot const*> spots;   // the city's: a service far from all of them is not in it
+        for (const PbpHangoutSpot& s : g_HangoutSpots)
+            if (s.map == mapId && ZoneOf(s) == zone && !DuelSpot(s.key))
+                spots.push_back(&s);
+        auto inCity = [&](float x, float y, float z)
+        {
+            return std::any_of(spots.begin(), spots.end(), [&](PbpHangoutSpot const* s)
+                               { return std::hypot(s->x - x, s->y - y) < 400.0f && std::fabs(s->z - z) < 40.0f; }) &&
+                   base->GetZoneId(PHASEMASK_NORMAL, x, y, z) == zone;
+        };
+        if (spots.empty())
+            return found;
+        for (auto const& [spawnId, data] : sObjectMgr->GetAllCreatureData())
+        {
+            if (data.mapid != mapId || !(data.phaseMask & PHASEMASK_NORMAL))
+                continue;
+            CreatureTemplate const* info = sObjectMgr->GetCreatureTemplate(data.id);
+            if (!info || !((info->npcflag | data.npcflag) & (UNIT_NPC_FLAG_BANKER | UNIT_NPC_FLAG_AUCTIONEER)))
+                continue;
+            if (inCity(data.posX, data.posY, data.posZ))
+                found.push_back({ mapId, data.posX, data.posY, data.posZ, data.orientation, false, info->faction });
+        }
+        for (auto const& [spawnId, data] : sObjectMgr->GetAllGOData())
+        {
+            if (data.mapid != mapId || !(data.phaseMask & PHASEMASK_NORMAL))
+                continue;
+            GameObjectTemplate const* info = sObjectMgr->GetGameObjectTemplate(data.id);
+            if (info && info->type == GAMEOBJECT_TYPE_MAILBOX && inCity(data.posX, data.posY, data.posZ))
+                found.push_back({ mapId, data.posX, data.posY, data.posZ, data.orientation, true, 0 });
+        }
+        return found;
+    }
+
+    // Where to stand at it: before an NPC, as people line up at the counter;
+    // any side of a mailbox.
+    bool StandAt(Player* bot, const Service& s, float& x, float& y, float& z)
+    {
+        Map* map = bot->GetMap();
+        for (int tries = 0; tries < 8; ++tries)
+        {
+            const float a = s.mailbox ? Frand(0.0f, kTwoPi) : s.o + Frand(-0.7f, 0.7f);
+            const float d = s.mailbox ? Frand(1.6f, 2.4f) : Frand(2.2f, 3.4f);
+            x = s.x + d * std::cos(a);
+            y = s.y + d * std::sin(a);
+            z = map->GetHeight(bot->GetPhaseMask(), x, y, s.z + 2.0f, true, 4.0f);
+            if (z <= INVALID_HEIGHT || std::fabs(z - s.z) > 1.5f || map->IsInWater(bot->GetPhaseMask(), x, y, z, 2.0f))
+                continue;
+            if (!map->isInLineOfSight(s.x, s.y, s.z + 1.5f, x, y, z + 1.5f, bot->GetPhaseMask(), kSightChecks,
+                                      VMAP::ModelIgnoreFlags::Nothing))
+                continue;
+            if (PbpSpace_Crowded(map, bot, x, y, z, 1.6f, bot))
+                continue;
+            return true;
+        }
+        return false;
+    }
+
+    // Off to one now: the bank, the auction house, the mailbox, a fair walk
+    // away in the city. Its own AI walks it there (playerbots' "go camp").
+    bool StartErrand(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (!g_LifeErrandChance || g_HangoutSpots.empty())
+            return false;
+        std::vector<std::pair<float, Service const*>> near;
+        FactionTemplateEntry const* mine = bot->GetFactionTemplateEntry();
+        for (const Service& s : ServicesIn(bot->GetMapId(), bot->GetZoneId()))
+        {
+            const float d = bot->GetExactDist2d(s.x, s.y);
+            if (d < 15.0f || d > g_LifeErrandRange || std::fabs(s.z - bot->GetPositionZ()) > kMaxClimb)
+                continue;
+            if (s.faction && mine)
+            {
+                FactionTemplateEntry const* theirs = sFactionTemplateStore.LookupEntry(s.faction);
+                if (theirs && (mine->IsHostileTo(*theirs) || theirs->IsHostileTo(*mine)))
+                    continue;
+            }
+            near.emplace_back(d, &s);
+        }
+        if (near.empty())
+            return false;
+        std::sort(near.begin(), near.end(), [](auto const& a, auto const& b) { return a.first < b.first; });
+        Service const& to = *near[std::uniform_int_distribution<size_t>(0, std::min<size_t>(near.size(), 5) - 1)(Rng())]
+                                 .second;
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        if (!StandAt(bot, to, x, y, z))
+            return false;
+        if (v.afkSet && bot->isAFK())
+            bot->ToggleAFK();
+        v.afkSet = false;
+        if (bot->IsSitState())
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
+        if (bot->GetUInt32Value(UNIT_NPC_EMOTESTATE))
+            bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
+        v.holding    = false;
+        v.phase      = Phase::Errand;
+        v.errandStep = 0;
+        v.ex = x;
+        v.ey = y;
+        v.ez = z;
+        v.efx = to.x;
+        v.efy = to.y;
+        v.errandSince = now;
+        ai->SetNextCheckDelay(0);
+        ai->rpgInfo.ChangeToGoCamp(WorldPosition(bot->GetMapId(), x, y, z));
+        ++g_stats.errands;
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} nips off to the {} from {}.", bot->GetName(),
+                     to.mailbox ? "mailbox" : "counter", v.spotName);
+        return true;
+    }
+
+    // The spot of a city nearest a place: where one done at the mailbox
+    // settles, if it does not go back.
+    PbpHangoutSpot const* SpotNear(uint32_t map, uint32_t zone, float x, float y, float z)
+    {
+        PbpHangoutSpot const* best = nullptr;
+        float bestDist = 0.0f;
+        for (const PbpHangoutSpot& s : g_HangoutSpots)
+        {
+            if (s.map != map || ZoneOf(s) != zone || DuelSpot(s.key) || std::fabs(s.z - z) > kMaxClimb)
+                continue;
+            const float d = std::hypot(s.x - x, s.y - y);
+            if (!best || d < bestDist)
+            {
+                best = &s;
+                bestDist = d;
+            }
+        }
+        return best;
+    }
+
+    // On an errand. False: done with hanging out here.
+    bool Errand(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        // Two and a half minutes to get there; once there, ErrandMaxSeconds at most.
+        if (!StillFree(bot, v) || (v.errandStep == 0 && now - v.errandSince > std::chrono::seconds(150)))
+        {
+            ++g_stats.cutShort;
+            Let(bot, ai, v, true, now);
+            return false;
+        }
+        const float dist = bot->GetExactDist2d(v.ex, v.ey);
+        if (v.errandStep == 0)
+        {
+            // Playerbots' "go camp" turns into wandering between NPCs within
+            // ten yards of where it was going: there, as far as this goes.
+            const auto& data = ai->rpgInfo.data;
+            const auto* camp = std::get_if<NewRpgInfo::GoCamp>(&data);
+            const bool ours = camp && std::fabs(camp->pos.GetPositionX() - v.ex) < 0.5f &&
+                              std::fabs(camp->pos.GetPositionY() - v.ey) < 0.5f;
+            const bool arrived = (ours && dist < 10.0f) ||
+                                 (std::holds_alternative<NewRpgInfo::WanderNpc>(data) && dist < 14.0f);
+            if (!ours && !arrived)
+            {
+                ++g_stats.cutShort;   // playerbots gave it something else to do
+                Let(bot, ai, v, false, now);
+                return false;
+            }
+            if (!arrived)
+                return true;
+            // At the counter, or the mailbox: it stops there, held, and turns to it.
+            ai->rpgInfo.ChangeToRest();
+            ai->SetNextCheckDelay(kHoldMs);
+            bot->GetMotionMaster()->Clear();
+            if (dist > 1.0f)
+                bot->GetMotionMaster()->MovePoint(kPointId, v.ex, v.ey, v.ez);
+            v.errandStep  = 1;
+            v.errandUntil = now + Secs(g_LifeErrandMinSeconds, g_LifeErrandMaxSeconds);
+            v.errandFaced = false;
+            ++g_stats.errandsDone;
+            return true;
+        }
+        ai->SetNextCheckDelay(kHoldMs);
+        ai->rpgInfo.startT = getMSTime();
+        if (!v.errandFaced && (!bot->movespline || bot->movespline->Finalized()))
+        {
+            bot->SetFacingTo(bot->GetAngle(v.efx, v.efy));
+            v.errandFaced = true;
+        }
+        if (now < v.errandUntil)
+            return true;
+        // Done there. Its time here up: off about its business. Otherwise
+        // back to its spot, or to the one nearest, the way people drift.
+        if (v.until != Clock::time_point{} && now >= v.until)
+        {
+            ++g_stats.movedOn;
+            Let(bot, ai, v, true, now);
+            if (v.broughtIn)
+                SendBack(bot, ai, v);
+            return false;
+        }
+        PbpHangoutSpot const* to = Roll(g_LifeErrandStayChance)
+                                       ? SpotNear(v.map, bot->GetZoneId(), bot->GetPositionX(), bot->GetPositionY(),
+                                                  bot->GetPositionZ())
+                                       : SpotByKey(v.spotKey);
+        if (!to || (to->key != v.spotKey && RoomAt(*to) <= AtSpot(to->key)))
+            to = SpotByKey(v.spotKey);
+        const Visit from = v;
+        const uint64_t key = bot->GetGUID().GetRawValue();
+        ai->SetNextCheckDelay(0);   // its own AI walks it, as it walked here
+        if (to && Send(bot, ai, *to, now, &from))
+        {
+            Visit& now2 = g_visits[key];
+            now2.until = from.until;   // the rest of its time, not a fresh stay
+            return true;
+        }
+        ++g_stats.movedOn;
+        Let(bot, ai, v, true, now);
+        return false;
+    }
+
+    // ---- flights ------------------------------------------------------------------------
+
+    // The flight path a spot's city is on: the nearest node to it of the
+    // bot's side, if that is in the city's zone (Darnassus's is over in
+    // Rut'theran Village: nobody flies in to it).
+    uint32_t CityNode(const PbpHangoutSpot& s, uint32_t zone, TeamId team)
+    {
+        const uint32_t node = sObjectMgr->GetNearestTaxiNode(s.x, s.y, s.z, s.map, team);
+        TaxiNodesEntry const* entry = node ? sTaxiNodesStore.LookupEntry(node) : nullptr;
+        Map* base = sMapMgr->FindBaseMap(s.map);
+        if (!entry || !base || entry->map_id != s.map || std::hypot(entry->x - s.x, entry->y - s.y) > 700.0f ||
+            base->GetZoneId(PHASEMASK_NORMAL, entry->x, entry->y, entry->z) != zone)
+            return 0;
+        return node;
+    }
+
+    // How far a bot fetched by flight path may be from its own flight master.
+    constexpr float kFlyInReach = 250.0f;
+
+    // Fetched by flight path: off to its own nearest flight master, and in to
+    // the city's, the way people come in. Nobody sees it teleported anywhere.
+    bool FlyIn(Player* bot, PlayerbotAI* ai, const PbpHangoutSpot& s, uint32_t zone, const Clock::time_point now)
+    {
+        TravelMgr::FlightMasterInfo const* from = sTravelMgr.GetNearestFlightMasterInfo(bot);
+        if (!from || !from->taxiNodeId || bot->GetMapId() != s.map || bot->GetDistance(from->pos) > kFlyInReach)
+            return false;
+        const uint32_t to = CityNode(s, zone, bot->GetTeamId());
+        if (!to || to == from->taxiNodeId)
+            return false;
+        std::vector<uint32_t> path = sTravelNodeMap.FindTaxiPath(from->taxiNodeId, to);
+        if (path.size() < 2)
+            return false;
+
+        Visit v;
+        v.spotKey   = s.key;
+        v.spotName  = s.name;
+        v.map       = s.map;
+        v.cx        = s.x;
+        v.cy        = s.y;
+        v.cz        = s.z;
+        v.radius    = s.radius;
+        v.x         = s.x;
+        v.y         = s.y;
+        v.z         = s.z;
+        v.phase     = Phase::Flying;
+        v.started   = now;
+        v.broughtIn = true;
+        v.viaInn    = true;   // walks over from where it lands
+        v.fromMap   = bot->GetMapId();
+        v.fromX     = bot->GetPositionX();
+        v.fromY     = bot->GetPositionY();
+        v.fromZ     = bot->GetPositionZ();
+        v.fromO     = bot->GetOrientation();
+        if (bot->isAFK())
+            bot->ToggleAFK();
+        if (bot->IsSitState())
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
+        ai->rpgInfo.ChangeToTravelFlight(from->templateEntry, from->pos, std::move(path));
+        g_visits[bot->GetGUID().GetRawValue()] = std::move(v);
+        g_fetchTimes.push_back(now);
+        ++g_stats.broughtIn;
+        ++g_stats.flewIn;
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} flies in to hang out at {}.", bot->GetName(),
+                     s.name);
+        return true;
+    }
+
+    // One of `fetchable` that can fly in to `s` now: one of the city's side on
+    // its continent, on its own near a flight master (most bots are nowhere
+    // near one, so one picked at random seldom could). Out of `fetchable`
+    // once it goes. False: none could.
+    bool FlyInOne(const PbpHangoutSpot& s, uint32_t zone, std::vector<Player*>& fetchable, const Clock::time_point now)
+    {
+        const uint32_t nodeA = CityNode(s, zone, TEAM_ALLIANCE), nodeH = CityNode(s, zone, TEAM_HORDE);
+        if ((!nodeA && !nodeH) || fetchable.empty())
+            return false;   // the city has no flight master of its own (Darnassus's is over in Rut'theran)
+        const size_t n = fetchable.size(), start = std::uniform_int_distribution<size_t>(0, n - 1)(Rng());
+        for (size_t k = 0; k < n && k < 400; ++k)
+        {
+            const size_t i = (start + k) % n;
+            Player* bot = fetchable[i];
+            if (bot->GetMapId() != s.map || !(bot->GetTeamId() == TEAM_ALLIANCE ? nodeA : nodeH) ||
+                bot->GetLevel() < MinLevelFor(s, zone) || !TeamFits(bot, zone) ||
+                g_visits.contains(bot->GetGUID().GetRawValue()))
+                continue;
+            TravelMgr::FlightMasterInfo const* from = sTravelMgr.GetNearestFlightMasterInfo(bot);
+            if (!from || bot->GetDistance(from->pos) > kFlyInReach)
+                continue;
+            PlayerbotAI* ai = AiOf(bot);
+            if (!CanBringIn(bot, ai, s, zone) || !FlyIn(bot, ai, s, zone, now))
+                continue;
+            fetchable[i] = fetchable.back();
+            fetchable.pop_back();
+            return true;
+        }
+        return false;
+    }
+
+    // Flying in. Landed in the city: as one in at the inn, it walks over from
+    // there. False: it never went, or went somewhere else.
+    bool Fly(Player* bot, PlayerbotAI* ai, Visit& v, const PbpHangoutSpot& s, const Clock::time_point now)
+    {
+        if (now - v.started > std::chrono::minutes(10) || (!bot->IsInFlight() && Wanted(bot)))
+        {
+            ++g_stats.gaveUp;
+            ++g_stats.lostLanding;
+            Let(bot, ai, v, false, now);
+            return false;
+        }
+        if (bot->IsInFlight())
+        {
+            v.flewAt = now;
+            return true;
+        }
+        if (std::holds_alternative<NewRpgInfo::TravelFlight>(ai->rpgInfo.data))
+            return true;   // on its way to its flight master, or just off it
+        const uint32_t zone = ZoneOf(s);
+        if (v.flewAt == Clock::time_point{} || bot->GetMapId() != v.map || !zone || bot->GetZoneId() != zone)
+        {
+            ++g_stats.gaveUp;   // never took off, or came down somewhere else
+            ++g_stats.lostLanding;
+            Let(bot, ai, v, false, now);
+            return false;
+        }
+        ++g_stats.landed;
+        v.phase    = Phase::Arriving;
+        v.started  = now;
+        v.landedAt = Clock::time_point{};
+        return true;
+    }
+
+    // Off by flight path: to the city's flight master, and away to somewhere
+    // for its level (playerbots' own pick, and its own walk and flight).
+    bool FlyOut(Player* bot, PlayerbotAI* ai)
+    {
+        if (!ai || bot->GetVehicle() || !bot->IsAlive() || bot->IsInCombat())
+            return false;
+        TravelMgr::FlightMasterInfo const* info = sTravelMgr.GetNearestFlightMasterInfo(bot);
+        if (!info || bot->GetDistance(info->pos) > 400.0f)
+            return false;
+        std::vector<std::vector<uint32>> paths = sTravelMgr.GetOptimalFlightDestinations(bot);
+        if (paths.empty() || paths.front().size() < 2)
+            return false;
+        ai->rpgInfo.ChangeToTravelFlight(info->templateEntry, info->pos, std::move(paths.front()));
+        ++g_stats.flewOut;
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} heads for the flight master to fly out.",
+                     bot->GetName());
+        return true;
+    }
+
+    // ---- acts: over to look at a mount, dancing, gathered to talk, fishing -----------------
+
+    // Done with what took it off its place: back to its place, as it was.
+    void EndAct(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (v.act == Act::Dancing && bot->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE)
+            bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
+        if (v.act == Act::Fishing)
+            PutAwayPole(bot, v);
+        v.act = Act::None;
+        v.actWith.Clear();
+        ScheduleFidget(v, now);
+        if (v.away)
+        {
+            v.away = false;
+            if (v.phase == Phase::Settled && ai)
+                Shift(bot, ai, v, v.hx, v.hy, v.hz, false, now);
+            else
+            {
+                v.x = v.hx;
+                v.y = v.hy;
+                v.z = v.hz;
+            }
+        }
+    }
+
+    // Off its place for an act: back to it after (EndAct).
+    void LeavePlace(Visit& v)
+    {
+        if (v.away)
+            return;
+        v.away = true;
+        v.hx = v.x;
+        v.hy = v.y;
+        v.hz = v.z;
+    }
+
+    // Free for something to happen: settled, at its keyboard, on its feet or
+    // its mount, not already about something, nobody talking with it.
+    bool FreeForLife(Player* bot, const Visit& v, const Clock::time_point now)
+    {
+        return v.phase == Phase::Settled && v.act == Act::None && !v.forDuel && !v.afkSet && now >= v.busyUntil &&
+               (v.posture == Posture::Stand || v.posture == Posture::Mounted) && bot->IsAlive() && !bot->IsInCombat() &&
+               !bot->isMoving() && !bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+    }
+
+    // Over to `who`, `r` yards off at `angle` round them, for `act`: false if
+    // there is nowhere to stand there.
+    bool GoOverTo(Player* bot, PlayerbotAI* ai, Visit& v, Unit* who, float angle, float r, Act act,
+                  Clock::time_point until, const Clock::time_point now)
+    {
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        if (!PlaceNear(bot, v, who->GetPositionX(), who->GetPositionY(), who->GetPositionZ(), r - 0.6f, r + 0.6f, angle,
+                       0.8f, false, x, y, z))
+            return false;
+        LeavePlace(v);
+        v.act      = act;
+        v.actWith  = who->GetGUID();
+        v.actUntil = until;
+        Shift(bot, ai, v, x, y, z, false, now);
+        return true;
+    }
+
+    // Settled again (Settle): what it is about decides how it stands.
+    void LifeSettle(Player* bot, PlayerbotAI* /*ai*/, Visit& v, const Clock::time_point now)
+    {
+        if (!v.lifeSet)
+        {
+            v.lifeSet = true;
+            v.temper  = PbpCityLife::PickTemper(std::uniform_int_distribution<uint32_t>(1, 100)(Rng()),
+                                                g_LifeParkedShare, g_LifeRestlessShare);
+            ScheduleFidget(v, now);
+            v.nextTurn = now + Secs(g_LifeTurnMinSeconds, g_LifeTurnMaxSeconds);
+        }
+        Unit* with = v.actWith ? ObjectAccessor::GetUnit(*bot, v.actWith) : nullptr;
+        switch (v.act)
+        {
+            case Act::Gawking:
+            case Act::Chatting:
+                if (with)
+                {
+                    bot->SetFacingToObject(with);
+                    if (v.act == Act::Gawking && Roll(40))
+                    {
+                        static const uint32_t kAdmire[] = { EMOTE_ONESHOT_POINT, EMOTE_ONESHOT_APPLAUD,
+                                                            EMOTE_ONESHOT_EXCLAMATION, EMOTE_ONESHOT_CHEER };
+                        bot->HandleEmoteCommand(kAdmire[std::uniform_int_distribution<int>(0, 3)(Rng())]);
+                    }
+                    if (v.act == Act::Chatting)
+                        if (Player* p = with->ToPlayer(); p && p->GetExactDist(bot) < 6.0f && !p->isMoving())
+                            p->SetFacingToObject(bot);
+                }
+                break;
+            case Act::Dancing:
+                bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_STATE_DANCE);
+                if (with && with != bot)
+                {
+                    bot->SetFacingToObject(with);
+                    if (v.danceJoined && !v.danceSaid)
+                    {
+                        v.danceSaid = true;   // over there and dancing: it joined them
+                        ++g_stats.danced;
+                        RaiseDance(bot, with);
+                    }
+                }
+                break;
+            case Act::Fishing:
+                bot->SetFacingTo(v.fishO);
+                v.nextCast = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(800, 2500)(Rng()));
+                v.castFails = 0;
+                break;
+            default:
+                break;
+        }
+    }
+
+    // A hop: a step's worth up into the air and down again, the way people
+    // jump on the spot while they wait.
+    void Hop(Player* bot)
+    {
+        Map* map = bot->GetMap();
+        const float a = Roll(60) ? bot->GetOrientation() : Frand(0.0f, kTwoPi);
+        const float d = Frand(0.3f, 0.9f);
+        float x = bot->GetPositionX() + d * std::cos(a);
+        float y = bot->GetPositionY() + d * std::sin(a);
+        float z = map->GetHeight(bot->GetPhaseMask(), x, y, bot->GetPositionZ() + 2.0f, true, 3.0f);
+        if (z <= INVALID_HEIGHT || std::fabs(z - bot->GetPositionZ()) > 0.6f ||
+            PbpSpace_Crowded(map, bot, x, y, z, 1.2f, bot))
+        {
+            x = bot->GetPositionX();
+            y = bot->GetPositionY();
+            z = bot->GetPositionZ();
+        }
+        bot->GetMotionMaster()->MoveJump(x, y, z, PbpCityLife::HopSpeed(std::max(0.25f, d)), PbpCityLife::kHopRise);
+    }
+
+    // Looks round: at someone stood close by, or just a little turn.
+    void LookRound(Player* bot)
+    {
+        std::list<Player*> near;
+        Acore::AnyPlayerInObjectRangeCheck check(bot, 6.0f);
+        Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(bot, near, check);
+        Cell::VisitObjects(bot, searcher, 6.0f);
+        near.remove(bot);
+        if (!near.empty() && Roll(60))
+        {
+            auto it = near.begin();
+            std::advance(it, std::uniform_int_distribution<size_t>(0, near.size() - 1)(Rng()));
+            bot->SetFacingToObject(*it);
+        }
+        else
+            bot->SetFacingTo(bot->GetOrientation() + (Roll(50) ? 1.0f : -1.0f) * Frand(0.3f, 1.1f));
+        ++g_stats.turns;
+    }
+
+    // Fishing: a line out, and another once that one is in.
+    void FishTick(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (now >= v.actUntil || !g_LifeFish)
+        {
+            EndAct(bot, ai, v, now);
+            return;
+        }
+        if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
+        {
+            v.castFails = 0;
+            v.nextCast  = now + Secs(3, 9);   // a moment after this one is in
+            return;
+        }
+        if (now < v.nextCast)
+            return;
+        if (v.castFails >= 3 || (!v.poleOn && !TakeOutPole(bot, v)))
+        {
+            EndAct(bot, ai, v, now);   // it will not take: the water, the skill or the pole
+            return;
+        }
+        const uint32_t spell = FishingSpell(bot);
+        if (!spell)
+        {
+            EndAct(bot, ai, v, now);
+            return;
+        }
+        bot->SetFacingTo(v.fishO);
+        bot->CastSpell(bot, spell, false);
+        ++v.castFails;   // cleared once the line is out
+        ++g_stats.casts;
+        v.nextCast = now + std::chrono::seconds(3);
+    }
+
+    // Off to fish, at a place near it with nobody fishing there. On foot:
+    // nobody casts a line from the saddle (the game will not have it).
+    bool StartFishing(Player* bot, PlayerbotAI* ai, Visit& v, const PbpHangoutSpot& s, const Clock::time_point now)
+    {
+        if (!g_LifeFish || !g_LifeFishChance || v.posture != Posture::Stand || bot->IsMounted() ||
+            !bot->GetSkillValue(SKILL_FISHING) || !FishingSpell(bot))
+            return false;
+        for (const FishPlace& f : FishPlacesAt(s, bot))
+        {
+            if (f.map != bot->GetMapId() || bot->GetExactDist2d(f.x, f.y) > 70.0f)
+                continue;
+            if (TakenByOther(f.map, f.x, f.y, 3.0f, bot->GetGUID().GetRawValue()))
+                continue;
+            PathGenerator path(bot);
+            path.CalculatePath(f.x, f.y, f.z, false);
+            if (!(path.GetPathType() & PATHFIND_NORMAL) || (path.GetPathType() & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE)))
+                continue;
+            LeavePlace(v);
+            v.act      = Act::Fishing;
+            v.actUntil = now + std::chrono::seconds(PbpCityLife::Between(g_LifeFishMinMinutes * 60,
+                                                                           g_LifeFishMaxMinutes * 60, Frand(0.0f, 1.0f)));
+            v.fishO    = f.o;
+            Shift(bot, ai, v, f.x, f.y, f.z, false, now);
+            ++g_stats.fished;
+            if (g_PbpDebug)
+                LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} goes fishing by {}.", bot->GetName(), s.name);
+            return true;
+        }
+        return false;
+    }
+
+    // Now and then, near a real player: a look round, a step, a hop or
+    // three, an errand, a go at fishing.
+    void Fidget(Player* bot, PlayerbotAI* ai, Visit& v, const PbpHangoutSpot& s, const Clock::time_point now)
+    {
+        if (v.hops)
+        {
+            if (now >= v.nextHop && !bot->isMoving())
+            {
+                Hop(bot);
+                --v.hops;
+                v.nextHop = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(900, 1700)(Rng()));
+            }
+            return;
+        }
+        if (now >= v.nextTurn)
+        {
+            v.nextTurn = now + Secs(g_LifeTurnMinSeconds, g_LifeTurnMaxSeconds);
+            if (!bot->isMoving() && v.posture != Posture::Bench)
+                LookRound(bot);
+        }
+        if (now < v.nextFidget)
+            return;
+        ScheduleFidget(v, now);
+        if (!FreeForLife(bot, v, now))
+            return;
+        // Back where it belongs first, if a hop or a push left it off its place.
+        if (bot->GetExactDist2d(v.x, v.y) > 2.0f)
+        {
+            Shift(bot, ai, v, v.x, v.y, v.z, true, now);
+            return;
+        }
+        const uint32_t roll = std::uniform_int_distribution<uint32_t>(1, 100)(Rng());
+        if (roll <= g_LifeErrandChance && StartErrand(bot, ai, v, now))
+            return;
+        if (roll > g_LifeErrandChance && roll <= g_LifeErrandChance + g_LifeFishChance &&
+            StartFishing(bot, ai, v, s, now))
+            return;
+        if (Roll(g_LifeJumpChance))
+        {
+            v.hops    = std::uniform_int_distribution<uint32_t>(1, 3)(Rng());
+            v.nextHop = now;
+            ++g_stats.hops;
+            return;
+        }
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        if (PlaceNear(bot, v, v.x, v.y, v.z, g_LifeStepMin, g_LifeStepMax, Frand(0.0f, kTwoPi), kTwoPi, true, x, y, z))
+        {
+            Shift(bot, ai, v, x, y, z, Roll(g_LifeWalkChance), now);
+            ++g_stats.steps;
+        }
+    }
+
+    // ---- rare mounts --------------------------------------------------------------------
+
+    std::vector<bool>                                  g_mountSpells;    // by spell id: one that mounts you
+    std::unordered_map<uint32_t, uint32_t>             g_mountOwners;    // spell -> how many online have it
+    Clock::time_point                                  g_nextCensus{};
+    std::unordered_map<uint64_t, uint32_t>             g_lastMount;      // player -> the mount it was on at the last look
+    std::unordered_map<uint64_t, Clock::time_point>    g_gawkedAt;       // rider -> looked at then
+
+    // Who has which mount, of everyone online: what makes one rare here.
+    void Census(const Clock::time_point now)
+    {
+        if (now < g_nextCensus)
+            return;
+        g_nextCensus = now + std::chrono::minutes(10);
+        if (g_mountSpells.empty())
+        {
+            // A flat table: every spell every player online knows is looked up in it.
+            g_mountSpells.assign(sSpellMgr->GetSpellInfoStoreSize(), false);
+            for (uint32_t id = 0; id < g_mountSpells.size(); ++id)
+                if (SpellInfo const* info = sSpellMgr->GetSpellInfo(id); info && info->HasAura(SPELL_AURA_MOUNTED))
+                    g_mountSpells[id] = true;
+        }
+        g_mountOwners.clear();
+        for (auto const& [guid, p] : ObjectAccessor::GetPlayers())
+        {
+            if (!p || !p->IsInWorld())
+                continue;
+            for (auto const& [spell, known] : p->GetSpellMap())
+                if (spell < g_mountSpells.size() && g_mountSpells[spell] && known && known->State != PLAYERSPELL_REMOVED)
+                    ++g_mountOwners[spell];
+        }
+    }
+
+    uint32_t MountOf(Unit* who)
+    {
+        Unit::AuraEffectList const& mounts = who->GetAuraEffectsByType(SPELL_AURA_MOUNTED);
+        return mounts.empty() ? 0 : mounts.front()->GetId();
+    }
+
+    // A few of those hanging out near `rider` come over to look at its rare mount.
+    void Gawk(Player* rider, uint32_t spell, uint32_t owners, const Clock::time_point now)
+    {
+        std::vector<std::pair<float, uint64_t>> near;
+        for (auto& [guid, v] : g_visits)
+        {
+            if (guid == rider->GetGUID().GetRawValue() || v.map != rider->GetMapId())
+                continue;
+            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+            if (!bot || !bot->IsInWorld() || !FreeForLife(bot, v, now))
+                continue;
+            const float d = bot->GetExactDist(rider);
+            if (d > g_LifeGawkRange || !bot->IsWithinLOSInMap(rider))
+                continue;
+            near.emplace_back(d + Frand(0.0f, 8.0f), guid);
+        }
+        if (near.empty())
+            return;
+        std::sort(near.begin(), near.end());
+        const uint32_t want = std::min<uint32_t>(uint32_t(near.size()),
+                                                 std::uniform_int_distribution<uint32_t>(g_LifeGawkMin, g_LifeGawkMax)(Rng()));
+        Player* first = ObjectAccessor::FindConnectedPlayer(ObjectGuid(near.front().second));
+        const float start = first ? rider->GetAngle(first) : Frand(0.0f, kTwoPi);
+        std::vector<float> jitter;
+        for (uint32_t i = 0; i < want; ++i)
+            jitter.push_back(Frand(-1.0f, 1.0f));
+        const std::vector<float> angles = PbpCityLife::RingAngles(want, start, jitter);
+        Player* speaker = nullptr;
+        uint32_t went = 0;
+        for (uint32_t i = 0; i < want; ++i)
+        {
+            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(near[i].second));
+            auto it = g_visits.find(near[i].second);
+            PlayerbotAI* ai = bot ? AiOf(bot) : nullptr;
+            if (!bot || !ai || it == g_visits.end())
+                continue;
+            const auto until = now + Secs(g_LifeGawkMinSeconds, g_LifeGawkMaxSeconds);
+            if (!GoOverTo(bot, ai, it->second, rider, angles[i], Frand(3.5f, 5.0f), Act::Gawking, until, now))
+                continue;
+            ++went;
+            if (!speaker)
+                speaker = bot;
+        }
+        if (!went)
+            return;
+        g_gawkedAt[rider->GetGUID().GetRawValue()] = now;
+        ++g_stats.gawks;
+        g_stats.gawkers += went;
+        SpellInfo const* info = sSpellMgr->GetSpellInfo(spell);
+        char const* name = info ? info->SpellName[sWorld->GetDefaultDbcLocale()] : nullptr;
+        if (info && (!name || !*name))
+            name = info->SpellName[LOCALE_enUS];
+        const std::string mount = name ? name : std::string();
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} came over to look at {}'s {} ({}).", went,
+                     rider->GetName(), mount, PbpCityLife::RareText(owners));
+        if (speaker && !mount.empty())
+        {
+            PlayerbotsPlus::BotEvent e;
+            e.type   = PlayerbotsPlus::BotEventType::CityMountShown;
+            e.bot    = speaker->GetGUID();
+            e.other  = rider->GetGUID();
+            e.what   = mount;
+            e.detail = PbpCityLife::RareText(owners);
+            e.have   = went;
+            e.zone   = PbpZoneName(speaker);
+            PbpRaiseBotEvent(e);
+        }
+    }
+
+    // Who has just got on a rare mount near a real player in a city.
+    void LookAtMounts(const Clock::time_point now)
+    {
+        if (!g_LifeGawk || !g_LifeGawkRareOwners)
+            return;
+        Census(now);
+        std::unordered_set<uint64_t> seen;
+        for (Player* real : g_lifeWatchers)
+        {
+            if (!CityZone(real->GetMapId(), real->GetZoneId()))
+                continue;
+            std::list<Player*> near;
+            Acore::AnyPlayerInObjectRangeCheck check(real, 40.0f);
+            Acore::PlayerListSearcher<Acore::AnyPlayerInObjectRangeCheck> searcher(real, near, check);
+            Cell::VisitObjects(real, searcher, 40.0f);
+            for (Player* p : near)
+            {
+                const uint64_t key = p->GetGUID().GetRawValue();
+                if (!seen.insert(key).second)
+                    continue;
+                // Getting on, seen: one first seen already up there got on
+                // a while ago, out of sight.
+                const uint32_t spell = p->IsMounted() ? MountOf(p) : 0;
+                auto [was, first] = g_lastMount.try_emplace(key, spell);
+                const bool justUp = !first && spell && spell != was->second;
+                was->second = spell;
+                if (!justUp)
+                    continue;
+                auto owners = g_mountOwners.find(spell);
+                if (owners == g_mountOwners.end() || !PbpCityLife::Rare(owners->second, g_LifeGawkRareOwners))
+                    continue;
+                if (auto at = g_gawkedAt.find(key);
+                    at != g_gawkedAt.end() && now - at->second < std::chrono::minutes(g_LifeGawkCooldownMinutes))
+                    continue;
+                Gawk(p, spell, owners->second, now);
+            }
+        }
+        if (g_lastMount.size() > 20000)
+            g_lastMount.clear();
+    }
+
+    // ---- dance parties --------------------------------------------------------------------
+
+    std::unordered_map<uint32_t, Clock::time_point> g_nextDance;    // zone -> when the next may start
+    std::unordered_map<uint64_t, Clock::time_point> g_danceWith;    // real player dancing -> joined then
+
+    void RaiseDance(Player* bot, Unit* with)
+    {
+        PlayerbotsPlus::BotEvent e;
+        e.type = PlayerbotsPlus::BotEventType::CityDance;
+        e.bot  = bot->GetGUID();
+        if (with && with != bot)
+            e.other = with->GetGUID();
+        e.zone = PbpZoneName(bot);
+        PbpRaiseBotEvent(e);
+    }
+
+    // Up to `count` of those hanging out near `dancer` join in, one after another.
+    uint32_t JoinDance(Unit* dancer, uint32_t count, Clock::time_point until, const Clock::time_point now)
+    {
+        std::vector<std::pair<float, uint64_t>> near;
+        for (auto& [guid, v] : g_visits)
+        {
+            if (guid == dancer->GetGUID().GetRawValue() || v.map != dancer->GetMapId())
+                continue;
+            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+            if (!bot || !bot->IsInWorld() || !FreeForLife(bot, v, now) || v.posture == Posture::Mounted)
+                continue;
+            const float d = bot->GetExactDist(dancer);
+            if (d < 15.0f && bot->IsWithinLOSInMap(dancer))
+                near.emplace_back(d + Frand(0.0f, 5.0f), guid);
+        }
+        std::sort(near.begin(), near.end());
+        uint32_t joined = 0;
+        for (const auto& [d, guid] : near)
+        {
+            if (joined >= count)
+                break;
+            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+            auto it = g_visits.find(guid);
+            PlayerbotAI* ai = bot ? AiOf(bot) : nullptr;
+            if (!bot || !ai || it == g_visits.end())
+                continue;
+            Visit& v = it->second;
+            // Staggered: one joins, then another a few seconds on.
+            v.danceJoinAt = now + std::chrono::seconds(2 + 5 * joined) +
+                            std::chrono::milliseconds(std::uniform_int_distribution<int>(0, 3000)(Rng()));
+            v.act      = Act::Dancing;
+            v.actWith  = dancer->GetGUID();
+            v.actUntil = until;
+            v.danceJoined = false;
+            v.danceSaid   = false;
+            ++joined;
+        }
+        return joined;
+    }
+
+    void DanceParties(const Clock::time_point now)
+    {
+        if (!g_LifeDance)
+            return;
+        std::unordered_set<uint32_t> zones;
+        for (Player* real : g_lifeWatchers)
+        {
+            if (!CityZone(real->GetMapId(), real->GetZoneId()))
+                continue;
+            zones.insert(real->GetZoneId());
+            // Someone real dancing: one or two of those about join them.
+            const uint64_t key = real->GetGUID().GetRawValue();
+            if (real->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE)
+            {
+                if (!g_danceWith.contains(key))
+                {
+                    g_danceWith[key] = now;
+                    if (Roll(g_LifeDanceWithChance))
+                        JoinDance(real, std::uniform_int_distribution<uint32_t>(1, 2)(Rng()),
+                                  now + std::chrono::minutes(2), now);
+                }
+            }
+            else
+                g_danceWith.erase(key);
+        }
+        for (uint32_t zone : zones)
+        {
+            auto [it, fresh] = g_nextDance.emplace(zone, Clock::time_point{});
+            if (fresh)
+                it->second = now + std::chrono::seconds(PbpCityLife::Between(g_LifeDanceMinutes * 30,
+                                                                              g_LifeDanceMinutes * 90, Frand(0.0f, 1.0f)));
+            if (now < it->second)
+                continue;
+            it->second = now + std::chrono::seconds(PbpCityLife::Between(g_LifeDanceMinutes * 30,
+                                                                          g_LifeDanceMinutes * 90, Frand(0.0f, 1.0f)));
+            // Someone hanging out near a real player there starts one.
+            std::vector<uint64_t> could;
+            for (auto& [guid, v] : g_visits)
+            {
+                if (v.temper == Temper::Parked)
+                    continue;
+                Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+                if (bot && bot->IsInWorld() && bot->GetZoneId() == zone && FreeForLife(bot, v, now) &&
+                    v.posture == Posture::Stand && NearWatcher(bot, g_LifeRange * 0.6f))
+                    could.push_back(guid);
+            }
+            if (could.empty())
+                continue;
+            const uint64_t pick = could[std::uniform_int_distribution<size_t>(0, could.size() - 1)(Rng())];
+            Player* starter = ObjectAccessor::FindConnectedPlayer(ObjectGuid(pick));
+            Visit& v = g_visits[pick];
+            const auto until = now + Secs(g_LifeDanceMinSeconds, g_LifeDanceMaxSeconds);
+            v.act         = Act::Dancing;
+            v.actWith     = starter->GetGUID();
+            v.actUntil    = until;
+            v.danceJoined = true;
+            v.danceSaid   = true;
+            starter->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_STATE_DANCE);
+            ++g_stats.dances;
+            RaiseDance(starter, nullptr);
+            const uint32_t joined =
+                JoinDance(starter, std::uniform_int_distribution<uint32_t>(g_LifeDanceJoinMin, g_LifeDanceJoinMax)(Rng()),
+                          until - std::chrono::seconds(5), now);
+            if (g_PbpDebug)
+                LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} starts dancing at {}; {} to join in.",
+                         starter->GetName(), v.spotName, joined);
+        }
+    }
+
+    // One dancing (or about to join a dance): over to them when its turn
+    // comes, then dancing till the music stops -- or the one it danced with
+    // does.
+    void DanceTick(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        Unit* with = v.actWith ? ObjectAccessor::GetUnit(*bot, v.actWith) : nullptr;
+        const bool own = with == bot;
+        // Its own dance stopped by something else (an emote of its own, its
+        // AI) is over too.
+        if (now >= v.actUntil || !with || !with->IsInWorld() ||
+            (v.danceJoined && bot->GetUInt32Value(UNIT_NPC_EMOTESTATE) != EMOTE_STATE_DANCE) ||
+            (!own && v.danceJoined && with->GetUInt32Value(UNIT_NPC_EMOTESTATE) != EMOTE_STATE_DANCE) ||
+            (!own && with->GetExactDist(bot) > 20.0f))
+        {
+            EndAct(bot, ai, v, now);
+            return;
+        }
+        if (v.danceJoined || now < v.danceJoinAt)
+            return;
+        // Its turn: over to them (a couple of yards off), dancing once there (LifeSettle).
+        v.danceJoined = true;
+        if (with->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE &&
+            GoOverTo(bot, ai, v, with, with->GetAngle(bot) + Frand(-0.6f, 0.6f), Frand(2.2f, 3.4f), Act::Dancing,
+                     v.actUntil, now))
+            return;
+        if (bot->GetExactDist(with) < 5.0f && with->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE)
+        {
+            LifeSettle(bot, ai, v, now);   // close enough as it is: dancing where it stands
+            return;
+        }
+        EndAct(bot, ai, v, now);
+    }
+
+    // ---- every second ---------------------------------------------------------------------
+
+    void Life(const Clock::time_point now)
+    {
+        g_lifeWatchers.clear();
+        if (!g_LifeEnable)
+            return;
+        for (Player* p : sRandomPlayerbotMgr.GetPlayers())
+            if (p && p->IsInWorld() && PbpIsRealPlayer(p))
+                g_lifeWatchers.push_back(p);
+        for (auto& [guid, v] : g_visits)
+        {
+            if (v.phase != Phase::Settled)
+                continue;
+            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+            PlayerbotAI* ai = bot ? AiOf(bot) : nullptr;
+            if (!bot || !ai || !bot->IsInWorld() || bot->IsBeingTeleported())
+                continue;
+            // Someone spoke near it: it looks round at them.
+            if (v.turnAt != Clock::time_point{} && now >= v.turnAt)
+            {
+                Unit* who = ObjectAccessor::GetUnit(*bot, v.turnTo);
+                if (who && who->GetExactDist(bot) < 15.0f && !bot->isMoving() && v.posture != Posture::Bench)
+                {
+                    bot->SetFacingToObject(who);
+                    ++g_stats.turns;
+                }
+                v.turnAt = Clock::time_point{};
+            }
+            switch (v.act)
+            {
+                case Act::Gawking:
+                {
+                    Unit* rider = ObjectAccessor::GetUnit(*bot, v.actWith);
+                    if (now >= v.actUntil || !rider || !rider->IsMounted() || rider->GetExactDist(bot) > 12.0f)
+                        EndAct(bot, ai, v, now);
+                    continue;
+                }
+                case Act::Dancing:
+                    DanceTick(bot, ai, v, now);
+                    continue;
+                case Act::Chatting:
+                    if (now >= v.actUntil)
+                        EndAct(bot, ai, v, now);
+                    continue;
+                case Act::Fishing:
+                    FishTick(bot, ai, v, now);
+                    continue;
+                default:
+                    break;
+            }
+            if (!v.afkSet && now >= v.busyUntil && !v.forDuel && NearWatcher(bot, g_LifeRange))
+                if (PbpHangoutSpot const* spot = SpotByKey(v.spotKey))
+                    Fidget(bot, ai, v, *spot, now);
+        }
+        static Clock::time_point nextMoments{};
+        if (now < nextMoments || g_lifeWatchers.empty())
+            return;
+        nextMoments = now + std::chrono::seconds(2);
+        LookAtMounts(now);
+        DanceParties(now);
+        for (auto it = g_gawkedAt.begin(); it != g_gawkedAt.end();)
+            it = now - it->second > std::chrono::minutes(g_LifeGawkCooldownMinutes + 1) ? g_gawkedAt.erase(it)
+                                                                                         : std::next(it);
     }
 
     void LetAllGo(const Clock::time_point now)
@@ -1535,6 +2940,10 @@ void PbpHangout_Update(uint32_t /*diff*/)
             keep = Approach(bot, ai, v, now);
         else if (v.phase == Phase::Duelling)
             keep = Duel(bot, ai, v, now);
+        else if (v.phase == Phase::Flying)
+            keep = Fly(bot, ai, v, *spot, now);
+        else if (v.phase == Phase::Errand)
+            keep = Errand(bot, ai, v, now);
         else
         {
             keep = Hold(bot, ai, v, now);
@@ -1545,6 +2954,13 @@ void PbpHangout_Update(uint32_t /*diff*/)
             }
         }
         it = keep ? std::next(it) : g_visits.erase(it);
+    }
+
+    static Clock::time_point nextLife{};
+    if (now >= nextLife)
+    {
+        nextLife = now + std::chrono::seconds(1);
+        Life(now);
     }
 
     static Clock::time_point nextRecruit{};
@@ -1617,6 +3033,10 @@ PbpHangoutStats PbpHangout_GetStats()
 {
     PbpHangoutStats s = g_stats;
     s.spots = static_cast<uint32_t>(g_HangoutSpots.size());
+    for (const auto& [key, places] : g_fishPlaces)
+        s.fishPlaces += static_cast<uint32_t>(places.size());
+    for (const auto& [zone, services] : g_services)
+        s.services += static_cast<uint32_t>(services.size());
     for (const auto& [key, known] : g_spotInns)
         if (known.known && !known.inns.empty())
             ++s.withInn;
@@ -1654,8 +3074,9 @@ bool PbpHangout_SendToDuel(Player* bot, const std::string& spotKey)
     const uint64_t raw = bot->GetGUID().GetRawValue();
     if (auto it = g_visits.find(raw); it != g_visits.end())
     {
-        if (it->second.phase == Phase::Arriving || it->second.phase == Phase::Duelling)
-            return false;   // landing, or in a duel already
+        if (it->second.phase == Phase::Arriving || it->second.phase == Phase::Duelling ||
+            it->second.phase == Phase::Flying)
+            return false;   // landing, in the air, or in a duel already
         // Done with how it was there: up on its feet and back at the keyboard.
         Let(bot, ai, it->second, false, now);
         g_visits.erase(it);
@@ -1734,11 +3155,18 @@ PbpHangoutMove PbpHangout_MoveTo(Player* bot, float x, float y, float z)
     Visit& v = it->second;
     if (v.phase == Phase::Duelling)
         return PbpHangoutMove::NotHere;
-    if (v.phase == Phase::Arriving || v.phase == Phase::Travel)
+    if (v.phase == Phase::Arriving || v.phase == Phase::Travel || v.phase == Phase::Flying ||
+        v.phase == Phase::Errand)
         return PbpHangoutMove::OnItsWay;
     PlayerbotAI* ai = AiOf(bot);
     if (!ai)
         return PbpHangoutMove::NotHere;
+    // Moved on from whatever city life had it doing: its place is the new one.
+    if (v.act == Act::Dancing && bot->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE)
+        bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
+    PutAwayPole(bot, v);
+    v.act  = Act::None;
+    v.away = false;
 
     // Its place from now on. Back at the keyboard to move (out of a fire, or
     // out of someone's way), and away again once it is there, if it was (Hold).
@@ -1859,5 +3287,73 @@ void PbpHangout_At(const std::string& spotKey, std::vector<Player*>& settled, ui
         }
         else
             settled.push_back(bot);
+    }
+}
+
+void PbpHangout_Busy(Player* bot, uint32_t seconds)
+{
+    if (!bot || g_visits.empty())
+        return;
+    auto it = g_visits.find(bot->GetGUID().GetRawValue());
+    if (it == g_visits.end())
+        return;
+    Visit& v = it->second;
+    const auto now = Clock::now();
+    if (!seconds)
+    {
+        // Done talking: back to its own place, if it walked over to talk.
+        v.busyUntil = Clock::time_point{};
+        if (v.act == Act::Chatting)
+            if (PlayerbotAI* ai = AiOf(bot))
+                EndAct(bot, ai, v, now);
+        return;
+    }
+    v.busyUntil = std::max(v.busyUntil, now + std::chrono::seconds(seconds));
+}
+
+void PbpHangout_Spoke(Player* speaker)
+{
+    if (!speaker || !speaker->IsInWorld() || !g_Pbp.enable || !g_HangoutEnable || !g_LifeEnable ||
+        !g_LifeHeadTurnChance || g_visits.empty())
+        return;
+    const auto now = Clock::now();
+    const uint64_t self = speaker->GetGUID().GetRawValue();
+    for (auto& [guid, v] : g_visits)
+    {
+        if (guid == self || v.map != speaker->GetMapId() || v.phase != Phase::Settled || v.afkSet ||
+            v.posture == Posture::Bench || now < v.busyUntil || std::hypot(v.x - speaker->GetPositionX(),
+                                                                           v.y - speaker->GetPositionY()) > 12.0f)
+            continue;
+        if (std::uniform_int_distribution<uint32_t>(1, 100)(Rng()) > g_LifeHeadTurnChance)
+            continue;   // (not Roll: out here that is the core's group loot roll)
+        v.turnTo = speaker->GetGUID();
+        v.turnAt = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(400, 1800)(Rng()));
+    }
+}
+
+void PbpHangout_Gather(std::vector<Player*> const& bots, uint32_t seconds)
+{
+    if (bots.size() < 2 || !bots.front() || !g_Pbp.enable || !g_HangoutEnable || !g_LifeEnable || g_visits.empty())
+        return;
+    const auto now = Clock::now();
+    Player* first = bots.front();
+    for (Player* bot : bots)
+        if (bot)
+            PbpHangout_Busy(bot, seconds);
+    for (size_t i = 1; i < bots.size(); ++i)
+    {
+        Player* bot = bots[i];
+        auto it = bot ? g_visits.find(bot->GetGUID().GetRawValue()) : g_visits.end();
+        PlayerbotAI* ai = bot ? AiOf(bot) : nullptr;
+        if (it == g_visits.end() || !ai || !bot->IsInWorld() || bot->GetMapId() != first->GetMapId())
+            continue;
+        Visit& v = it->second;
+        const float d = bot->GetExactDist(first);
+        if (v.phase != Phase::Settled || v.act != Act::None || v.afkSet || d < 4.0f || d > 25.0f ||
+            (v.posture != Posture::Stand && v.posture != Posture::Mounted) || bot->isMoving())
+            continue;
+        if (GoOverTo(bot, ai, v, first, first->GetAngle(bot) + Frand(-0.5f, 0.5f), Frand(2.0f, 2.8f), Act::Chatting,
+                     now + std::chrono::seconds(seconds), now))
+            ++g_stats.gathered;
     }
 }

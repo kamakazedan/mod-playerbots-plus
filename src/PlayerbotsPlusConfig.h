@@ -176,6 +176,51 @@ namespace pbp
     extern bool        g_HangoutCityWeights;   // places shared out by playerbots' city weights
     extern uint32_t    g_HangoutHotShare;      // ...that share of a city's at its hot spots (percent)
 
+    // City life (PlayerbotsPlusHangout): what the crowd at the hangouts does
+    // while it is there, near a real player
+    extern bool        g_LifeEnable;
+    extern float       g_LifeRange;              // a real player this near for any of it
+    extern uint32_t    g_LifeParkedShare;        // of those hanging out, never move from their place (percent)
+    extern uint32_t    g_LifeRestlessShare;      // ...cannot keep still (percent)
+    extern uint32_t    g_LifeShuffleMinSeconds;  // between one fidget and the next
+    extern uint32_t    g_LifeShuffleMaxSeconds;
+    extern uint32_t    g_LifeRestlessMinSeconds; // ...for a restless one
+    extern uint32_t    g_LifeRestlessMaxSeconds;
+    extern float       g_LifeStepMin;            // a step to another place at its spot, yards
+    extern float       g_LifeStepMax;
+    extern uint32_t    g_LifeWalkChance;         // ...walked, not run (percent)
+    extern uint32_t    g_LifeTurnMinSeconds;     // between one look round and the next
+    extern uint32_t    g_LifeTurnMaxSeconds;
+    extern uint32_t    g_LifeHeadTurnChance;     // someone speaks in /say: each near enough turns to them (percent)
+    extern uint32_t    g_LifeJumpChance;         // a fidget that is a hop or three (percent)
+    extern bool        g_LifeGawk;               // a rare mount gets looked at
+    extern uint32_t    g_LifeGawkRareOwners;     // ...rare: at most this many online have one
+    extern uint32_t    g_LifeGawkMin;            // ...this many come over
+    extern uint32_t    g_LifeGawkMax;
+    extern float       g_LifeGawkRange;          // ...from this near
+    extern uint32_t    g_LifeGawkMinSeconds;     // ...and stay this long
+    extern uint32_t    g_LifeGawkMaxSeconds;
+    extern uint32_t    g_LifeGawkCooldownMinutes;   // one rider looked at again after this
+    extern bool        g_LifeDance;              // dance parties
+    extern uint32_t    g_LifeDanceMinutes;       // ...one in a city about every this, while someone is there
+    extern uint32_t    g_LifeDanceJoinMin;       // ...this many join in
+    extern uint32_t    g_LifeDanceJoinMax;
+    extern uint32_t    g_LifeDanceMinSeconds;    // ...for this long
+    extern uint32_t    g_LifeDanceMaxSeconds;
+    extern uint32_t    g_LifeDanceWithChance;    // a real player dances near the crowd: one or two join them (percent)
+    extern uint32_t    g_LifeErrandChance;       // a fidget that is a walk to a banker, auctioneer or mailbox (percent)
+    extern float       g_LifeErrandRange;        // ...within this far
+    extern uint32_t    g_LifeErrandMinSeconds;   // ...stood at it this long
+    extern uint32_t    g_LifeErrandMaxSeconds;
+    extern uint32_t    g_LifeErrandStayChance;   // ...then settles at the spot nearest it, not back (percent)
+    extern uint32_t    g_LifeFlyInChance;        // a bot fetched while someone is in the city flies in (percent)
+    extern uint32_t    g_LifeFlyOutChance;       // one leaving a city flies out (percent)
+    extern bool        g_LifeFish;               // fishing at the water's edge
+    extern uint32_t    g_LifeFishChance;         // ...a fidget that is a go at it, for one that fishes (percent)
+    extern uint32_t    g_LifeFishMinMinutes;     // ...for this long
+    extern uint32_t    g_LifeFishMaxMinutes;
+    extern uint32_t    g_LifeFishPlaces;         // ...places to fish from, at most, round each spot
+
     // Stuck on a mount (PlayerbotsPlusStuck)
     extern bool        g_StuckEnable;
     extern uint32_t    g_StuckMountCount;

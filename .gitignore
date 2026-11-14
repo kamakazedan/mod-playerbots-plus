@@ -4,6 +4,7 @@ tests/text_test
 tests/ledger_test
 tests/dungeons_test
 tests/groupquests_test
+tests/citylife_test
 
 # Editors
 .vscode/

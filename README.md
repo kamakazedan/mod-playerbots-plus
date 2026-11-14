@@ -12,6 +12,7 @@ their own words.
 |---|---|
 | [The auction house](#the-auction-house) | Sell what they have no use for and buy upgrades, under their own names |
 | [City hangouts](#city-hangouts) | Gather where players do in the capitals: on a bench, mounted, or AFK |
+| [City life](#city-life) | Shift about, hop, dance, look at a rare mount, run errands, fish and fly in and out while they hang out |
 | [Stuck on a mount](#stuck-on-a-mount) | Stop getting on and off their mount at a herb they can't pick, and move on |
 | [On foot indoors](#on-foot-indoors) | Get off their mount in a bank, an inn or a cave, instead of standing at the counter on it |
 | [Out of the fire](#out-of-the-fire) | Step out of a campfire, bonfire or brazier, burning or not, instead of standing in it |
@@ -147,6 +148,42 @@ ground or stay on their mounts.
 `.pbp status` shows how full each city is.
 
 Settings: `PlayerbotsPlus.Hangout.*`.
+
+## City life
+
+A crowd that stands stock still for half an hour is a painting. People
+waiting about in a city shift their feet, look round, hop on the spot, dance
+and wander off to the mailbox. Bots hanging out do the same, but only near a
+real player, since nobody else would see it:
+
+- **Tempers:** about a third stay put the whole time, a few can't keep still,
+  and the rest shift about every minute or two: a step or two, a few hops, or
+  off on an errand or to fish. Nobody moves while it's talking or emoting, or
+  sat down or AFK.
+- **Looking round:** now and then, at someone stood close by. When someone
+  says something in /say nearby, most of those about look round at them.
+- **Rare mounts:** when someone gets on a mount that hardly anyone online has
+  (counted from what everyone has learned), two to four of those nearby wander
+  over and stand round them for a look, pointing, clapping or cheering, then
+  drift back to their places. With mod-ollama-chat, one of them says
+  something about it, naming the mount.
+- **Dancing:** every quarter of an hour or so, in a city someone is in, one
+  of the crowd starts dancing and a few join in. Dance in a city yourself and
+  someone may join you.
+- **Errands:** off to a banker, an auctioneer or a mailbox in the city, a
+  minute there, then back to their spot or settling at another nearby.
+- **Flights:** some of the bots fetched for a city fly in, landing at the
+  city's flight master and walking over, instead of coming in at an inn; some
+  of those done hanging out fly off somewhere for their level.
+- **Fishing:** those who know fishing go to the water's edge near their spot
+  (found from the map's own water) and fish for a few minutes, with a pole
+  from their bags.
+
+An invite, a trade, a fight or a queue lets a bot go at once, with its own
+weapons back in its hands. `.pbp status` counts it all on its "City life:"
+line.
+
+Settings: `PlayerbotsPlus.CityLife.*`.
 
 ## Stuck on a mount
 
@@ -576,6 +613,10 @@ this builds on.
   - A rogue that can't sap the star says why in party.
   - Bots asking for help with a group quest say so in General, and those who
     have it answer.
+  - In a city, one of those who came over to look at a rare mount says
+    something about it, and dances come with the /dance emote. Bots talking in
+    /say stay put while they do, those near look round at whoever speaks, and
+    two bots chatting walk over to talk face to face.
   - A hunter knows its pet's name, and any bot knows what companion is
     following it, when someone asks or coos over it. Duels get a gg, and two
     bots chatting in the city may talk themselves into one and walk out to

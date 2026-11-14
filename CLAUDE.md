@@ -87,6 +87,26 @@ open spot -- until fewer are there or `Hangout.FullMinutes` pass. Use
 `RoomAt(spot)`, never `spot.capacity`, for how many a spot takes now.
 `PickPlace` counts why it turns places down per spot (`.pbp hangouts`).
 
+## City life lives in the hangouts
+
+What the crowd does while it hangs out (`PlayerbotsPlus.CityLife.*`) is part
+of a visit in `PlayerbotsPlusHangout.cpp`, not a module of its own: a step, a
+hop, an errand, fishing, a look at a rare mount, a dance or walking over to
+talk is the visit's `Act` (or its `Errand` and `Flying` phases), started only
+when it is `FreeForLife` and near a real player, and undone by `EndAct` and
+`Let` -- the dance state off, its own weapons back in its hands. Moving it
+goes through `Shift` (its AI stays held); a walk across the city (an errand,
+a flight) frees the AI and uses playerbots' own `go camp` and
+`ChangeToTravelFlight`. The sums with no game in them are
+`PlayerbotsPlusCityLifeText` (tested).
+
+The chat module tells it what it cannot see (`CityBusy`, `CitySpoke`,
+`CityGather`, API 5), and voices `BotEventType::CityMountShown` and
+`CityDance`. Those calls can come from inside a raised event (a dance emote
+played while the hangouts raise `CityDance`), so they only ever change a
+visit's fields, never add or remove one: a loop over `g_visits` may be under
+way.
+
 ## Auctions and mail copy the game's own handlers
 
 `CreateAuction`, `BuyOut` and `CollectMail` in `PlayerbotsPlusMarket.cpp` do

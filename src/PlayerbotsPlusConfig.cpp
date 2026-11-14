@@ -47,6 +47,49 @@ namespace pbp
     bool        g_HangoutCityWeights       = true;
     uint32_t    g_HangoutHotShare          = 75;
 
+    bool        g_LifeEnable               = true;
+    float       g_LifeRange                = 90.0f;
+    uint32_t    g_LifeParkedShare          = 30;
+    uint32_t    g_LifeRestlessShare        = 15;
+    uint32_t    g_LifeShuffleMinSeconds    = 60;
+    uint32_t    g_LifeShuffleMaxSeconds    = 180;
+    uint32_t    g_LifeRestlessMinSeconds   = 20;
+    uint32_t    g_LifeRestlessMaxSeconds   = 40;
+    float       g_LifeStepMin              = 2.5f;
+    float       g_LifeStepMax              = 7.0f;
+    uint32_t    g_LifeWalkChance           = 30;
+    uint32_t    g_LifeTurnMinSeconds       = 15;
+    uint32_t    g_LifeTurnMaxSeconds       = 60;
+    uint32_t    g_LifeHeadTurnChance       = 60;
+    uint32_t    g_LifeJumpChance           = 12;
+    bool        g_LifeGawk                 = true;
+    uint32_t    g_LifeGawkRareOwners       = 3;
+    uint32_t    g_LifeGawkMin              = 2;
+    uint32_t    g_LifeGawkMax              = 4;
+    float       g_LifeGawkRange            = 30.0f;
+    uint32_t    g_LifeGawkMinSeconds       = 20;
+    uint32_t    g_LifeGawkMaxSeconds       = 60;
+    uint32_t    g_LifeGawkCooldownMinutes  = 15;
+    bool        g_LifeDance                = true;
+    uint32_t    g_LifeDanceMinutes         = 15;
+    uint32_t    g_LifeDanceJoinMin         = 1;
+    uint32_t    g_LifeDanceJoinMax         = 4;
+    uint32_t    g_LifeDanceMinSeconds      = 60;
+    uint32_t    g_LifeDanceMaxSeconds      = 120;
+    uint32_t    g_LifeDanceWithChance      = 50;
+    uint32_t    g_LifeErrandChance         = 10;
+    float       g_LifeErrandRange          = 250.0f;
+    uint32_t    g_LifeErrandMinSeconds     = 10;
+    uint32_t    g_LifeErrandMaxSeconds     = 40;
+    uint32_t    g_LifeErrandStayChance     = 50;
+    uint32_t    g_LifeFlyInChance          = 30;
+    uint32_t    g_LifeFlyOutChance         = 30;
+    bool        g_LifeFish                 = true;
+    uint32_t    g_LifeFishChance           = 8;
+    uint32_t    g_LifeFishMinMinutes       = 3;
+    uint32_t    g_LifeFishMaxMinutes       = 10;
+    uint32_t    g_LifeFishPlaces           = 4;
+
     bool        g_StuckEnable             = true;
     uint32_t    g_StuckMountCount         = 4;
     uint32_t    g_StuckWindowSeconds      = 30;
@@ -275,6 +318,60 @@ namespace
             { "Shattrath", w("Playerbots.TeleToShattrathCityWeight", 1) },
             { "Dalaran", w("Playerbots.TeleToDalaranWeight", 1) },
         };
+    }
+
+    void LoadCityLife()
+    {
+        using namespace pbp;
+        auto range = [](char const* lo, char const* hi, uint32_t defLo, uint32_t defHi, uint32_t min, uint32_t max,
+                        uint32_t& outLo, uint32_t& outHi)
+        {
+            outLo = std::clamp<uint32_t>(U(lo, defLo), min, max);
+            outHi = std::clamp<uint32_t>(U(hi, defHi), outLo, max);
+        };
+        auto pct = [](char const* key, uint32_t def) { return std::min<uint32_t>(100, U(key, def)); };
+        g_LifeEnable         = B("PlayerbotsPlus.CityLife.Enable", true);
+        g_LifeRange          = std::clamp(F("PlayerbotsPlus.CityLife.Range", 90.0f), 20.0f, 250.0f);
+        g_LifeParkedShare    = pct("PlayerbotsPlus.CityLife.ParkedShare", 30);
+        g_LifeRestlessShare  = pct("PlayerbotsPlus.CityLife.RestlessShare", 15);
+        range("PlayerbotsPlus.CityLife.ShuffleMinSeconds", "PlayerbotsPlus.CityLife.ShuffleMaxSeconds", 60, 180, 5,
+              3600, g_LifeShuffleMinSeconds, g_LifeShuffleMaxSeconds);
+        range("PlayerbotsPlus.CityLife.RestlessMinSeconds", "PlayerbotsPlus.CityLife.RestlessMaxSeconds", 20, 40, 5,
+              3600, g_LifeRestlessMinSeconds, g_LifeRestlessMaxSeconds);
+        g_LifeStepMin        = std::clamp(F("PlayerbotsPlus.CityLife.StepMin", 2.5f), 1.0f, 20.0f);
+        g_LifeStepMax        = std::clamp(F("PlayerbotsPlus.CityLife.StepMax", 7.0f), g_LifeStepMin, 30.0f);
+        g_LifeWalkChance     = pct("PlayerbotsPlus.CityLife.WalkChance", 30);
+        range("PlayerbotsPlus.CityLife.TurnMinSeconds", "PlayerbotsPlus.CityLife.TurnMaxSeconds", 15, 60, 3, 3600,
+              g_LifeTurnMinSeconds, g_LifeTurnMaxSeconds);
+        g_LifeHeadTurnChance = pct("PlayerbotsPlus.CityLife.HeadTurnChance", 60);
+        g_LifeJumpChance     = pct("PlayerbotsPlus.CityLife.JumpChance", 12);
+        g_LifeGawk           = B("PlayerbotsPlus.CityLife.Gawk", true);
+        g_LifeGawkRareOwners = std::min<uint32_t>(1000, U("PlayerbotsPlus.CityLife.GawkRareOwners", 3));
+        range("PlayerbotsPlus.CityLife.GawkMin", "PlayerbotsPlus.CityLife.GawkMax", 2, 4, 1, 8, g_LifeGawkMin,
+              g_LifeGawkMax);
+        g_LifeGawkRange      = std::clamp(F("PlayerbotsPlus.CityLife.GawkRange", 30.0f), 5.0f, 80.0f);
+        range("PlayerbotsPlus.CityLife.GawkMinSeconds", "PlayerbotsPlus.CityLife.GawkMaxSeconds", 20, 60, 5, 600,
+              g_LifeGawkMinSeconds, g_LifeGawkMaxSeconds);
+        g_LifeGawkCooldownMinutes = std::min<uint32_t>(1440, U("PlayerbotsPlus.CityLife.GawkCooldownMinutes", 15));
+        g_LifeDance          = B("PlayerbotsPlus.CityLife.Dance", true);
+        g_LifeDanceMinutes   = std::clamp<uint32_t>(U("PlayerbotsPlus.CityLife.DanceMinutes", 15), 1, 1440);
+        range("PlayerbotsPlus.CityLife.DanceJoinMin", "PlayerbotsPlus.CityLife.DanceJoinMax", 1, 4, 0, 10,
+              g_LifeDanceJoinMin, g_LifeDanceJoinMax);
+        range("PlayerbotsPlus.CityLife.DanceMinSeconds", "PlayerbotsPlus.CityLife.DanceMaxSeconds", 60, 120, 10, 900,
+              g_LifeDanceMinSeconds, g_LifeDanceMaxSeconds);
+        g_LifeDanceWithChance = pct("PlayerbotsPlus.CityLife.DanceWithChance", 50);
+        g_LifeErrandChance   = pct("PlayerbotsPlus.CityLife.ErrandChance", 10);
+        g_LifeErrandRange    = std::clamp(F("PlayerbotsPlus.CityLife.ErrandRange", 250.0f), 20.0f, 600.0f);
+        range("PlayerbotsPlus.CityLife.ErrandMinSeconds", "PlayerbotsPlus.CityLife.ErrandMaxSeconds", 10, 40, 3, 600,
+              g_LifeErrandMinSeconds, g_LifeErrandMaxSeconds);
+        g_LifeErrandStayChance = pct("PlayerbotsPlus.CityLife.ErrandStayChance", 50);
+        g_LifeFlyInChance    = pct("PlayerbotsPlus.CityLife.FlyInChance", 30);
+        g_LifeFlyOutChance   = pct("PlayerbotsPlus.CityLife.FlyOutChance", 30);
+        g_LifeFish           = B("PlayerbotsPlus.CityLife.Fish", true);
+        g_LifeFishChance     = pct("PlayerbotsPlus.CityLife.FishChance", 8);
+        range("PlayerbotsPlus.CityLife.FishMinMinutes", "PlayerbotsPlus.CityLife.FishMaxMinutes", 3, 10, 1, 60,
+              g_LifeFishMinMinutes, g_LifeFishMaxMinutes);
+        g_LifeFishPlaces     = std::min<uint32_t>(20, U("PlayerbotsPlus.CityLife.FishPlaces", 4));
     }
 
     void LoadHangout()
@@ -806,6 +903,7 @@ void PlayerbotsPlus_LoadConfig(bool reload)
 
     pbp::g_PbpDebug = B("PlayerbotsPlus.Debug", false);
     LoadHangout();
+    LoadCityLife();
     LoadStuckReviveMarks();
     LoadPetsDuels();
     // The packet hook goes by what is published here alone: with the module
@@ -840,6 +938,18 @@ void PlayerbotsPlus_LoadConfig(bool reload)
              pbp::g_SpaceEnable ? "on" : "off",
              pbp::g_ReviveEnable ? "on" : "off", pbp::g_MarksEnable ? "on" : "off",
              pbp::g_MarksSapStar ? "on" : "off");
+
+    if (pbp::g_LifeEnable)
+        LOG_INFO(where,
+                 "[Playerbots Plus] City life on, within {:.0f} yd of a real player: {}% parked, {}% restless, the "
+                 "rest fidget every {}-{} s; hops {}%, errands {}%, fishing {}%; rare mounts looked at {}, dance "
+                 "parties {}; flights in {}%, out {}%.",
+                 pbp::g_LifeRange, pbp::g_LifeParkedShare, pbp::g_LifeRestlessShare, pbp::g_LifeShuffleMinSeconds,
+                 pbp::g_LifeShuffleMaxSeconds, pbp::g_LifeJumpChance, pbp::g_LifeErrandChance,
+                 pbp::g_LifeFish ? pbp::g_LifeFishChance : 0u, pbp::g_LifeGawk ? "on" : "off",
+                 pbp::g_LifeDance ? "on" : "off", pbp::g_LifeFlyInChance, pbp::g_LifeFlyOutChance);
+    else
+        LOG_INFO(where, "[Playerbots Plus] City life off.");
 
     LOG_INFO(where,
              "[Playerbots Plus] Economy ledger {} (written every {} min, a look at the bots every {} min, kept {} "

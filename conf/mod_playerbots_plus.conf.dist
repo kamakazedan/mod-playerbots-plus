@@ -1026,6 +1026,228 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 
 ###############################################################################
 #
+#   CITY LIFE
+#
+#   A crowd that stands stock still for half an hour is a painting. On a
+#   real server people waiting about in a city shift their feet, look round
+#   at whoever speaks or walks up, hop on the spot, wander over when someone
+#   gets on a rare mount, start dancing by the bank, nip off to the mailbox
+#   or the auctioneer, fly in and out, and fish in the canals. Those hanging
+#   out (CITY HANGOUTS) do the same -- only within Range yards of a real
+#   player, since nobody else would see it.
+#
+#     * Tempers: settling at a spot, each picks one. ParkedShare of them
+#       stay put the whole time, RestlessShare cannot keep still (something
+#       every RestlessMinSeconds to RestlessMaxSeconds), and the rest shuffle
+#       about every ShuffleMinSeconds to ShuffleMaxSeconds. Each time, it
+#       may go on an errand (ErrandChance) or fishing (FishChance), or hop
+#       about (JumpChance), or else take a step or two within its spot
+#       (StepMin to StepMax yards, walking WalkChance of the time). Nobody
+#       moves while it is talking or emoting (mod-ollama-chat says when),
+#       sat down, AFK, or about something else.
+#     * Looking round: every TurnMinSeconds to TurnMaxSeconds anyone, parked
+#       or not, looks round -- at someone stood within six yards, most times
+#       there is someone, or just a little turn. And when someone says
+#       something in /say within 12 yards (mod-ollama-chat tells it), each
+#       there that is not busy looks round at them HeadTurnChance of the
+#       time, a moment later.
+#     * Hopping (JumpChance): one to three hops on the spot, a second or so
+#       apart, a player's jump high -- on foot or mounted.
+#     * Rare mounts (Gawk): someone near a real player in a city gets on a
+#       mount that GawkRareOwners or fewer of everyone online have learned
+#       (counted every ten minutes; the rider counts). GawkMin to GawkMax of
+#       those hanging out within GawkRange of them, in sight and free, come
+#       over and stand round them facing them -- some point, clap or cheer
+#       -- for GawkMinSeconds to GawkMaxSeconds, or until the rider gets
+#       down or rides off, then go back to their places. Not again for that
+#       rider for GawkCooldownMinutes. Someone first seen already mounted is
+#       not looked at: they got on out of sight. With mod-ollama-chat, the
+#       first of them says something to the rider about it.
+#     * Dancing (Dance): in each city a real player is in, every
+#       DanceMinutes or so (half to one and a half times it) someone
+#       hanging out on foot near them starts dancing, for DanceMinSeconds to
+#       DanceMaxSeconds, and DanceJoinMin to DanceJoinMax of those on foot
+#       within 15 yards join in, one after another, a couple of yards from
+#       them. A real player dancing in a city gets one or two of those near
+#       them dancing with them DanceWithChance of the time, for up to two
+#       minutes or till they stop. With mod-ollama-chat, each does it with
+#       the /dance emote.
+#     * Errands (ErrandChance): it walks off to a banker, an auctioneer or a
+#       mailbox of the city -- one of the five nearest between 15 yards and
+#       ErrandRange away, never the other side's -- on its own two feet
+#       (playerbots' own walk), stands at it facing it for ErrandMinSeconds
+#       to ErrandMaxSeconds, and goes back to its spot or, ErrandStayChance
+#       of the time, to whichever spot is nearest there, if it has room. Its
+#       time up meanwhile, it goes about its business from there. Two and a
+#       half minutes to get there, or it gives up.
+#     * Flights: a bot fetched for a city someone is in (Hangout.BringIn)
+#       flies in FlyInChance of the time -- one of the city's side out on
+#       its continent near a flight master of its own (250 yards) walks over
+#       to it, flies to the city's flight master and walks over to its spot
+#       from there, instead of coming in at an inn. Only for a city whose
+#       flight master is in it (not Darnassus, whose is over in Rut'theran
+#       Village). And when its time is up, one not sent back where it was
+#       fetched from walks to the city's flight master (within 400 yards)
+#       and flies out, FlyOutChance of the time, to somewhere for its level
+#       (playerbots' own pick).
+#     * Fishing (Fish, FishChance): one on foot that knows fishing walks to
+#       one of its spot's places to fish from within 70 yards with nobody
+#       there -- found once per spot from the map's own water (a water's
+#       edge looking out over water deep enough to fish, in sight, a way
+#       there from the spot; FishPlaces at most, the nearest first, six
+#       yards apart; logged as "N places to fish from by ...") -- takes out
+#       a fishing pole (its own, or a plain one put in its bags if it has
+#       none and room for one, as playerbots gives its bots one) and fishes
+#       for FishMinMinutes to FishMaxMinutes, then puts its own weapons back
+#       and goes back to its place.
+#
+#   Everything is let go of the moment the bot is wanted for anything else:
+#   an invite, a trade, a fight, a queue. Its weapons go back, and nobody is
+#   left dancing. ".pbp status" counts all of it on its "City life:" line;
+#   with PlayerbotsPlus.Debug on, each gawk, dance party, errand, flight
+#   and fishing trip is logged.
+#
+###############################################################################
+
+#    PlayerbotsPlus.CityLife.Enable
+#    PlayerbotsPlus.CityLife.Range
+#        City life on or off, and how near a real player (yards, 20 to 250) a
+#        bot hanging out must be for any of it.
+#        Default: 1, 90
+PlayerbotsPlus.CityLife.Enable = 1
+PlayerbotsPlus.CityLife.Range = 90
+
+#    PlayerbotsPlus.CityLife.ParkedShare
+#    PlayerbotsPlus.CityLife.RestlessShare
+#    PlayerbotsPlus.CityLife.ShuffleMinSeconds
+#    PlayerbotsPlus.CityLife.ShuffleMaxSeconds
+#    PlayerbotsPlus.CityLife.RestlessMinSeconds
+#    PlayerbotsPlus.CityLife.RestlessMaxSeconds
+#        Tempers (see above): the percent that stay put and the percent that
+#        cannot keep still (the rest shuffle about), and how often (seconds,
+#        5 to 3600) the shufflers and the restless do something.
+#        Default: 30, 15, 60, 180, 20, 40
+PlayerbotsPlus.CityLife.ParkedShare = 30
+PlayerbotsPlus.CityLife.RestlessShare = 15
+PlayerbotsPlus.CityLife.ShuffleMinSeconds = 60
+PlayerbotsPlus.CityLife.ShuffleMaxSeconds = 180
+PlayerbotsPlus.CityLife.RestlessMinSeconds = 20
+PlayerbotsPlus.CityLife.RestlessMaxSeconds = 40
+
+#    PlayerbotsPlus.CityLife.StepMin
+#    PlayerbotsPlus.CityLife.StepMax
+#    PlayerbotsPlus.CityLife.WalkChance
+#        A step: how far (yards, 1 to 30), and the percent of steps walked
+#        rather than run.
+#        Default: 2.5, 7, 30
+PlayerbotsPlus.CityLife.StepMin = 2.5
+PlayerbotsPlus.CityLife.StepMax = 7
+PlayerbotsPlus.CityLife.WalkChance = 30
+
+#    PlayerbotsPlus.CityLife.TurnMinSeconds
+#    PlayerbotsPlus.CityLife.TurnMaxSeconds
+#    PlayerbotsPlus.CityLife.HeadTurnChance
+#        Looking round: how often (seconds, 3 to 3600), and the percent of
+#        those near someone who says something in /say that look round at
+#        them (0: none).
+#        Default: 15, 60, 60
+PlayerbotsPlus.CityLife.TurnMinSeconds = 15
+PlayerbotsPlus.CityLife.TurnMaxSeconds = 60
+PlayerbotsPlus.CityLife.HeadTurnChance = 60
+
+#    PlayerbotsPlus.CityLife.JumpChance
+#        The percent of a shuffler's or a restless one's moves that are a few
+#        hops on the spot. 0: nobody hops.
+#        Default: 12
+PlayerbotsPlus.CityLife.JumpChance = 12
+
+#    PlayerbotsPlus.CityLife.Gawk
+#    PlayerbotsPlus.CityLife.GawkRareOwners
+#    PlayerbotsPlus.CityLife.GawkMin
+#    PlayerbotsPlus.CityLife.GawkMax
+#    PlayerbotsPlus.CityLife.GawkRange
+#    PlayerbotsPlus.CityLife.GawkMinSeconds
+#    PlayerbotsPlus.CityLife.GawkMaxSeconds
+#    PlayerbotsPlus.CityLife.GawkCooldownMinutes
+#        Rare mounts (see above): on or off; a mount at most this many of
+#        everyone online have is rare (0: none is); how many come over to
+#        look (1 to 8); from how far (yards, 5 to 80); for how long (seconds,
+#        5 to 600); and how long before the same rider is looked at again
+#        (minutes).
+#        Default: 1, 3, 2, 4, 30, 20, 60, 15
+PlayerbotsPlus.CityLife.Gawk = 1
+PlayerbotsPlus.CityLife.GawkRareOwners = 3
+PlayerbotsPlus.CityLife.GawkMin = 2
+PlayerbotsPlus.CityLife.GawkMax = 4
+PlayerbotsPlus.CityLife.GawkRange = 30
+PlayerbotsPlus.CityLife.GawkMinSeconds = 20
+PlayerbotsPlus.CityLife.GawkMaxSeconds = 60
+PlayerbotsPlus.CityLife.GawkCooldownMinutes = 15
+
+#    PlayerbotsPlus.CityLife.Dance
+#    PlayerbotsPlus.CityLife.DanceMinutes
+#    PlayerbotsPlus.CityLife.DanceJoinMin
+#    PlayerbotsPlus.CityLife.DanceJoinMax
+#    PlayerbotsPlus.CityLife.DanceMinSeconds
+#    PlayerbotsPlus.CityLife.DanceMaxSeconds
+#    PlayerbotsPlus.CityLife.DanceWithChance
+#        Dancing (see above): on or off; about how often a dance starts in a
+#        city someone is in (minutes, 1 to 1440); how many join in (0 to 10);
+#        how long it goes on (seconds, 10 to 900); and the percent of times
+#        a real player dancing gets someone dancing with them.
+#        Default: 1, 15, 1, 4, 60, 120, 50
+PlayerbotsPlus.CityLife.Dance = 1
+PlayerbotsPlus.CityLife.DanceMinutes = 15
+PlayerbotsPlus.CityLife.DanceJoinMin = 1
+PlayerbotsPlus.CityLife.DanceJoinMax = 4
+PlayerbotsPlus.CityLife.DanceMinSeconds = 60
+PlayerbotsPlus.CityLife.DanceMaxSeconds = 120
+PlayerbotsPlus.CityLife.DanceWithChance = 50
+
+#    PlayerbotsPlus.CityLife.ErrandChance
+#    PlayerbotsPlus.CityLife.ErrandRange
+#    PlayerbotsPlus.CityLife.ErrandMinSeconds
+#    PlayerbotsPlus.CityLife.ErrandMaxSeconds
+#    PlayerbotsPlus.CityLife.ErrandStayChance
+#        Errands (see above): the percent of a shuffler's or a restless one's
+#        moves that are one (0: none); how far the banker, auctioneer or
+#        mailbox may be (yards, 20 to 600); how long it stands at it
+#        (seconds, 3 to 600); and the percent of times it settles at the spot
+#        nearest there rather than going back to its own.
+#        Default: 10, 250, 10, 40, 50
+PlayerbotsPlus.CityLife.ErrandChance = 10
+PlayerbotsPlus.CityLife.ErrandRange = 250
+PlayerbotsPlus.CityLife.ErrandMinSeconds = 10
+PlayerbotsPlus.CityLife.ErrandMaxSeconds = 40
+PlayerbotsPlus.CityLife.ErrandStayChance = 50
+
+#    PlayerbotsPlus.CityLife.FlyInChance
+#    PlayerbotsPlus.CityLife.FlyOutChance
+#        Flights (see above): the percent of bots fetched for a city someone
+#        is in that fly in, when one near a flight master can, and of those
+#        done hanging out (and not sent back) that fly out. 0: none.
+#        Default: 30, 30
+PlayerbotsPlus.CityLife.FlyInChance = 30
+PlayerbotsPlus.CityLife.FlyOutChance = 30
+
+#    PlayerbotsPlus.CityLife.Fish
+#    PlayerbotsPlus.CityLife.FishChance
+#    PlayerbotsPlus.CityLife.FishMinMinutes
+#    PlayerbotsPlus.CityLife.FishMaxMinutes
+#    PlayerbotsPlus.CityLife.FishPlaces
+#        Fishing (see above): on or off; the percent of a shuffler's or a
+#        restless one's moves that are a go at it (if it can); how long it
+#        fishes (minutes, 1 to 60); and the most places to fish from found
+#        for each spot (0 to 20).
+#        Default: 1, 8, 3, 10, 4
+PlayerbotsPlus.CityLife.Fish = 1
+PlayerbotsPlus.CityLife.FishChance = 8
+PlayerbotsPlus.CityLife.FishMinMinutes = 3
+PlayerbotsPlus.CityLife.FishMaxMinutes = 10
+PlayerbotsPlus.CityLife.FishPlaces = 4
+
+###############################################################################
+#
 #   STUCK ON A MOUNT
 #
 #   Playerbots' loot code gets a mounted bot down before it opens something.

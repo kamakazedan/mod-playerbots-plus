@@ -181,6 +181,13 @@ namespace
                                      h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.lostNoRoom, h.lostSlow,
                                      h.lostBusy, h.lostElsewhere, h.lostLanding, h.redirected, h.foundFull, h.movedOn,
                                      h.cutShort, h.cameBack);
+            handler->PSendSysMessage("City life: {} - steps {}, looks round {}, hops {}; rare mounts looked at {} "
+                                     "(by {}); dance parties {} ({} joined in); walked over to talk {}; errands {} "
+                                     "({} got there; {} bankers, auctioneers and mailboxes known); flew in {} ({} "
+                                     "landed), flew out {}; fishing {} ({} casts, {} places to fish from).",
+                                     onOff(pbp::g_LifeEnable), h.steps, h.turns, h.hops, h.gawks, h.gawkers, h.dances,
+                                     h.danced, h.gathered, h.errands, h.errandsDone, h.services, h.flewIn, h.landed,
+                                     h.flewOut, h.fished, h.casts, h.fishPlaces);
             std::string cities;
             for (PbpHangoutCity const& c : PbpHangout_Cities())
             {

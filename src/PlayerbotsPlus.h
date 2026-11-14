@@ -25,12 +25,14 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <vector>
 
 class Player;
 
 // 1: the market. 2: hangouts, bot events and OwnLine. 3: duels talked into.
 // 4: group quests (BotEvent's GroupQuest* types, quest and need).
-#define PLAYERBOTS_PLUS_API_VERSION 4
+// 5: city life (CityBusy, CitySpoke, CityGather; BotEvent's City* types).
+#define PLAYERBOTS_PLUS_API_VERSION 5
 
 namespace PlayerbotsPlus
 {
@@ -102,6 +104,24 @@ namespace PlayerbotsPlus
     // room. False when they cannot go after all.
     bool GoDuel(Player* a, Player* b);
 
+    // ---- City life (PlayerbotsPlus.CityLife.*): what the crowd does while it
+    // hangs out -- shifting about, looking round, hopping, dancing, errands,
+    // fishing. What a chat module does there it says here, so nobody walks off
+    // in the middle of a sentence.
+
+    // `bot` is talking or emoting for `seconds`: hanging out, it stays where
+    // it is meanwhile. 0: it is done.
+    void CityBusy(Player* bot, uint32_t seconds);
+
+    // `speaker` said something in /say: those hanging out near them may look
+    // round at them.
+    void CitySpoke(Player* speaker);
+
+    // These are about to talk in /say for up to `seconds`: those hanging out
+    // walk over to the first, to talk face to face, and stay put till
+    // CityBusy(bot, 0).
+    void CityGather(std::vector<Player*> const& bots, uint32_t seconds);
+
     // ---- What bots did, for a chat module to have them say
 
     enum class BotEventType : uint8_t
@@ -121,6 +141,12 @@ namespace PlayerbotsPlus
         GroupQuestDone,    // ...and did it: its leader
         GroupQuestGiveUp,  // ...or gave up on it after its tries (alone, `have` is 1): its leader
         GroupQuestSolo,    // nobody came for it in the time it asked: it tries it alone
+        // City life (PlayerbotsPlus.CityLife.*), in a city, near a real player.
+        CityMountShown,    // someone got on a mount few people have, and a few hanging out nearby came over
+                           //    to look: `bot` is one of them, `other` the rider, `what` the mount
+                           //    ("Swift Spectral Tiger"), `detail` how rare ("nobody else about has one"),
+                           //    `have` how many came over, it too
+        CityDance,         // a bot hanging out started dancing (`other` empty), or joined `other` dancing
     };
 
     struct BotEvent
@@ -134,7 +160,8 @@ namespace PlayerbotsPlus
         std::string  detail;   // Sap*: why, said to the bot ("you have not trained Sap", "it is immune to Sap")
         uint32_t     quest = 0;   // GroupQuest*: the quest
         uint32_t     need  = 0;   // GroupQuestAsk: how many more it wants
-        uint32_t     have  = 0;   // GroupQuestAsk, Go, GiveUp: how many there are, it too
+        uint32_t     have  = 0;   // GroupQuestAsk, Go, GiveUp: how many there are, it too;
+                                  // CityMountShown: how many came over to look, it too
     };
 
     using BotEventListener = std::function<void(BotEvent const&)>;
