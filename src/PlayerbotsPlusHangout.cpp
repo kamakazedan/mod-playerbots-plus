@@ -2242,8 +2242,11 @@ namespace
     bool Fly(Player* bot, PlayerbotAI* ai, Visit& v, const PbpHangoutSpot& s, const Clock::time_point now)
     {
         // A walk to its flight master and a flight across a continent can
-        // take a quarter of an hour.
-        const bool late = now - v.started > std::chrono::minutes(15);
+        // take a quarter of an hour; one still in the air then is let land
+        // (a path of many hops), up to half an hour. Given up at 15 minutes,
+        // 23 of 50 flights in were let go.
+        const auto took = now - v.started;
+        const bool late = took > std::chrono::minutes(bot->IsInFlight() ? 30 : 15);
         if (late || (!bot->IsInFlight() && Wanted(bot)))
         {
             ++g_stats.gaveUp;

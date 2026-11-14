@@ -1197,12 +1197,13 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 #       flies in FlyInChance of the time -- one of the city's side out on
 #       its continent near a flight master of its own (250 yards) walks over
 #       to it, flies to the city's flight master and walks over to its spot
-#       from there, instead of coming in at an inn. Only for a city whose
-#       flight master is in it (not Darnassus, whose is over in Rut'theran
-#       Village). And when its time is up, one not sent back where it was
-#       fetched from walks to the city's flight master (within 400 yards)
-#       and flies out, FlyOutChance of the time, to somewhere for its level
-#       (playerbots' own pick).
+#       from there, instead of coming in at an inn (given up if it is not
+#       in the air within 15 minutes, or not down within 30). Only for a
+#       city whose flight master is in it (not Darnassus, whose is over in
+#       Rut'theran Village). And when its time is up, one not sent back
+#       where it was fetched from walks to the city's flight master (within
+#       400 yards) and flies out, FlyOutChance of the time, to somewhere for
+#       its level (playerbots' own pick).
 #     * Fishing (Fish, FishChance): one on foot that knows fishing walks to
 #       one of its spot's places to fish from within 70 yards with nobody
 #       there -- found once per spot from the map's own water (a water's
