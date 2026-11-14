@@ -222,6 +222,18 @@ int main()
 
         std::map<std::string, int64_t> under = { { "gold.in", 100 }, { "gold.loot", 500 } };
         True("the rest never below nothing", Has(Report("t", under, {}, 1), "the rest 0c"));
+
+        // The same in three lines, for the chat window.
+        const std::vector<std::string> brief = Brief(flows, now, 7);
+        True("brief: three lines", brief.size() == 3);
+        True("brief: gold", Has(brief, "Gold in 100,000g, about 14,285g a day, out 30,000g") &&
+                                Has(brief, "top-ups +900g, taken back -1g"));
+        True("brief: auction house", Has(brief, "Auction house: 1,234 listed, 800 sold for 4,100g, 40 bought for "
+                                                "1,000g, 300 back unsold."));
+        True("brief: the look", Has(brief, "Last look at the bots (11 Nov 01:30): 3,098 online, holding "
+                                           "1,982,720g, 640g each on average."));
+        True("brief: no look yet", Has(Brief(flows, {}, 1), "No look at the bots yet"));
+        True("brief: nothing yet", Brief({}, {}, 0).size() == 1 && Has(Brief({}, {}, 0), "No figures yet"));
     }
 
     std::printf("%d/%d passed\n", g_checks - g_fails, g_checks);

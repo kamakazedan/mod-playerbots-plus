@@ -49,6 +49,7 @@
 #include <fmt/core.h>
 
 #include <algorithm>
+#include <iterator>
 #include <chrono>
 #include <cmath>
 #include <deque>
@@ -3379,6 +3380,100 @@ std::vector<std::string> PbpHangout_SpotReport()
         out.push_back(line);
     }
     return out;
+}
+
+namespace
+{
+    // What most of a spot's looks were turned down for.
+    const char* MostlyWhy(const Looks& l)
+    {
+        const std::pair<uint64_t, const char*> why[] = {
+            { l.ground, "not at its height" },          { l.water, "in water" },
+            { l.sight, "out of sight of its middle" },   { l.taken, "someone's place already" },
+            { l.roof, "under a roof" },                  { l.fire, "by a fire" },
+            { l.crowded, "someone standing there" },     { l.path, "no way there from its middle" },
+        };
+        const auto* most = std::max_element(std::begin(why), std::end(why),
+                                            [](const auto& a, const auto& b) { return a.first < b.first; });
+        return most->second;
+    }
+
+    std::string Joined(const std::vector<std::string>& parts)
+    {
+        std::string out;
+        for (size_t i = 0; i < parts.size(); ++i)
+            out += (i == 0 ? "" : i + 1 == parts.size() ? " and " : ", ") + parts[i];
+        return out;
+    }
+}
+
+PbpBrief PbpHangout_Brief(bool full)
+{
+    PbpBrief b;
+    const PbpHangoutStats h = PbpHangout_GetStats();
+    const bool on = g_Pbp.enable && g_HangoutEnable;
+
+    uint32_t room = 0, cities = 0;
+    std::string byCity;
+    for (const PbpHangoutCity& c : PbpHangout_Cities())
+    {
+        room += c.room;
+        if (!c.there && !c.onTheWay && !c.room)
+            continue;
+        ++cities;
+        byCity += fmt::format("{}{} {}/{}{}", byCity.empty() ? "" : ", ", c.name, c.there, c.room,
+                              c.full ? fmt::format(" ({} full)", c.full) : std::string());
+    }
+    b.lines.push_back(fmt::format("City hangouts: {} -- {} hanging out in {} cities (room for {}{}), {} on the way.",
+                                  on ? "on" : "off", h.hanging, cities, room,
+                                  h.away ? fmt::format(", {} of them AFK", h.away) : std::string(), h.onTheWay));
+    if (full)
+    {
+        if (!byCity.empty())
+            b.lines.push_back("By city, there/room: " + byCity + ".");
+        b.lines.push_back(fmt::format("Since start: {} sent to a spot, {} fetched from elsewhere ({} gone back), {} "
+                                      "settled, {} never got there ({} too slow), {} sent on to another spot; spots "
+                                      "found full {} times.",
+                                      h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.lostSlow, h.redirected,
+                                      h.foundFull));
+    }
+    if (on && g_LifeEnable)
+        b.lines.push_back(fmt::format("City life: on -- {} steps, {} hops, {} mounts reared ({} done back), {} rare "
+                                      "mounts looked at, {} dance parties, {} errands, {} flew in, {} flew out, {} "
+                                      "went fishing.",
+                                      h.steps, h.hops, h.rears, h.rearedBack, h.gawks, h.dances, h.errands, h.flewIn,
+                                      h.flewOut, h.fished));
+    else
+        b.lines.push_back("City life: off.");
+    if (!on)
+        return b;
+
+    // Who is at each spot now, settled.
+    std::unordered_map<std::string, uint32_t> there;
+    for (const auto& [guid, v] : g_visits)
+        if (v.phase == Phase::Settled || v.phase == Phase::Duelling)
+            ++there[v.spotKey];
+    std::vector<std::string> nobody, hard;
+    for (const PbpHangoutSpot& s : g_HangoutSpots)
+    {
+        auto it = g_looks.find(s.key);
+        if (it == g_looks.end())
+            continue;
+        const Looks& l = it->second;
+        if (l.said && !l.found)
+            nobody.push_back(s.key);
+        else if (l.Looked() >= 500 && l.found * 50 < l.Looked() && there[s.key] < RoomAt(s))
+            hard.push_back(fmt::format("{} ({} of {} looks, mostly {})", s.key, l.found, l.Looked(), MostlyWhy(l)));
+    }
+    if (!nobody.empty())
+        b.issues.push_back("Nobody can stand at " + Joined(nobody) +
+                           ": its middle may be inside something or off the floor.");
+    if (!hard.empty())
+        b.issues.push_back("Places hard to find at " + Joined(hard) + ".");
+    if (h.lostSlow >= 20 && h.lostSlow * 4 > h.settled)
+        b.issues.push_back(fmt::format("{} bots never got to their spot in time, of {} that did: stuck on the way?",
+                                       h.lostSlow, h.settled));
+    return b;
 }
 
 void PbpHangout_At(const std::string& spotKey, std::vector<Player*>& settled, uint32_t& duelling)

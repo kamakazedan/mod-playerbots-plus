@@ -1919,6 +1919,133 @@ bool PbpDungeons_Busy(Player* bot)
     return false;
 }
 
+namespace
+{
+    // Each level band's runs now against its share: "15-19 2/2, 20-29 1/3
+    // (why not more), ...; 1 in no band". Empty with no bands.
+    std::string BandsNow()
+    {
+        PbpBotDungeonSettings const& s = g_Pbp.dungeons;
+        if (s.bands.empty())
+            return std::string();
+        uint32 other = 0;
+        std::vector<uint32> const runs = RunsByBand(other);
+        std::string line;
+        for (size_t i = 0; i < s.bands.size(); ++i)
+        {
+            uint32 const share = i < s.bandShares.size() ? s.bandShares[i] : 1;
+            line += (line.empty() ? "" : ", ") + PbpDungeons::BandName(s.bands[i]) + " " + std::to_string(runs[i]) +
+                    "/" + std::to_string(share);
+            if (runs[i] < share && i < g_bandWhy.size() && !g_bandWhy[i].empty())
+                line += " (" + g_bandWhy[i] + ")";
+        }
+        if (other)
+            line += "; " + std::to_string(other) + " in no band";
+        return line;
+    }
+}
+
+PbpBrief PbpDungeons_Brief(bool full)
+{
+    PbpBrief b;
+    PbpBotDungeonSettings const& s = g_Pbp.dungeons;
+    bool const on = g_Pbp.enable && s.enable;
+    Clock::time_point const now = Clock::now();
+    PbpDungeonsStats const st = PbpDungeons_GetStats();
+    b.lines.push_back("Bot dungeons: " + std::string(on ? "on" : "off") + " -- " + std::to_string(g_runs.size()) +
+                      " running (up to " + std::to_string(s.maxRuns) + "), " + std::to_string(g_queued.size()) +
+                      " in the queue; since start " + std::to_string(st.runs) + " runs, " +
+                      std::to_string(st.cleared) + " cleared, " + std::to_string(st.failed) + " failed.");
+
+    uint32 gathering = 0, clearing = 0, leaving = 0, slowIn = 0;
+    struct Long
+    {
+        std::string what;
+        uint32 seconds = 0;
+    };
+    std::vector<Long> longest;
+    std::vector<std::string> stalled;
+    for (auto const& [key, r] : g_runs)
+    {
+        if (r.phase == Phase::Gathering)
+        {
+            ++gathering;
+            if (now - r.since >= std::chrono::minutes(10))
+                ++slowIn;
+            continue;
+        }
+        if (r.phase == Phase::Leaving)
+        {
+            ++leaving;
+            continue;
+        }
+        ++clearing;
+        DcBotRun::Status const rs = DcBotRun::Get(r.group);
+        longest.push_back({ r.name + " " + PbpDungeons::Duration(rs.elapsedS) + " (" + std::to_string(rs.bossesDown) +
+                                "/" + std::to_string(rs.bossesTotal) + ")",
+                            rs.elapsedS });
+        if (rs.sinceProgressS >= 600)
+            stalled.push_back(r.name + " (" + PbpDungeons::Duration(rs.sinceProgressS) + ")");
+    }
+    uint32 queuedLong = 0;
+    for (Queued const& q : g_queued)
+        if (now - q.since >= std::chrono::minutes(30))
+            ++queuedLong;
+
+    PbpDungeonQuestsStats const q = PbpDungeonQuests_GetStats();
+    if (full)
+    {
+        if (std::string const bands = BandsNow(); !bands.empty())
+            b.lines.push_back("By level, runs now/share: " + bands + ".");
+        if (!g_runs.empty())
+        {
+            std::sort(longest.begin(), longest.end(), [](Long const& a, Long const& c) { return a.seconds > c.seconds; });
+            std::string top;
+            for (size_t i = 0; i < longest.size() && i < 3; ++i)
+                top += (top.empty() ? "" : ", ") + longest[i].what;
+            b.lines.push_back("Runs: " + std::to_string(clearing) + " clearing, " + std::to_string(gathering) +
+                              " getting everyone in, " + std::to_string(leaving) + " leaving" +
+                              (top.empty() ? std::string() : "; longest " + top) + ".");
+        }
+        if (!g_lately.empty())
+        {
+            std::string lately;
+            for (size_t i = 0; i < g_lately.size() && i < 3; ++i)
+                lately += (lately.empty() ? "" : "; ") + g_lately[i];
+            b.lines.push_back("Lately: " + lately + ".");
+        }
+        if (s.quests)
+            b.lines.push_back("Dungeon quests: " + std::to_string(q.sent) + " bots sent to take some (" +
+                              std::to_string(q.taken) + " taken), " + std::to_string(q.handIns) +
+                              " to hand some in (" + std::to_string(q.handedIn) + " handed in), " +
+                              std::to_string(q.walksLost) + " walks given up, " + std::to_string(q.walking) +
+                              " on their way now.");
+    }
+    if (!on)
+        return b;
+    if (!stalled.empty())
+    {
+        std::string list;
+        for (size_t i = 0; i < stalled.size() && i < 3; ++i)
+            list += (list.empty() ? "" : ", ") + stalled[i];
+        b.issues.push_back(std::to_string(stalled.size()) + " run" + (stalled.size() == 1 ? "" : "s") +
+                           " with no progress for 10+ min: " + list + (stalled.size() > 3 ? ", ..." : "") + ".");
+    }
+    if (slowIn)
+        b.issues.push_back(std::to_string(slowIn) + " run" + (slowIn == 1 ? "" : "s") +
+                           " still getting everyone in after 10+ min.");
+    if (queuedLong)
+        b.issues.push_back(std::to_string(queuedLong) + " part" + (queuedLong == 1 ? "y" : "ies") +
+                           " in the dungeon finder's queue for 30+ min.");
+    if (st.failed >= 3 && st.failed > st.cleared)
+        b.issues.push_back("More runs failed (" + std::to_string(st.failed) + ") than cleared (" +
+                           std::to_string(st.cleared) + ") since start.");
+    if (s.quests && q.sent + q.handIns >= 20 && q.walksLost * 2 > q.sent + q.handIns)
+        b.issues.push_back("Most walks for dungeon quests given up (" + std::to_string(q.walksLost) + " of " +
+                           std::to_string(q.sent + q.handIns) + ").");
+    return b;
+}
+
 std::vector<std::string> PbpDungeons_Status()
 {
     PbpBotDungeonSettings const& s = g_Pbp.dungeons;
@@ -1946,23 +2073,8 @@ std::vector<std::string> PbpDungeons_Status()
 
     if (!plan.empty())
         out.push_back(plan);
-    if (!s.bands.empty())
-    {
-        uint32 other = 0;
-        std::vector<uint32> const runs = RunsByBand(other);
-        std::string line;
-        for (size_t i = 0; i < s.bands.size(); ++i)
-        {
-            uint32 const share = i < s.bandShares.size() ? s.bandShares[i] : 1;
-            line += (line.empty() ? "" : ", ") + PbpDungeons::BandName(s.bands[i]) + " " + std::to_string(runs[i]) +
-                    "/" + std::to_string(share);
-            if (runs[i] < share && i < g_bandWhy.size() && !g_bandWhy[i].empty())
-                line += " (" + g_bandWhy[i] + ")";
-        }
-        if (other)
-            line += "; " + std::to_string(other) + " in no band";
-        out.push_back("  By level, now/share: " + line + ". .pbp dungeons bands lists them.");
-    }
+    if (std::string const bands = BandsNow(); !bands.empty())
+        out.push_back("  By level, now/share: " + bands + ". .pbp dungeons bands lists them.");
     for (Queued const& q : g_queued)
     {
         std::string names;
@@ -2203,6 +2315,11 @@ bool PbpDungeons_Busy(Player*)
 std::vector<std::string> PbpDungeons_Status()
 {
     return { "|cff00ff00[Bot dungeons]|r not in this build: it needs mod-dungeon-clear (DcBotRun.h)." };
+}
+
+PbpBrief PbpDungeons_Brief(bool)
+{
+    return { { "Bot dungeons: not in this build (it needs mod-dungeon-clear)." }, {} };
 }
 
 std::vector<std::string> PbpDungeons_Bands()

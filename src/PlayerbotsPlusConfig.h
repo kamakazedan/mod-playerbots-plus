@@ -118,6 +118,14 @@ struct PbpGroupQuestSettings
     uint32_t cooldownMinutes    = 30;      // after a party, before it asks for help again
 };
 
+// The full report (PlayerbotsPlusReport): every counter, spot, run and party,
+// in a file in the server's logs folder.
+struct PbpReportSettings
+{
+    uint32_t    minutes = 10;                         // written this often (0: only by .pbp report)
+    std::string file    = "PlayerbotsPlusReport.log"; // in the logs folder, unless a whole path
+};
+
 struct PbpSettings
 {
     bool                  enable = true;
@@ -125,6 +133,7 @@ struct PbpSettings
     PbpLedgerSettings     ledger;
     PbpBotDungeonSettings dungeons;
     PbpGroupQuestSettings groupQuests;
+    PbpReportSettings     report;
 };
 
 extern PbpSettings g_Pbp;

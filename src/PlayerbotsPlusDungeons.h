@@ -54,6 +54,7 @@
 #define PBP_BOT_DUNGEONS 0
 #endif
 
+#include "PlayerbotsPlusReport.h"
 #include "ScriptMgr.h"
 
 #include <cstdint>
@@ -116,8 +117,16 @@ void PbpDungeons_Update(uint32_t diff);
 // whatever else wants the bot leaves it be.
 bool PbpDungeons_Busy(Player* bot);
 
-// .pbp dungeons: the lines to print.
+// Every queue, run and count, for the full report (PlayerbotsPlusReport).
 std::vector<std::string> PbpDungeons_Status();
+
+// .pbp dungeons, and the line in .pbp status: how many are running and in
+// the queue, how they have gone, and what looks wrong -- a run with no
+// progress for ten minutes, one still getting everyone in, a party queued
+// half an hour, more runs failed than cleared, most quest walks given up.
+// `full`: by level band, the longest runs, the last results and the
+// dungeon quests too.
+PbpBrief PbpDungeons_Brief(bool full);
 
 // The memory this machine has available for new work, in MB: /proc/meminfo's
 // MemAvailable, which BotDungeons.MinFreeMemoryMB is held to. In a container

@@ -200,6 +200,36 @@ namespace PbpLedger
         return keys;
     }
 
+    std::vector<std::string> Brief(std::map<std::string, int64_t> const& flows,
+                                   std::map<std::string, int64_t> const& now, uint32_t withData)
+    {
+        std::vector<std::string> out;
+        if (flows.empty() && now.empty())
+        {
+            out.push_back("No figures yet: they start once random bots are online.");
+            return out;
+        }
+        auto F = [&flows](std::string const& key) { return Get(flows, key); };
+        const uint32_t per = std::max<uint32_t>(withData, 1);
+        out.push_back("Gold in " + AndADay(F("gold.in"), per) + ", out " + AndADay(F("gold.out"), per) +
+                      "; playerbots' own top-ups +" + Gold(F("gold.free")) + ", taken back -" + Gold(F("gold.gone")) +
+                      ".");
+        out.push_back("Auction house: " + Count(F("ah.listed")) + " listed, " + Count(F("ah.sold")) + " sold for " +
+                      Gold(F("ah.sold.value")) + ", " + Count(F("ah.bought")) + " bought for " +
+                      Gold(F("ah.bought.value")) + ", " + Count(F("ah.expired")) + " back unsold.");
+        if (now.empty())
+            out.push_back("No look at the bots yet since the server started.");
+        else
+        {
+            auto N = [&now](std::string const& key) { return Get(now, key); };
+            const int64_t bots = N("now.bots");
+            out.push_back("Last look at the bots (" + WhenText(std::time_t(N("now.time"))) + "): " + Count(bots) +
+                          " online, holding " + Gold(N("now.gold")) + ", " + Gold(bots ? N("now.gold") / bots : 0) +
+                          " each on average.");
+        }
+        return out;
+    }
+
     std::vector<std::string> Report(std::string const& title, std::map<std::string, int64_t> const& flows,
                                     std::map<std::string, int64_t> const& now, uint32_t withData)
     {

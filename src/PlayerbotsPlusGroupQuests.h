@@ -55,6 +55,7 @@
 // raised as BotEvents (PlayerbotsPlus.h). World thread only.
 // --------------------------------------------------------------------------
 
+#include "PlayerbotsPlusReport.h"
 #include "ScriptMgr.h"
 
 #include <cstdint>
@@ -91,8 +92,13 @@ bool PbpGroupQuests_Busy(Player* bot);
 // One of the group quests this knows: a quest log keeper keeps it.
 bool PbpGroupQuests_IsOne(uint32_t questId);
 
-// .pbp groupquests: the lines to print.
+// Every party and count, for the full report (PlayerbotsPlusReport).
 std::vector<std::string> PbpGroupQuests_Status();
+
+// .pbp groupquests, and the line in .pbp status: the parties and how they
+// stand, how they have gone, and what looks wrong -- parties going and no
+// quest done, most walks given up. `full`: the quests and walks too.
+PbpBrief PbpGroupQuests_Brief(bool full);
 
 struct PbpGroupQuestsStats
 {

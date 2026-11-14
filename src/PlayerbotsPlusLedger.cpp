@@ -998,6 +998,30 @@ std::vector<std::string> PbpLedger_Report(uint32_t days)
     return PbpLedger::Report(title, flows, look, withData);
 }
 
+PbpBrief PbpLedger_Brief(uint32_t days)
+{
+    PbpBrief b;
+    if (!g_Pbp.enable || !Cfg().enable)
+    {
+        b.lines.push_back("The economy ledger is off (PlayerbotsPlus.Ledger.Enable).");
+        return b;
+    }
+    days = std::clamp<uint32_t>(days, 1, Cfg().keepDays);
+    const std::time_t now = Now();
+    std::map<std::string, int64_t> flows, look;
+    uint32_t withData = 0;
+    Gather(PbpLedger::DayOf(now - std::time_t(days - 1) * DAY), PbpLedger::DayOf(now), true, flows, look, withData);
+    b.lines.push_back("The random bots' economy, last " + std::to_string(days) + " day" + (days == 1 ? "" : "s") +
+                      " (" + std::to_string(withData) + " with figures):");
+    for (std::string& line : PbpLedger::Brief(flows, look, withData))
+        b.lines.push_back(std::move(line));
+    const PbpLedgerStats st = PbpLedger_GetStats();
+    if (st.dropped)
+        b.issues.push_back("The ledger dropped " + PbpLedger::Count(int64_t(st.dropped)) +
+                           " things it was told of, too many at once: its figures are short by those.");
+    return b;
+}
+
 PbpLedgerStats PbpLedger_GetStats()
 {
     PbpLedgerStats s = g_stats;

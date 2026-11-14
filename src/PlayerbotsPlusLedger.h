@@ -40,6 +40,7 @@
 // item is sure to be there, and matched by its address on the same thread.
 // --------------------------------------------------------------------------
 
+#include "PlayerbotsPlusReport.h"
 #include "ScriptMgr.h"
 
 #include <cstdint>
@@ -93,8 +94,14 @@ void PbpLedger_Shutdown();
 // The market took `copper` out of a random bot's auction house mail.
 void PbpLedger_MailMoney(uint64_t copper);
 
-// .pbp economy [days]: the lines to print.
+// The economy over the last `days`, every figure: for the full report
+// (PlayerbotsPlusReport). Reads the ledger's table: not every world tick.
 std::vector<std::string> PbpLedger_Report(uint32_t days);
+
+// .pbp economy [days]: the same in a few lines -- gold in and out, the
+// auction house, the bots as last looked at -- and what looks wrong (notes
+// dropped, too many at once).
+PbpBrief PbpLedger_Brief(uint32_t days);
 
 struct PbpLedgerStats
 {

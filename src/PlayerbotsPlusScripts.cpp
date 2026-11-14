@@ -11,6 +11,7 @@
 #include "PlayerbotsPlusMarks.h"
 #include "PlayerbotsPlusMute.h"
 #include "PlayerbotsPlusPets.h"
+#include "PlayerbotsPlusReport.h"
 #include "PlayerbotsPlusRevive.h"
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusStuck.h"
@@ -67,6 +68,8 @@ namespace
             PbpIndoors_Update(diff);
             PbpFire_Update(diff);
             PbpSpace_Update(diff);
+            // The full report, on the clock: switched off, it says so.
+            PbpReport_Update(diff);
             if (!g_Pbp.enable)
                 return;
             PbpMarket_Update(diff);
@@ -152,6 +155,7 @@ namespace
             static ChatCommandTable pbpTable =
             {
                 { "status", HandleStatus, SEC_GAMEMASTER,    Console::Yes },
+                { "report", HandleReport, SEC_GAMEMASTER,    Console::Yes },
                 { "dungeons", dungeonsTable },
                 { "groupquests", HandleGroupQuests, SEC_GAMEMASTER, Console::Yes },
                 { "economy", HandleEconomy, SEC_GAMEMASTER,  Console::Yes },
@@ -167,168 +171,61 @@ namespace
             return commandTable;
         }
 
-        // .pbp status: what the module is doing.
+        // Where the rest of it is: the report file, written by .pbp report
+        // (and on the clock).
+        static std::string More(char const* what)
+        {
+            std::string const every = g_Pbp.report.minutes ? fmt::format(", also every {} min", g_Pbp.report.minutes)
+                                                           : std::string();
+            return fmt::format("{}: .pbp report ({}{}).", what, g_Pbp.report.file, every);
+        }
+
+        // A part in brief, as the chat window takes it: its lines, what looks
+        // wrong, and where the rest is.
+        static void Brief(ChatHandler* handler, PbpBrief const& b, char const* more)
+        {
+            for (size_t i = 0; i < b.lines.size(); ++i)
+                handler->SendSysMessage(i ? b.lines[i] : "|cff00ff00[Playerbots Plus]|r " + b.lines[i]);
+            for (std::string const& issue : b.issues)
+                handler->SendSysMessage("|cffff8000 ! " + issue + "|r");
+            handler->SendSysMessage(More(more));
+        }
+
+        // .pbp status: a line for each part, and what looks wrong.
         static bool HandleStatus(ChatHandler* handler)
         {
-            PbpSettings const& s = g_Pbp;
-            PbpMarketStats const st = PbpMarket_GetStats();
-            using PbpPrice::MoneyText;
-            auto onOff = [](bool on) { return on ? "on" : "off"; };
+            for (std::string const& line : PbpReport_Overview())
+                handler->SendSysMessage(line);
+            handler->SendSysMessage("More: .pbp hangouts | dungeons | groupquests | economy. " +
+                                    More("Every counter, spot, run and party"));
+            return true;
+        }
 
-            handler->PSendSysMessage("|cff00ff00[Playerbots Plus]|r {}, auction house trading {}",
-                                     s.enable ? "on" : "|cffff0000OFF|r", onOff(s.market.enable));
-            handler->PSendSysMessage("Bots in a trading city: {}. Up for auction: {} by bots, of {} in all.",
-                                     st.inCities, st.botAuctions, st.allAuctions);
-            handler->PSendSysMessage("Visits: {}. Listed {} ({}), sold {} ({}), back unsold {}.",
-                                     st.visits, st.listed, MoneyText(st.listedMoney), st.sold, MoneyText(st.soldMoney),
-                                     st.expired);
-            handler->PSendSysMessage("Bought {} ({}), put on after {} visit{}. Mail collected: {} ({}, {} item{}).",
-                                     st.bought, MoneyText(st.boughtMoney), st.equipped, st.equipped == 1 ? "" : "s",
-                                     st.mails, MoneyText(st.mailMoney), st.mailItems, st.mailItems == 1 ? "" : "s");
-            if (st.tooCheap || st.bagsFull || st.takenDown)
-                handler->PSendSysMessage("Not listed, cheaper than a vendor already: {}. Taken down, not their own "
-                                         "loot: {}. Mail left, bags full: {}.", st.tooCheap, st.takenDown,
-                                         st.bagsFull);
-
-            PbpHangoutStats const h = PbpHangout_GetStats();
-            handler->PSendSysMessage("City hangouts: {} - {} hanging out ({} AFK), {} on their way, {} spots ({} with "
-                                     "an inn to arrive at). Sent {}, fetched from elsewhere {} ({} gone back), "
-                                     "settled {}, never got there {} ({} no room at the spot, {} too slow, {} given "
-                                     "something else to do, {} went elsewhere, {} never landed), sent on to another "
-                                     "spot in the city {}, spots found full {} times, moved on {}, cut short {}, back "
-                                     "from AFK {}.",
-                                     onOff(pbp::g_HangoutEnable), h.hanging, h.away, h.onTheWay, h.spots, h.withInn,
-                                     h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.lostNoRoom, h.lostSlow,
-                                     h.lostBusy, h.lostElsewhere, h.lostLanding, h.redirected, h.foundFull, h.movedOn,
-                                     h.cutShort, h.cameBack);
-            handler->PSendSysMessage("City life: {} - steps {}, looks round {}, hops {}, mounts reared {} ({} done "
-                                     "back); rare mounts looked at {} (by {}); dance parties {} ({} joined in); "
-                                     "walked over to talk {}; errands {} ({} got there; {} bankers, auctioneers and "
-                                     "mailboxes known); flew in {} ({} landed), flew out {}; fishing {} ({} casts, {} "
-                                     "places to fish from).",
-                                     onOff(pbp::g_LifeEnable), h.steps, h.turns, h.hops, h.rears, h.rearedBack,
-                                     h.gawks, h.gawkers, h.dances,
-                                     h.danced, h.gathered, h.errands, h.errandsDone, h.services, h.flewIn, h.landed,
-                                     h.flewOut, h.fished, h.casts, h.fishPlaces);
-            std::string cities;
-            for (PbpHangoutCity const& c : PbpHangout_Cities())
+        // .pbp report: the whole of it written to the file now.
+        static bool HandleReport(ChatHandler* handler)
+        {
+            std::string where;
+            uint32_t lines = 0;
+            if (!PbpReport_Write(where, lines))
             {
-                if (!c.there && !c.onTheWay && !c.share)
-                    continue;
-                std::string more;
-                auto add = [&more](std::string const& what) { more += (more.empty() ? "" : ", ") + what; };
-                if (c.hot)
-                    add(fmt::format("{} at the hot spots", c.hot));
-                if (c.onTheWay)
-                    add(fmt::format("{} on the way", c.onTheWay));
-                if (c.full)
-                    add(fmt::format("{} spot{} full", c.full, c.full == 1 ? "" : "s"));
-                if (c.room < c.share)
-                    add(fmt::format("{} of its {} places at other cities' spots", c.share - c.room, c.share));
-                else if (c.room > c.share)
-                    add(fmt::format("{} more from cities that are full", c.room - c.share));
-                cities += fmt::format("{}{} {} of {}{}", cities.empty() ? "" : ", ", c.name, c.there, c.room,
-                                      more.empty() ? std::string() : " (" + more + ")");
+                handler->SendErrorMessage("Playerbots Plus: the report was not written -- " + where + ".", false);
+                return false;
             }
-            handler->PSendSysMessage("Hanging out by city: {}.", cities.empty() ? std::string("nobody yet") : cities);
-
-            PbpStuckStats const k = PbpStuck_GetStats();
-            handler->PSendSysMessage("Stuck on a mount: {} - {} mounts noted, {} bots stuck ({} kept off what they "
-                                     "were after, {} with nothing to loot, {} kept on foot); {} held off now, {} on "
-                                     "foot now.",
-                                     onOff(pbp::g_StuckEnable), k.mounts, k.stuck, k.hinted, k.nothing, k.walked,
-                                     k.holding, k.walking);
-
-            PbpFireStats const f = PbpFire_GetStats();
-            handler->PSendSysMessage("Out of the fire: {} - {} bots burned standing in a fire, {} found standing in "
-                                     "one that burns nobody (a bonfire), {} walked out ({} of them hanging out, given "
-                                     "a new place; {} in one again within a minute and sent off to do something "
-                                     "else), {} with nowhere to step to.",
-                                     onOff(pbp::g_FireEnable), f.burns, f.seen, f.stepped, f.moved, f.sentOn,
-                                     f.nowhere);
-
-            PbpIndoorsStats const in = PbpIndoors_GetStats();
-            handler->PSendSysMessage("On foot indoors: {} - {} bots got off their mount under a roof, {} riding "
-                                     "indoors right now (off once standing still, after {}s).",
-                                     onOff(pbp::g_IndoorsEnable), in.dismounted, in.watching, pbp::g_IndoorsSeconds);
-
-            PbpSpaceStats const sp = PbpSpace_GetStats();
-            handler->PSendSysMessage("Room to stand: {} - {} bots found standing in someone, {} stepped aside ({} of "
-                                     "them hanging out, given a new place), {} with nowhere to step to just then.",
-                                     onOff(pbp::g_SpaceEnable), sp.crowded, sp.stepped, sp.moved, sp.nowhere);
-
-            PbpReviveStats const r = PbpRevive_GetStats();
-            handler->PSendSysMessage("Getting back up: {} - {} released, {} ran back in, {} stopped waiting for a "
-                                     "rez. Muted bot lines: {}.",
-                                     onOff(pbp::g_ReviveEnable), r.released, r.returned, r.gaveUp,
-                                     PbpMute_GetDropped());
-
-            PbpMarksStats const m = PbpMarks_GetStats();
-            std::string const lastFail = m.lastFail ? fmt::format(", last cast result {}", m.lastFail) : "";
-            handler->PSendSysMessage("Raid marks: {} - {} crowd-control marks given out, the skull moved {} to the "
-                                     "cross and {} to the next mob; {} saps ({} would not cast{}, {} did not take, {} "
-                                     "given up, {} could not sap it at all).",
-                                     onOff(pbp::g_MarksEnable), m.assigned, m.moved, m.picked, m.saps, m.sapFails,
-                                     lastFail, m.sapMissed, m.sapGaveUp, m.sapCant);
-
-            PbpPetsStats const p = PbpPets_GetStats();
-            handler->PSendSysMessage("Hunters' pets: {} - {} given a name, {} left as they were tamed. Companions: "
-                                     "{} - {} on the lists ({} left out), {} learned ({} near you waiting for their "
-                                     "first until nobody in their guild is on), {} brought out, {} swapped for "
-                                     "another, {} put away.",
-                                     onOff(pbp::g_PetNamesEnable), p.named, p.keptName,
-                                     onOff(pbp::g_CompanionsEnable), p.companions, p.badEntries, p.learned,
-                                     p.guildWait, p.summoned, p.switched, p.putAway);
-
-            PbpDuelsStats const d = PbpDuels_GetStats();
-            std::string spots;
-            for (std::string const& key : pbp::g_DuelsSpots)
-                spots += (spots.empty() ? "" : ", ") + key;
-            handler->PSendSysMessage("Duels at the gates ({}): {} - {} challenges ({} to a real player), {} fought "
-                                     "without leaving the crowd, {} duelling now, {} walking over now, {} given up; "
-                                     "{} pairs talked into one went out to the gates ({} fought it out, {} never "
-                                     "did, {} on their way now).",
-                                     spots.empty() ? std::string("nowhere") : spots, onOff(pbp::g_DuelsEnable),
-                                     d.challenged, d.asked, h.duels, h.duelling, d.walking, d.gaveUp, d.pacts,
-                                     d.pactsHeld, d.pactsLost, d.pactsNow);
-
-            PbpLedgerStats const lg = PbpLedger_GetStats();
-            handler->PSendSysMessage("Economy ledger: {} - {} things noted since startup ({} dropped, too many at "
-                                     "once), written {} times; last look at the bots: {}. .pbp economy [days] shows "
-                                     "it.",
-                                     onOff(s.ledger.enable), lg.notes, lg.dropped, lg.writes,
-                                     lg.lookedAt.empty() ? std::string("not yet")
-                                                         : fmt::format("{} bots at {}", lg.looked, lg.lookedAt));
-
-            PbpDungeonsStats const bd = PbpDungeons_GetStats();
-            handler->PSendSysMessage("Bot dungeons: {} - {} parties in the queue, {} runs going on; {} runs since "
-                                     "startup ({} cleared, {} failed). .pbp dungeons shows them.",
-                                     onOff(s.enable && s.dungeons.enable), bd.queuedNow, bd.runsNow, bd.runs,
-                                     bd.cleared, bd.failed);
-
-            PbpGroupQuestsStats const gq = PbpGroupQuests_GetStats();
-            handler->PSendSysMessage("Group quests: {} - {} parties now; {} went since startup ({} alone), {} "
-                                     "quests done. .pbp groupquests shows them.",
-                                     onOff(s.enable && s.groupQuests.enable), gq.partiesNow, gq.parties, gq.solos,
-                                     gq.done);
-
-            handler->SendSysMessage("Select a random bot and type .pbp visit to send it to the auction house now.");
+            handler->SendSysMessage(fmt::format("Playerbots Plus: the full report, {} lines, is in {}", lines, where));
             return true;
         }
 
         // .pbp groupquests: random bots getting parties together for group quests.
         static bool HandleGroupQuests(ChatHandler* handler)
         {
-            for (std::string const& line : PbpGroupQuests_Status())
-                handler->PSendSysMessage("{}", line);
+            Brief(handler, PbpGroupQuests_Brief(true), "Every party");
             return true;
         }
 
         // .pbp dungeons: random bots running dungeons on their own.
         static bool HandleDungeons(ChatHandler* handler)
         {
-            for (std::string const& line : PbpDungeons_Status())
-                handler->PSendSysMessage("{}", line);
+            Brief(handler, PbpDungeons_Brief(true), "Every queue and run");
             return true;
         }
 
@@ -357,8 +254,7 @@ namespace
         // .pbp economy [days]: the random bots' economy over the last days (7).
         static bool HandleEconomy(ChatHandler* handler, Optional<uint32> days)
         {
-            for (std::string const& line : PbpLedger_Report(days ? *days : 7))
-                handler->PSendSysMessage("{}", line);
+            Brief(handler, PbpLedger_Brief(days ? *days : 7), "Every figure, the last 7 days");
             return true;
         }
 
@@ -380,17 +276,15 @@ namespace
             return true;
         }
 
-        // .pbp reload: re-read mod_playerbots_plus.conf.
-        // The fires about you, how near anyone may stand, and who is in one.
-        // .pbp hangouts: each spot -- who is there, its room, and how the
-        // places looked at for it went (what was turned down, and why).
+        // .pbp hangouts: how many are where, city life, and what looks wrong.
         static bool HandleHangouts(ChatHandler* handler)
         {
-            for (std::string const& line : PbpHangout_SpotReport())
-                handler->PSendSysMessage("{}", line);
+            Brief(handler, PbpHangout_Brief(true), "Each spot, and how the places looked at for it went");
             return true;
         }
 
+        // .pbp fires: the fires about you, how near anyone may stand, and
+        // who is in one.
         static bool HandleFires(ChatHandler* handler)
         {
             Player* me = handler->GetSession() ? handler->GetSession()->GetPlayer() : nullptr;
@@ -401,6 +295,7 @@ namespace
             return true;
         }
 
+        // .pbp reload: re-read mod_playerbots_plus.conf.
         static bool HandleReload(ChatHandler* handler)
         {
             if (!sConfigMgr->Reload())

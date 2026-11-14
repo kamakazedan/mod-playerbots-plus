@@ -263,13 +263,28 @@ test also checks the conf against the code: every key the code reads is in the
 conf, and the default mute list, hangout spots, companion lists and pet names
 are the same in both.
 
+## What it tells you: a few lines in game, the rest in a file
+
+`.pbp status` and the parts' own commands (`hangouts`, `dungeons`,
+`groupquests`, `economy`) say a few short lines each -- a part's `PbpBrief`:
+how it stands, then what looks wrong (`issues`) -- and the full report
+(`PlayerbotsPlusReport.cpp`, `Report.File` in the logs folder, every
+`Report.Minutes` and on `.pbp report`) has every counter, spot, run and
+party. A new part, or a new count, goes in the report; in game only if it
+says whether the part works. An issue is only what someone should act on,
+with a threshold that keeps it quiet when all is well: never a count that
+just grows. The report's economy reads the ledger's table, so it is read at
+most once an hour on the clock.
+
 ## Conventions
 
 - Header names start with `PlayerbotsPlus`. Every module's `src/` is on one
   shared include path, so a `Config.h` or `Market.h` here would shadow
   someone else's.
 - Log to `module.playerbotsplus`. Startup and registration lines go to
-  `server.loading`.
+  `server.loading`. Its own file (`PlayerbotsPlus.log`) is set up in
+  worldserver.conf, not the module conf: the logs are made before module
+  confs are read.
 - Every setting goes in `conf/mod_playerbots_plus.conf.dist` with a comment
   saying what it does and its default. That file is the documentation.
 - `urand(min, max)` is inclusive at both ends. Use the module's own `Between`

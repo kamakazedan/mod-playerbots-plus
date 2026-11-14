@@ -108,6 +108,11 @@ namespace PbpLedger
     std::vector<std::string> Report(std::string const& title, std::map<std::string, int64_t> const& flows,
                                     std::map<std::string, int64_t> const& now, uint32_t withData);
 
+    // The same in three lines, for the chat window: gold in and out, the
+    // auction house, and the bots as last looked at.
+    std::vector<std::string> Brief(std::map<std::string, int64_t> const& flows,
+                                   std::map<std::string, int64_t> const& now, uint32_t withData);
+
     // Every figure a look at the bots writes ("now.bots", "now.prof.mining",
     // ...), so a look that finds nobody queued writes a 0 over an earlier one.
     std::vector<std::string> NowKeys();

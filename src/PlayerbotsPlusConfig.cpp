@@ -844,6 +844,11 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     for (uint64_t guid : PbpLedger::GuidList(sConfigMgr->GetOption<std::string>("AuctionHouseBot.GUIDs", "", false)))
         l.auctionBots.insert(uint32_t(guid));
 
+    s.report.minutes = std::min<uint32_t>(U("PlayerbotsPlus.Report.Minutes", 10), 1440);
+    s.report.file    = sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Report.File", "PlayerbotsPlusReport.log");
+    if (s.report.file.empty())
+        s.report.file = "PlayerbotsPlusReport.log";
+
     PbpBotDungeonSettings& d = s.dungeons;
     d.enable              = B("PlayerbotsPlus.BotDungeons.Enable", false);
     d.checkSeconds        = std::clamp<uint32_t>(U("PlayerbotsPlus.BotDungeons.CheckSeconds", 30), 5, 3600);
@@ -963,6 +968,11 @@ void PlayerbotsPlus_LoadConfig(bool reload)
              "days; the AH bot's characters: {}).",
              g_Pbp.ledger.enable ? "on" : "off", g_Pbp.ledger.flushMinutes, g_Pbp.ledger.censusMinutes,
              g_Pbp.ledger.keepDays, g_Pbp.ledger.auctionBots.size());
+    if (g_Pbp.report.minutes)
+        LOG_INFO(where, "[Playerbots Plus] The full report goes to {} every {} min, and whenever .pbp report asks.",
+                 g_Pbp.report.file, g_Pbp.report.minutes);
+    else
+        LOG_INFO(where, "[Playerbots Plus] The full report goes to {} whenever .pbp report asks.", g_Pbp.report.file);
 
     PbpBotDungeonSettings const& bd = g_Pbp.dungeons;
 #if PBP_BOT_DUNGEONS

@@ -114,10 +114,11 @@ NPC to NPC. With hangouts, they gather where players do.
   the full spot takes nobody more for a while (`Hangout.FullMinutes`, or
   until someone leaves it). Its unused places go to its city's other spots of
   the same kind first (hot or quiet), then its other spots, and once the
-  whole city is full, to other cities' spots. `.pbp status` shows each city
-  with its room as it stands now, and `.pbp hangouts` lists every spot: who's
-  there, its room, and why places looked at for it were turned down (no
-  ground at its height, water, out of sight of the middle, a crowd, no path),
+  whole city is full, to other cities' spots. `.pbp hangouts` shows each
+  city with its room as it stands now, and the full report (`.pbp report`)
+  lists every spot: who's there, its room, and why places looked at for it
+  were turned down (no ground at its height, water, out of sight of the
+  middle, a crowd, no path),
   which shows up a spot nobody can be put at. Such a spot also says so in
   the log, once.
 - **Who:** idle random bots near a spot, of its zone and floor. A bot that is
@@ -146,7 +147,7 @@ the way the middle is, reachable on foot, out of any fire and not where
 anyone stands, so never under the city, on a roof, in the inn off the spot or
 in a brazier. Orgrimmar has no benches, so bots there stand, sit on the
 ground or stay on their mounts.
-`.pbp status` shows how full each city is.
+`.pbp hangouts` shows how full each city is.
 
 Settings: `PlayerbotsPlus.Hangout.*`.
 
@@ -184,7 +185,7 @@ real player, since nobody else would see it:
   from their bags.
 
 An invite, a trade, a fight or a queue lets a bot go at once, with its own
-weapons back in its hands. `.pbp status` counts it all on its "City life:"
+weapons back in its hands. `.pbp hangouts` counts it all on its "City life:"
 line.
 
 Settings: `PlayerbotsPlus.CityLife.*`.
@@ -452,8 +453,9 @@ bots count, not anyone's own.
   professions, who is in the dungeon queue, the trade goods they carry and
   what is in their banks, and who has what up for auction.
 
-`.pbp economy [days]` prints it (the last 7 days unless you say), from the
-console or SOAP as well as in game. Each finished day is also written to the
+`.pbp economy [days]` gives the short of it (the last 7 days unless you
+say), from the console or SOAP as well as in game, and the full report
+(`.pbp report`) every figure. Each finished day is also written to the
 server log. The figures are kept in the characters database
 (`playerbots_plus_ledger`, made by the SQL in `data/sql` or at startup) for 90
 days. Settings: `PlayerbotsPlus.Ledger.*`.
@@ -549,9 +551,11 @@ new starts until someone logs in. They also wait while the world tick averages
 over 200 ms, and while the machine has less than 1 GB of memory available
 (`MinFreeMemoryMB`, read from `/proc/meminfo`): each run is a dungeon instance
 more in memory, and the tick says nothing of that until the machine runs out.
-There are 5 at most at once. `.pbp dungeons` shows what's going on, including
-the tick, the memory free and each level band's runs, and
-`.pbp dungeons bands` the dungeons in each band.
+There are 5 at most at once. `.pbp dungeons` shows what's going on in a few
+lines -- each level band's runs, the longest runs, the last results, and any
+run that has stopped getting anywhere -- and the full report (`.pbp report`)
+every queue and run, the tick and the memory free; `.pbp dungeons bands` the
+dungeons in each band.
 `.pbp dungeons send <dungeon>` queues a party for a dungeon now, quest or no
 quest. Settings: `PlayerbotsPlus.BotDungeons.*`.
 
@@ -598,7 +602,8 @@ this builds on.
   gets together or is at its quest: playerbots teleports a bot that levels up
   if it leads its group, and the party's leader levels as often as the rest.
 
-`.pbp groupquests` shows the parties and what each is doing. Settings:
+`.pbp groupquests` shows how many parties are at what, and how they've gone;
+the full report (`.pbp report`) each party and what it is doing. Settings:
 `PlayerbotsPlus.GroupQuests.*`.
 
 ## With other modules
@@ -676,14 +681,31 @@ module at startup if the updater is off.
 
 | Command | What it does |
 |---|---|
-| `.pbp status` | What it's doing: the auction house, hangouts (and how full each city is), stuck bots, fires, room to stand, revives, marks, pets, companions, duels, muted lines and the ledger |
-| `.pbp economy [days]` | The random bots' economy over the last days (7 unless you say) |
-| `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
-| `.pbp dungeons` | Bot dungeons: parties in the queue, runs going on, each level band's runs, recent results, the world tick, the memory free, dungeon quests |
+| `.pbp status` | All of it in a few lines: a line for each part (hangouts, city life, the auction house, bot dungeons, group quests, the fixes) and anything that looks wrong |
+| `.pbp hangouts` | The hangouts in brief: how full each city is, how bots got there, city life, and any spot where nobody can stand |
+| `.pbp dungeons` | Bot dungeons in brief: runs and queue, each level band's runs, the longest runs, the last results, dungeon quests, and any run that has stalled |
 | `.pbp dungeons bands` | The dungeons in each level band, with the runs each band has and its share |
 | `.pbp dungeons send <dungeon>` | Queues a party of bots for that dungeon now (its dungeon finder id, or part of its name) |
-| `.pbp groupquests` | Group quests: the parties asking for help, getting together and at their quests, and what they've done |
+| `.pbp groupquests` | Group quests in brief: the parties and how they stand, and how they've gone |
+| `.pbp economy [days]` | The random bots' economy over the last days (7 unless you say), in brief |
+| `.pbp report` | Everything, written to a file now: every counter, every spot, queue, run and party, the economy |
+| `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |
+
+The full report also goes to `PlayerbotsPlusReport.log` in the server's logs
+folder every 10 minutes (`PlayerbotsPlus.Report.*`), always the latest: the
+one to read when something is wrong, or to send on.
+
+Its own log file goes in `worldserver.conf`, beside the others (the server
+sets up its logs before it reads module confs, so the module's own conf
+can't):
+
+```
+Appender.PlayerbotsPlus=2,5,0,PlayerbotsPlus.log,w
+Logger.module.playerbotsplus=4,PlayerbotsPlus Errors
+```
+
+Without them it logs to `Server.log`, as every module does.
 
 `PlayerbotsPlus.Debug = 1` logs more of what the bots do, such as each bot
 heading to a hangout, a rogue's sap step by step, and bots walking off to take

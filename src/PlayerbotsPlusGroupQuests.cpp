@@ -1957,6 +1957,38 @@ bool PbpGroupQuests_IsOne(uint32_t questId)
     return g_quests.contains(questId);
 }
 
+PbpBrief PbpGroupQuests_Brief(bool full)
+{
+    PbpBrief b;
+    bool const on = g_Pbp.enable && g_Pbp.groupQuests.enable;
+    uint32 asking = 0, meeting = 0, atIt = 0;
+    for (auto const& [id, p] : g_parties)
+        ++(p.phase == Phase::Recruiting ? asking : p.phase == Phase::Meeting ? meeting : atIt);
+    PbpGroupQuestsStats const st = PbpGroupQuests_GetStats();
+    b.lines.push_back("Group quests: " + std::string(on ? "on" : "off") + " -- " + std::to_string(g_parties.size()) +
+                      " parties (" + std::to_string(asking) + " asking for help, " + std::to_string(meeting) +
+                      " getting together, " + std::to_string(atIt) + " at it); since start " +
+                      std::to_string(st.parties + st.solos) + " went (" + std::to_string(st.solos) + " alone), " +
+                      std::to_string(st.done) + " quests done, " + std::to_string(st.failedTries) + " tries failed.");
+    if (full)
+        b.lines.push_back(std::to_string(st.quests) + " group quests known, given out at " +
+                          std::to_string(st.givers) + " places, " + std::to_string(g_holders.size()) +
+                          " bots hold some; " + std::to_string(st.sent) + " sent to take one (" +
+                          std::to_string(st.taken) + " taken), " + std::to_string(st.handIns) + " to hand one in (" +
+                          std::to_string(st.handedIn) + " handed in), " + std::to_string(st.walksLost) +
+                          " walks given up; " + std::to_string(st.asks) + " asks for help, " +
+                          std::to_string(st.answers) + " answered.");
+    if (!on)
+        return b;
+    if (st.parties + st.solos >= 3 && !st.done)
+        b.issues.push_back("No group quest done yet: " + std::to_string(st.parties + st.solos) + " went, " +
+                           std::to_string(st.failedTries) + " tries failed.");
+    if (st.sent + st.handIns >= 20 && st.walksLost * 2 > st.sent + st.handIns)
+        b.issues.push_back("Most walks for group quests given up (" + std::to_string(st.walksLost) + " of " +
+                           std::to_string(st.sent + st.handIns) + ").");
+    return b;
+}
+
 std::vector<std::string> PbpGroupQuests_Status()
 {
     std::vector<std::string> out;

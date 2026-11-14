@@ -1,6 +1,8 @@
 #ifndef PLAYERBOTS_PLUS_HANGOUT_H
 #define PLAYERBOTS_PLUS_HANGOUT_H
 
+#include "PlayerbotsPlusReport.h"
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -161,6 +163,12 @@ std::vector<PbpHangoutCity> PbpHangout_Cities();
 // (and whether it was found full), and how the places looked at for it went
 // -- what was turned down, and why.
 std::vector<std::string> PbpHangout_SpotReport();
+
+// The hangouts and city life in brief (PlayerbotsPlusReport): how many there
+// are and where, and what looks wrong -- a spot nobody can stand at, one
+// short of people where nearly every place looked at is turned down, bots
+// that take too long to get to theirs. `full`: by city and since start too.
+PbpBrief PbpHangout_Brief(bool full);
 
 struct PbpHangoutStats
 {

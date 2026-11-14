@@ -15,10 +15,25 @@
 #   just do it.
 #
 #   GM commands:
-#       .pbp status          what it is doing
+#       .pbp status          all of it in a few lines: is each part working,
+#                            and what looks wrong
+#       .pbp hangouts        the hangouts and city life in brief
+#       .pbp dungeons        bot dungeons in brief (.pbp dungeons bands: the
+#                            dungeons in each level band)
+#       .pbp groupquests     group quests in brief
 #       .pbp economy [days]  the random bots' economy over the last days (7)
+#       .pbp report          everything -- every counter, spot, run and
+#                            party, the economy -- written to a file now
+#                            (PlayerbotsPlus.Report.*)
 #       .pbp visit [name]    that bot (or the one selected) trades now
 #       .pbp reload          re-read this file (.reload config does too)
+#
+#   Its own log file: the server sets up its logs before it reads module
+#   confs, so that goes in worldserver.conf, beside the others:
+#       Appender.PlayerbotsPlus=2,5,0,PlayerbotsPlus.log,w
+#       Logger.module.playerbotsplus=4,PlayerbotsPlus Errors
+#   Without them it logs to Server.log (Logger.module). Its startup lines go
+#   to Server.log either way.
 #
 ###############################################################################
 
@@ -35,6 +50,21 @@ PlayerbotsPlus.Enable = 1
 #        rogue's sap step by step; a dead bot released.
 #        Default: 0
 PlayerbotsPlus.Debug = 0
+
+#    PlayerbotsPlus.Report.Minutes
+#    PlayerbotsPlus.Report.File
+#        The full report: everything .pbp status, hangouts, dungeons,
+#        groupquests and economy say in brief, in full -- every counter, every
+#        spot and how the places looked at for it went, every queue, run and
+#        party, the economy over the last 7 days. Written over again every
+#        Report.Minutes (0: only when .pbp report asks), to Report.File in the
+#        server's logs folder (LogsDir), or wherever a whole path says. The
+#        one to read when something is wrong, or to send on. The economy in it
+#        is read from the ledger's table at most once an hour, and fresh when
+#        .pbp report asks.
+#        Default: 10, "PlayerbotsPlusReport.log"
+PlayerbotsPlus.Report.Minutes = 10
+PlayerbotsPlus.Report.File = "PlayerbotsPlusReport.log"
 
 ###############################################################################
 #
