@@ -281,14 +281,14 @@ int main(int argc, char** argv)
             else
                 std::printf("   not the code's default: %s\n", text.c_str());
         }
-        True("conf spots", spots == 31 && good == 31);
-        True("conf spots are the code's", same == 31);
+        True("conf spots", spots == 32 && good == 32);
+        True("conf spots are the code's", same == 32);
         const size_t list = config.find("kDefaultHangoutSpots[]");
         const size_t end  = config.find("};", list);
         int defaults = 0;
         for (size_t at = config.find("\n        { \"", list); at < end; at = config.find("\n        { \"", at + 1))
             ++defaults;
-        True("the code has no other spots: " + std::to_string(defaults), list != std::string::npos && defaults == 31);
+        True("the code has no other spots: " + std::to_string(defaults), list != std::string::npos && defaults == 32);
         // Where people meet, there is room for them: Stormwind as much as
         // Orgrimmar, Dalaran (only from level 68) a good part of that.
         True("room in Orgrimmar: " + std::to_string(room["Orgrimmar"]), room["Orgrimmar"] >= 80);

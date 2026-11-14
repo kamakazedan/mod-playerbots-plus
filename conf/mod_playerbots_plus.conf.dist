@@ -928,8 +928,10 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #          so a place may be found up the slopes too) -- the Drag, the Valley
 #          of Honor, and outside the city the gates and the zeppelin tower.
 #          Stormwind: the Trade District, outside the auction house and the
-#          bank, the Valley of Heroes, Cathedral Square, the Mage Quarter, the
-#          Dwarven District, Old Town, the harbor and outside the gates.
+#          bank, round the fountain and down to the foot of the bank's steps
+#          (its middle to one side, toward the steps: the statue is no
+#          window), the Valley of Heroes, Cathedral Square, the Mage Quarter,
+#          the Dwarven District, Old Town, the harbor and outside the gates.
 #          Thunder Bluff: the middle of it (its teleport point), among the
 #          trainers and below the auction house, and outside the bank.
 #          Dalaran (from level 68, both sides): outside both banks, Runeweaver
@@ -950,6 +952,7 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 16 the Trade District in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindAuction = "0 -8815.2 652.9 94.9 14 12 outside the auction house in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 10 the bank in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindFountain = "0 -8869.0 643.0 96.4 18 12 by the fountain in the Trade District in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindValley = "0 -8955.0 525.0 96.4 20 10 the Valley of Heroes in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindCathedral = "0 -8635.0 800.0 97.0 24 14 Cathedral Square in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindMageQuarter = "0 -9010.0 850.0 106.0 18 8 the Mage Quarter in Stormwind"
@@ -1000,7 +1003,7 @@ PlayerbotsPlus.Hangout.Spot.DalaranMerchants = "571 5654.9 682.2 652.0 14 10 out
 PlayerbotsPlus.Hangout.CityWeights = 1
 PlayerbotsPlus.Hangout.Places = 0
 PlayerbotsPlus.Hangout.HotShare = 75
-PlayerbotsPlus.Hangout.HotSpots = "StormwindTrade|StormwindAuction|StormwindBank|IronforgeCommons|OrgrimmarValley|OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|DalaranMerchants"
+PlayerbotsPlus.Hangout.HotSpots = "StormwindTrade|StormwindAuction|StormwindBank|StormwindFountain|IronforgeCommons|OrgrimmarValley|OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|DalaranMerchants"
 
 #    PlayerbotsPlus.Hangout.RoomPerBot
 #        Square yards each person at a spot needs: a spot with room for more

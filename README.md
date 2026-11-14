@@ -83,14 +83,15 @@ Commons, the Valley of Strength, outside the bank in Dalaran. Playerbots never
 sends a bot anywhere in particular, so idle bots in a city just wander from
 NPC to NPC. With hangouts, they gather where players do.
 
-- **Where:** 31 spots in the capitals, Shattrath and Dalaran come set up:
+- **Where:** 32 spots in the capitals, Shattrath and Dalaran come set up:
   - Orgrimmar: in the Valley of Strength in front of the inn and the auction
     house, outside the bank, the open middle of it and just inside the gates,
     then the Drag, the Valley of Honor, outside the gates and the zeppelin
     tower.
   - Stormwind: the Trade District, outside the auction house and the bank,
-    the Valley of Heroes, Cathedral Square, the Mage Quarter, the Dwarven
-    District, Old Town, the harbor and outside the gates.
+    round the fountain in front of the bank's steps, the Valley of Heroes,
+    Cathedral Square, the Mage Quarter, the Dwarven District, Old Town, the
+    harbor and outside the gates.
   - Thunder Bluff: the middle of it, among the trainers and below the
     auction house, and outside the bank.
   - Dalaran, from level 68 and for both sides: outside both banks, Runeweaver

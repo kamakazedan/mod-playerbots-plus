@@ -259,6 +259,7 @@ namespace
         { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 16 the Trade District in Stormwind" },
         { "StormwindAuction",   "0 -8815.2 652.9 94.9 14 12 outside the auction house in Stormwind" },
         { "StormwindBank",      "0 -8914.0 621.5 99.6 14 10 the bank in Stormwind" },
+        { "StormwindFountain",  "0 -8869.0 643.0 96.4 18 12 by the fountain in the Trade District in Stormwind" },
         { "StormwindValley",    "0 -8955.0 525.0 96.4 20 10 the Valley of Heroes in Stormwind" },
         { "StormwindCathedral", "0 -8635.0 800.0 97.0 24 14 Cathedral Square in Stormwind" },
         { "StormwindMageQuarter", "0 -9010.0 850.0 106.0 18 8 the Mage Quarter in Stormwind" },
@@ -293,9 +294,10 @@ namespace
     // District, the Commons, the Valley of Strength, the middle of Thunder
     // Bluff, the banks and auction houses.
     char const* const kDefaultHotSpots =
-        "StormwindTrade|StormwindAuction|StormwindBank|IronforgeCommons|OrgrimmarValley|OrgrimmarBank|"
-        "OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|"
-        "ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|DalaranMerchants";
+        "StormwindTrade|StormwindAuction|StormwindBank|StormwindFountain|IronforgeCommons|OrgrimmarValley|"
+        "OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|"
+        "DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|"
+        "DalaranMerchants";
 
     // The city weights playerbots sends its bots to the cities' bankers by,
     // read as it reads them (its keys and defaults), by the city a spot's name
