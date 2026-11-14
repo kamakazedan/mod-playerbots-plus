@@ -68,6 +68,14 @@ bool PbpDungeonQuests_Walking(Player* bot);
 // One of the dungeon quests this knows: a quest log keeper keeps it.
 bool PbpDungeonQuests_IsOne(uint32_t questId);
 
+// A teleport of `player` to map `mapid` (x, y) while it walks for a dungeon
+// quest: false turns it down. Playerbots' level-up teleport took walkers to
+// another continent and the walk was lost; one to where it is walking is
+// playerbots getting a bot stuck on the way there to it, and goes. Any
+// thread (PbpDungeonsTeleportScript): reads only a list the world tick
+// publishes under a mutex.
+bool PbpDungeonQuests_MayTeleport(Player* player, uint32_t mapid, float x, float y);
+
 // World tick, from PbpDungeons_Update while bot dungeons are on.
 void PbpDungeonQuests_Update(uint32_t diff);
 
@@ -81,7 +89,11 @@ struct PbpDungeonQuestsStats
     uint32_t givers     = 0;   // places they are given out
     uint64_t sent       = 0;   // bots sent to take some
     uint64_t taken      = 0;   // quests taken
-    uint64_t walksLost  = 0;   // walks given up (too long, or the bot was wanted elsewhere)
+    uint64_t walksLost  = 0;   // walks given up:
+    uint64_t walksSlow  = 0;   // ...not there in BotDungeons.QuestWalkMinutes
+    uint64_t walksBusy  = 0;   // ...playerbots kept giving it other things to do on the way
+    uint64_t walksAway  = 0;   // ...taken off elsewhere: grouped, off the map, queued, hanging out
+    uint64_t keptOn     = 0;   // teleports away from a walk turned down (a level-up, mostly)
     uint64_t handIns    = 0;   // bots sent to hand some in
     uint64_t handedIn   = 0;   // dungeon quests handed in (by anyone's hand)
     uint64_t made       = 0;   // log slots freed for them

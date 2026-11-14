@@ -109,7 +109,10 @@ struct PbpGroupQuestsStats
     uint64_t taken      = 0;   // quests taken
     uint64_t handIns    = 0;   // bots sent to hand one in
     uint64_t handedIn   = 0;   // group quests handed in, by anyone's hand
-    uint64_t walksLost  = 0;   // walks given up
+    uint64_t walksLost  = 0;   // walks given up:
+    uint64_t walksSlow  = 0;   // ...not there in GroupQuests.WalkMinutes
+    uint64_t walksBusy  = 0;   // ...playerbots kept giving it other things to do on the way
+    uint64_t walksAway  = 0;   // ...taken off elsewhere: grouped, off the map, queued, hanging out
     uint64_t asks       = 0;   // asks for help in General
     uint64_t answers    = 0;   // ...answered by one who came along
     uint64_t parties    = 0;   // parties that got together and went
@@ -120,6 +123,7 @@ struct PbpGroupQuestsStats
     uint64_t greyGone   = 0;   // ...or gone grey
     uint64_t made       = 0;   // log slots freed for them
     uint64_t keptAt     = 0;   // teleports away from one turned down (a level-up, mostly)
+    uint64_t ownPlace   = 0;   // teleports to one of its own places let through (stuck on its way there)
 };
 PbpGroupQuestsStats PbpGroupQuests_GetStats();
 

@@ -2018,7 +2018,9 @@ PbpBrief PbpDungeons_Brief(bool full)
             b.lines.push_back("Dungeon quests: " + std::to_string(q.sent) + " bots sent to take some (" +
                               std::to_string(q.taken) + " taken), " + std::to_string(q.handIns) +
                               " to hand some in (" + std::to_string(q.handedIn) + " handed in), " +
-                              std::to_string(q.walksLost) + " walks given up, " + std::to_string(q.walking) +
+                              std::to_string(q.walksLost) + " walks given up (" + std::to_string(q.walksSlow) +
+                              " too slow, " + std::to_string(q.walksBusy) + " kept given other things to do, " +
+                              std::to_string(q.walksAway) + " taken off elsewhere), " + std::to_string(q.walking) +
                               " on their way now.");
     }
     if (!on)
@@ -2042,7 +2044,9 @@ PbpBrief PbpDungeons_Brief(bool full)
                            std::to_string(st.cleared) + ") since start.");
     if (s.quests && q.sent + q.handIns >= 20 && q.walksLost * 2 > q.sent + q.handIns)
         b.issues.push_back("Most walks for dungeon quests given up (" + std::to_string(q.walksLost) + " of " +
-                           std::to_string(q.sent + q.handIns) + ").");
+                           std::to_string(q.sent + q.handIns) + ": " + std::to_string(q.walksSlow) + " too slow, " +
+                           std::to_string(q.walksBusy) + " kept given other things to do, " +
+                           std::to_string(q.walksAway) + " taken off elsewhere).");
     return b;
 }
 
@@ -2146,7 +2150,11 @@ std::vector<std::string> PbpDungeons_Status()
                       std::to_string(q.givers) + " places; " + std::to_string(q.sent) + " bots sent to take some (" +
                       std::to_string(q.taken) + " taken), " + std::to_string(q.handIns) + " to hand some in (" +
                       std::to_string(q.handedIn) + " handed in); " + std::to_string(q.walksLost) +
-                      " walks given up; " + std::to_string(q.made) + " log slots made; let go: " +
+                      " walks given up (" + std::to_string(q.walksSlow) + " too slow, " +
+                      std::to_string(q.walksBusy) + " kept given other things to do, " +
+                      std::to_string(q.walksAway) + " taken off elsewhere; " + std::to_string(q.keptOn) +
+                      " teleports away from a walk turned down); " + std::to_string(q.made) +
+                      " log slots made; let go: " +
                       std::to_string(q.greyGone) + " grey, " + std::to_string(q.triesGone) + " after " +
                       std::to_string(s.questRuns) + " runs; " + std::to_string(q.walking) + " on their way now.");
     else
@@ -2236,6 +2244,9 @@ std::string PbpDungeons_Send(std::string const& which)
 bool PbpDungeonsTeleportScript::OnPlayerBeforeTeleport(Player* player, uint32 mapid, float x, float y, float z,
                                                        float /*orientation*/, uint32 /*options*/, Unit* /*target*/)
 {
+    // Walking for a dungeon quest: kept on its way, but to where it walks.
+    if (!PbpDungeonQuests_MayTeleport(player, mapid, x, y))
+        return false;
     // Within its own map (a stranded member brought to the tank), and the
     // dead on their way to a graveyard, as ever.
     if (!player || mapid == player->GetMapId() || !player->IsAlive())

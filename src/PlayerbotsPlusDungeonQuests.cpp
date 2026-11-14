@@ -32,8 +32,11 @@
 #include "StatsWeightCalculator.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cmath>
 #include <deque>
+#include <mutex>
 #include <random>
 #include <set>
 #include <unordered_map>
@@ -574,6 +577,7 @@ namespace
             if (lost || now - w.since >= std::chrono::minutes(walkMinutes))
             {
                 ++g_stats.walksLost;
+                ++(lost ? g_stats.walksAway : g_stats.walksSlow);
                 if (!lost)
                     g_unreached[it->first].insert(SpotKey(w.spot));
                 EndWalk(bot, ai, w);
@@ -610,6 +614,7 @@ namespace
                 if (++w.nudges > 5)
                 {
                     ++g_stats.walksLost;
+                    ++g_stats.walksBusy;
                     g_unreached[it->first].insert(SpotKey(w.spot));
                     it = g_walks.erase(it);
                     continue;
@@ -618,6 +623,29 @@ namespace
             }
             ++it;
         }
+    }
+
+    // Who is walking where, for the teleport guard (PbpDungeonQuests_MayTeleport),
+    // published every second.
+    struct WalkTo
+    {
+        uint32 map = 0;
+        float x = 0.0f, y = 0.0f;
+    };
+    std::mutex g_walkToMutex;
+    std::unordered_map<uint64, WalkTo> g_walkTo;
+    std::unordered_map<uint64, Clock::time_point> g_walkKeptSaid;   // logged at most once a minute
+    std::atomic<uint64_t> g_walkKept{ 0 };
+
+    void PublishWalks()
+    {
+        std::unordered_map<uint64, WalkTo> walking;
+        for (auto const& [raw, w] : g_walks)
+            walking[raw] = { w.spot.map, w.spot.x, w.spot.y };
+        std::lock_guard<std::mutex> lock(g_walkToMutex);
+        g_walkTo.swap(walking);
+        for (auto it = g_walkKeptSaid.begin(); it != g_walkKeptSaid.end();)
+            it = g_walkTo.contains(it->first) ? std::next(it) : g_walkKeptSaid.erase(it);
     }
 
     // Room in a full log for the dungeon quests it holds.
@@ -866,6 +894,7 @@ void PbpDungeonQuests_Update(uint32_t diff)
         g_walkMs = 0;
         Walks(now);
         KeepAll();
+        PublishWalks();
     }
 
     g_scanMs += diff;
@@ -892,11 +921,43 @@ void PbpDungeonQuests_Stop()
     }
     g_walks.clear();
     g_recentWalks.clear();
+    PublishWalks();
+}
+
+bool PbpDungeonQuests_MayTeleport(Player* player, uint32_t mapid, float x, float y)
+{
+    // A short hop, or the dead on their way to a graveyard, as ever.
+    if (!player || !player->IsAlive() || (mapid == player->GetMapId() && player->GetExactDist2d(x, y) < 300.0f))
+        return true;
+    bool say = false;
+    {
+        std::lock_guard<std::mutex> lock(g_walkToMutex);
+        uint64 const id = player->GetGUID().GetRawValue();
+        auto it = g_walkTo.find(id);
+        if (it == g_walkTo.end())
+            return true;
+        if (it->second.map == mapid && std::hypot(it->second.x - x, it->second.y - y) < 80.0f)
+            return true;   // to where it is walking: stuck on the way
+        auto const now = Clock::now();
+        auto& said = g_walkKeptSaid[id];
+        if (said == Clock::time_point() || now - said >= std::chrono::minutes(1))
+        {
+            said = now;
+            say = true;
+        }
+    }
+    g_walkKept.fetch_add(1, std::memory_order_relaxed);
+    if (say)
+        LOG_DEBUG("module.playerbotsplus", "[Playerbots Plus] Bot dungeons: kept {} (level {}) on its walk for a "
+                  "dungeon quest -- something tried to take it to map {} ({:.1f}, {:.1f}).", player->GetName(),
+                  player->GetLevel(), mapid, x, y);
+    return false;
 }
 
 PbpDungeonQuestsStats PbpDungeonQuests_GetStats()
 {
     PbpDungeonQuestsStats out = g_stats;
+    out.keptOn = g_walkKept.load(std::memory_order_relaxed);
     out.quests = uint32(g_quests.size());
     out.givers = g_giverCount;
     out.walking = uint32(g_walks.size());
@@ -930,6 +991,11 @@ bool PbpDungeonQuests_Walking(Player*)
 bool PbpDungeonQuests_IsOne(uint32_t)
 {
     return false;
+}
+
+bool PbpDungeonQuests_MayTeleport(Player*, uint32_t, float, float)
+{
+    return true;
 }
 
 void PbpDungeonQuests_Update(uint32_t) { }

@@ -432,20 +432,34 @@ namespace
 
     // The wander-about strategies a random bot gets on its own (AiFactory): a
     // party member that keeps them goes off about its own business instead of
-    // following its leader.
-    char const* const kWander[] = { "new rpg", "rpg", "grind", "move random", "travel", "start duel" };
+    // following its leader (Strip).
 
-    void Strip(Player* bot)
+    void StripOf(Player* bot, std::initializer_list<char const*> which)
     {
         PlayerbotAI* ai = PbpAiOf(bot);
         if (!ai)
             return;
         std::string names;
-        for (char const* name : kWander)
+        for (char const* name : which)
             if (ai->HasStrategy(name, BOT_STATE_NON_COMBAT))
                 names += (names.empty() ? "-" : ",-") + std::string(name);
         if (!names.empty())
             ai->ChangeStrategy(names, BOT_STATE_NON_COMBAT);
+    }
+
+    void Strip(Player* bot)
+    {
+        StripOf(bot, { "new rpg", "rpg", "grind", "move random", "travel", "start duel" });
+    }
+
+    // The leader, on its way to what the quest is for and at it: not off
+    // after every mob it passes (grind), nor talking to whoever is about
+    // (rpg). Its "new rpg" stays: that is what walks it there. What attacks
+    // the party it still fights. Given back by ResetStrategies (LetGo,
+    // PassLead, or playerbots' questing taking over).
+    void StripLeader(Player* bot)
+    {
+        StripOf(bot, { "rpg", "grind", "move random", "travel", "start duel" });
     }
 
     // ---- walks to givers and to hand one in ----------------------------------------------
@@ -731,6 +745,7 @@ namespace
             if (lost || now - w.since >= std::chrono::minutes(Cfg().walkMinutes))
             {
                 ++g_stats.walksLost;
+                ++(lost ? g_stats.walksAway : g_stats.walksSlow);
                 if (!lost)
                     g_unreached[it->first].insert(SpotKey(w.spot));
                 EndWalk(bot, ai, w);
@@ -762,6 +777,7 @@ namespace
                 if (++w.nudges > 5)
                 {
                     ++g_stats.walksLost;
+                    ++g_stats.walksBusy;
                     g_unreached[it->first].insert(SpotKey(w.spot));
                     it = g_walks.erase(it);
                     continue;
@@ -844,23 +860,53 @@ namespace
         std::vector<size_t> emptyLairs;       // ...waited at with nothing turning up: the next one is tried
         std::vector<uint32> done;             // quests it did or gave up on: not gone back to
         std::unordered_set<uint64> arrived;   // Meeting: got to the leader
+        bool leaderStripped = false;          // Questing: the leader's wander-about strategies are off (StripLeader)
     };
     std::map<uint32, Party> g_parties;   // by id: the oldest first
     uint32 g_nextParty = 1;
 
-    // Members of a party getting together or at it, kept there
-    // (PbpGroupQuestsTeleportScript), published every second.
+    // Members of a party getting together or at it, and those walking for
+    // one, kept there (PbpGroupQuestsTeleportScript) -- but for a teleport to
+    // one of their own places: what the quest is for, its middle, the leader
+    // they are getting together with, the giver they are walking to. That is
+    // playerbots getting one stuck on the way there to it ("go camp" gives up
+    // walking after a while and takes it there), and turning it down left a
+    // leader stuck on a ledge 900 yards from the lair for every try it had.
+    // Published every second.
+    struct KeepPlace
+    {
+        uint32 map = 0;
+        float x = 0.0f, y = 0.0f;
+    };
     std::mutex g_keepMutex;
-    std::unordered_set<uint64> g_keep;
+    std::unordered_map<uint64, std::vector<KeepPlace>> g_keep;
     std::unordered_map<uint64, std::chrono::steady_clock::time_point> g_keptSaid;   // logged at most once a minute
     std::atomic<uint64_t> g_keptAt{ 0 };
+    std::atomic<uint64_t> g_ownPlace{ 0 };    // teleports to one of their own places let through
+    constexpr float kOwnPlaceReach = 80.0f;   // a teleport this near one of its places is to it
 
     void PublishKeep()
     {
-        std::unordered_set<uint64> keep;
+        std::unordered_map<uint64, std::vector<KeepPlace>> keep;
         for (auto const& [id, p] : g_parties)
-            if (p.phase != Phase::Recruiting)
-                keep.insert(p.members.begin(), p.members.end());
+        {
+            if (p.phase == Phase::Recruiting)
+                continue;
+            std::vector<KeepPlace> places;
+            if (auto q = g_quests.find(p.quest); q != g_quests.end())
+            {
+                places.push_back({ q->second.map, q->second.areaX, q->second.areaY });
+                for (Spot const& lair : q->second.lairs)
+                    places.push_back({ lair.map, lair.x, lair.y });
+            }
+            if (p.phase == Phase::Meeting)
+                if (Player* leader = InWorld(p.leader))
+                    places.push_back({ leader->GetMapId(), leader->GetPositionX(), leader->GetPositionY() });
+            for (uint64 m : p.members)
+                keep[m] = places;
+        }
+        for (auto const& [raw, w] : g_walks)
+            keep[raw] = { { w.spot.map, w.spot.x, w.spot.y } };
         std::lock_guard<std::mutex> lock(g_keepMutex);
         g_keep.swap(keep);
         for (auto it = g_keptSaid.begin(); it != g_keptSaid.end();)
@@ -1280,6 +1326,7 @@ namespace
         }
         if (PlayerbotAI* ai = PbpAiOf(newLeader))
             ai->ResetStrategies();   // a group leader's: questing and grinding
+        p.leaderStripped = false;
         p.leader = to;
         p.members.erase(std::remove(p.members.begin(), p.members.end(), to), p.members.end());
         p.members.insert(p.members.begin(), to);
@@ -1605,8 +1652,10 @@ namespace
 
         // The leader goes to it; the rest follow.
         PlayerbotAI* ai = PbpAiOf(leader);
+        bool driven = false;   // walked to it from here, not left to playerbots' questing
         if (ai && leader->IsAlive() && !leader->IsInCombat())
         {
+            driven = true;
             if (far)
             {
                 auto const* camp = std::get_if<NewRpgInfo::GoCamp>(&ai->rpgInfo.data);
@@ -1669,20 +1718,34 @@ namespace
             }
             else
             {
-                // Nothing known of where they stand: playerbots' own questing.
+                // Nothing known of where they stand: playerbots' own questing,
+                // which kills what it is for by grinding there.
+                driven = false;
+                if (p.leaderStripped)
+                {
+                    ai->ResetStrategies();
+                    p.leaderStripped = false;
+                }
                 auto const* doing = std::get_if<NewRpgInfo::DoQuest>(&ai->rpgInfo.data);
                 if (!doing || doing->questId != p.quest)
                     if (Quest const* quest = sObjectMgr->GetQuestTemplate(p.quest))
                         ai->rpgInfo.ChangeToDoQuest(p.quest, quest);
             }
         }
-        if (!p.solo && now >= p.nextStrip)
+        if (now >= p.nextStrip)
         {
             p.nextStrip = now + std::chrono::seconds(10);
-            for (uint64 m : p.members)
-                if (m != p.leader)
-                    if (Player* bot = InWorld(m))
-                        Strip(bot);   // playerbots puts its own plans back on a reset
+            // Playerbots puts its own plans back on a reset: off again.
+            if (driven)
+            {
+                StripLeader(leader);
+                p.leaderStripped = true;
+            }
+            if (!p.solo)
+                for (uint64 m : p.members)
+                    if (m != p.leader)
+                        if (Player* bot = InWorld(m))
+                            Strip(bot);
         }
     }
 
@@ -1881,7 +1944,6 @@ namespace
             ids.push_back(id);
         for (uint32 id : ids)
             Dissolve(id, "group quests were switched off", false, now);
-        PublishKeep();
         for (auto const& [raw, w] : g_walks)
         {
             Player* bot = InWorld(raw);
@@ -1889,6 +1951,7 @@ namespace
         }
         g_walks.clear();
         g_recentWalks.clear();
+        PublishKeep();
     }
 
     char const* PhaseText(Party const& p)
@@ -1976,8 +2039,10 @@ PbpBrief PbpGroupQuests_Brief(bool full)
                           " bots hold some; " + std::to_string(st.sent) + " sent to take one (" +
                           std::to_string(st.taken) + " taken), " + std::to_string(st.handIns) + " to hand one in (" +
                           std::to_string(st.handedIn) + " handed in), " + std::to_string(st.walksLost) +
-                          " walks given up; " + std::to_string(st.asks) + " asks for help, " +
-                          std::to_string(st.answers) + " answered.");
+                          " walks given up (" + std::to_string(st.walksSlow) + " too slow, " +
+                          std::to_string(st.walksBusy) + " kept given other things to do, " +
+                          std::to_string(st.walksAway) + " taken off elsewhere); " + std::to_string(st.asks) +
+                          " asks for help, " + std::to_string(st.answers) + " answered.");
     if (!on)
         return b;
     if (st.parties + st.solos >= 3 && !st.done)
@@ -1985,7 +2050,9 @@ PbpBrief PbpGroupQuests_Brief(bool full)
                            std::to_string(st.failedTries) + " tries failed.");
     if (st.sent + st.handIns >= 20 && st.walksLost * 2 > st.sent + st.handIns)
         b.issues.push_back("Most walks for group quests given up (" + std::to_string(st.walksLost) + " of " +
-                           std::to_string(st.sent + st.handIns) + ").");
+                           std::to_string(st.sent + st.handIns) + ": " + std::to_string(st.walksSlow) +
+                           " too slow, " + std::to_string(st.walksBusy) + " kept given other things to do, " +
+                           std::to_string(st.walksAway) + " taken off elsewhere).");
     return b;
 }
 
@@ -2018,12 +2085,15 @@ std::vector<std::string> PbpGroupQuests_Status()
     out.push_back("  Since start: " + std::to_string(st.sent) + " bots sent to take some (" +
                   std::to_string(st.taken) + " taken), " + std::to_string(st.handIns) + " to hand one in (" +
                   std::to_string(st.handedIn) + " handed in), " + std::to_string(st.walksLost) +
-                  " walks given up; " + std::to_string(st.asks) + " asks for help, " + std::to_string(st.answers) +
+                  " walks given up (" + std::to_string(st.walksSlow) + " too slow, " + std::to_string(st.walksBusy) +
+                  " kept given other things to do, " + std::to_string(st.walksAway) + " taken off elsewhere); " +
+                  std::to_string(st.asks) + " asks for help, " + std::to_string(st.answers) +
                   " answered; " + std::to_string(st.parties) + " parties went, " + std::to_string(st.solos) +
                   " went alone; " + std::to_string(st.done) + " quests done, " + std::to_string(st.failedTries) +
                   " tries failed; let go: " + std::to_string(st.gaveUp) + " after their tries, " +
                   std::to_string(st.greyGone) + " grey; " + std::to_string(st.made) + " log slots made; " +
-                  std::to_string(st.keptAt) + " teleports away from a party turned down.");
+                  std::to_string(st.keptAt) + " teleports away from a party or walk turned down, " +
+                  std::to_string(st.ownPlace) + " to its own place let through.");
     return out;
 }
 
@@ -2039,8 +2109,15 @@ bool PbpGroupQuestsTeleportScript::OnPlayerBeforeTeleport(Player* player, uint32
     {
         std::lock_guard<std::mutex> lock(g_keepMutex);
         uint64 const id = player->GetGUID().GetRawValue();
-        if (!g_keep.contains(id))
+        auto kept = g_keep.find(id);
+        if (kept == g_keep.end())
             return true;
+        for (KeepPlace const& at : kept->second)
+            if (at.map == mapid && std::hypot(at.x - x, at.y - y) < kOwnPlaceReach)
+            {
+                g_ownPlace.fetch_add(1, std::memory_order_relaxed);
+                return true;   // to one of its own places: stuck on its way there
+            }
         auto const now = std::chrono::steady_clock::now();
         auto& said = g_keptSaid[id];
         if (said == std::chrono::steady_clock::time_point() || now - said >= std::chrono::minutes(1))
@@ -2051,8 +2128,8 @@ bool PbpGroupQuestsTeleportScript::OnPlayerBeforeTeleport(Player* player, uint32
     }
     g_keptAt.fetch_add(1, std::memory_order_relaxed);
     if (say)
-        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: kept {} (level {}) with its party -- "
-                 "something tried to take it to map {} ({:.1f}, {:.1f}): playerbots' teleport on a level-up, most "
+        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: kept {} (level {}) with its party or walk "
+                 "-- something tried to take it to map {} ({:.1f}, {:.1f}): playerbots' teleport on a level-up, most "
                  "likely.", player->GetName(), player->GetLevel(), mapid, x, y);
     return false;
 }
@@ -2061,6 +2138,7 @@ PbpGroupQuestsStats PbpGroupQuests_GetStats()
 {
     PbpGroupQuestsStats out = g_stats;
     out.keptAt = g_keptAt.load(std::memory_order_relaxed);
+    out.ownPlace = g_ownPlace.load(std::memory_order_relaxed);
     out.quests = uint32(g_quests.size());
     out.givers = g_giverCount;
     out.partiesNow = uint32(g_parties.size());
