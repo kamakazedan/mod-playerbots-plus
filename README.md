@@ -701,7 +701,7 @@ sets up its logs before it reads module confs, so the module's own conf
 can't):
 
 ```
-Appender.PlayerbotsPlus=2,5,0,PlayerbotsPlus.log,w
+Appender.PlayerbotsPlus=2,5,1,PlayerbotsPlus.log,w
 Logger.module.playerbotsplus=4,PlayerbotsPlus Errors
 ```
 

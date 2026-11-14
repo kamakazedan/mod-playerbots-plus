@@ -30,7 +30,7 @@
 #
 #   Its own log file: the server sets up its logs before it reads module
 #   confs, so that goes in worldserver.conf, beside the others:
-#       Appender.PlayerbotsPlus=2,5,0,PlayerbotsPlus.log,w
+#       Appender.PlayerbotsPlus=2,5,1,PlayerbotsPlus.log,w
 #       Logger.module.playerbotsplus=4,PlayerbotsPlus Errors
 #   Without them it logs to Server.log (Logger.module). Its startup lines go
 #   to Server.log either way.
