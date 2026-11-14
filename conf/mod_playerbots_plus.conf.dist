@@ -1616,6 +1616,55 @@ PlayerbotsPlus.Space.Range = 120
 
 ###############################################################################
 #
+#   FEET ON THE GROUND
+#
+#   Playerbots sends bots to places that are not on the ground, and a bot has
+#   no game client to bring it down again: it stays wherever it was put, and
+#   its next walk starts from up there -- a glide through the air.
+#
+#   Most of it is playerbots' grind spots. They are a grid 50 yards a side,
+#   built from the creatures' spawns, with the height rounded to 50 as well:
+#   half of them are more than 12 yards above or below the ground under
+#   them. A bot walking to one comes to a stop under it (or over it), never
+#   within the 10 yards that count as there, and a minute and a half later
+#   playerbots takes it for stuck and teleports it there -- up into the air,
+#   or into the ground.
+#
+#   Every second, for playerbots' random bots in the open world that no real
+#   player plays or leads:
+#   - a grind spot on that grid is moved onto the spawn point of a creature
+#     in its square, the one nearest its middle: where what the bot is going
+#     to grind stands, on the ground (worked out once at startup);
+#   - a bot standing more than AirHeight yards above the floor (or the
+#     water) under it, or walking more than twice that above it, on two
+#     looks a second apart, falls to the ground as anyone would (onto water:
+#     put on it). Not one that may be up there: flying, swimming, on a flight
+#     path, a boat or a vehicle, jumping, falling, knocked back, floating
+#     down. No fall damage: nothing but a mistake put it up there. One
+#     brought down three times in two minutes is also sent off to do
+#     something else -- but for one this module has somewhere to go (a city
+#     hangout, a group quest, a bot dungeon or a walk for one);
+#   - a bot inside the ground -- under the land, with nothing to stand on --
+#     on two looks is put back on top of it.
+#
+#   Dungeons and battlegrounds are left alone. With PlayerbotsPlus.Debug on,
+#   each one is logged.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Ground.Enable
+#        Default: 1
+PlayerbotsPlus.Ground.Enable = 1
+
+#    PlayerbotsPlus.Ground.AirHeight
+#        How far above the floor under it a bot standing still is up in the
+#        air, in yards; a bot walking, twice that (a walk down a slope or off
+#        a ledge cuts through the air for a moment). 2 to 20.
+#        Default: 3
+PlayerbotsPlus.Ground.AirHeight = 3
+
+###############################################################################
+#
 #   GETTING BACK UP
 #
 #   Playerbots leaves a bot that dies near you lying where it fell until you

@@ -311,12 +311,12 @@ more suggested players). Built without mod-dungeon-clear too.
 
 `PlayerbotsPlusMarketPrice.{h,cpp}`, `PlayerbotsPlusText.{h,cpp}`,
 `PlayerbotsPlusLedgerText.{h,cpp}`, `PlayerbotsPlusDungeonsText.{h,cpp}`,
-`PlayerbotsPlusGroupQuestsText.{h,cpp}`, `PlayerbotsPlusCityLifeText.{h,cpp}`
-and `PlayerbotsPlusDropChance.{h,cpp}` have no game types in them, so they
-can be tested without a server. Keep it that way: `tests/build.sh`. The text
-test also checks the conf against the code: every key the code reads is in the
-conf, and the default mute list, hangout spots, companion lists and pet names
-are the same in both.
+`PlayerbotsPlusGroupQuestsText.{h,cpp}`, `PlayerbotsPlusCityLifeText.{h,cpp}`,
+`PlayerbotsPlusDropChance.{h,cpp}` and `PlayerbotsPlusGroundGrid.{h,cpp}` have
+no game types in them, so they can be tested without a server. Keep it that
+way: `tests/build.sh`. The text test also checks the conf against the code:
+every key the code reads is in the conf, and the default mute list, hangout
+spots, companion lists and pet names are the same in both.
 
 ## What it tells you: a few lines in game, the rest in a file
 

@@ -121,6 +121,8 @@ namespace pbp
     float       g_SpaceStepMax            = 5.0f;
     uint32_t    g_SpaceCooldownSeconds    = 60;
     float       g_SpaceRange              = 120.0f;
+    bool        g_GroundEnable            = true;
+    float       g_GroundAirHeight         = 3.0f;
 
     bool        g_ReviveEnable              = true;
     uint32_t    g_ReviveReleaseDelaySeconds = 5;
@@ -597,6 +599,9 @@ namespace
         g_SpaceStepMax         = std::clamp(F("PlayerbotsPlus.Space.StepMax", 5.0f), g_SpaceStepMin, 15.0f);
         g_SpaceCooldownSeconds = std::min<uint32_t>(U("PlayerbotsPlus.Space.CooldownSeconds", 60), 3600);
         g_SpaceRange           = std::clamp(F("PlayerbotsPlus.Space.Range", 120.0f), 0.0f, 1000.0f);
+
+        g_GroundEnable    = B("PlayerbotsPlus.Ground.Enable", true);
+        g_GroundAirHeight = std::clamp(F("PlayerbotsPlus.Ground.AirHeight", 3.0f), 2.0f, 20.0f);
 
         g_ReviveEnable              = B("PlayerbotsPlus.Revive.Enable", true);
         g_ReviveReleaseDelaySeconds = U("PlayerbotsPlus.Revive.ReleaseDelaySeconds", 5);

@@ -3,8 +3,9 @@
 # the conf ships, the economy ledger's words and sums, and bot dungeons'
 # choices (who goes, grey quests, wings, a full quest log), group quests'
 # (party size, what to ask for, what next), city life's sums (tempers,
-# rare mounts, rings of people, hops) and drop chances from loot tables
-# (groups, references, containers). Needs only g++:
+# rare mounts, rings of people, hops), drop chances from loot tables
+# (groups, references, containers) and feet on the ground's sums (playerbots'
+# grind grid, falls). Needs only g++:
 # none of them has game types in it. Run from anywhere: bash tests/build.sh
 # (OUT=<dir> puts the binaries elsewhere).
 set -e
@@ -20,6 +21,7 @@ g++ "${FLAGS[@]}" "$T/dungeons_test.cpp" "$ROOT/src/PlayerbotsPlusDungeonsText.c
 g++ "${FLAGS[@]}" "$T/groupquests_test.cpp" "$ROOT/src/PlayerbotsPlusGroupQuestsText.cpp" -o "$OUT/groupquests_test"
 g++ "${FLAGS[@]}" "$T/citylife_test.cpp" "$ROOT/src/PlayerbotsPlusCityLifeText.cpp" -o "$OUT/citylife_test"
 g++ "${FLAGS[@]}" "$T/drops_test.cpp" "$ROOT/src/PlayerbotsPlusDropChance.cpp" -o "$OUT/drops_test"
+g++ "${FLAGS[@]}" "$T/ground_test.cpp" "$ROOT/src/PlayerbotsPlusGroundGrid.cpp" -o "$OUT/ground_test"
 "$OUT/market_price_test"
 "$OUT/text_test" "$ROOT"
 "$OUT/ledger_test"
@@ -27,3 +29,4 @@ g++ "${FLAGS[@]}" "$T/drops_test.cpp" "$ROOT/src/PlayerbotsPlusDropChance.cpp" -
 "$OUT/groupquests_test"
 "$OUT/citylife_test"
 "$OUT/drops_test"
+"$OUT/ground_test"

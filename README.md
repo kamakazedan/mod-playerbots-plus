@@ -17,6 +17,7 @@ their own words.
 | [On foot indoors](#on-foot-indoors) | Get off their mount in a bank, an inn or a cave, instead of standing at the counter on it |
 | [Out of the fire](#out-of-the-fire) | Step out of a campfire, bonfire or brazier, burning or not, instead of standing in it |
 | [Room to stand](#room-to-stand) | Step aside when they've stopped inside someone, instead of piling up on one spot |
+| [Feet on the ground](#feet-on-the-ground) | Walk to grind spots on the ground, and fall down if they ever end up hanging in the air, instead of gliding through it |
 | [Getting back up](#getting-back-up) | Release and run back when nobody in the group can resurrect them |
 | [Raid marks](#raid-marks) | Crowd-control their own mark and sap the star |
 | [Hunters' pets and companions](#hunters-pets-and-companions) | Name their hunter pets the way players do, and keep companions of their side and level |
@@ -296,6 +297,30 @@ up on one spot, inside each other.
   fight are left alone, and only bots near a real player are looked at.
 
 Settings: `PlayerbotsPlus.Space.*`.
+
+## Feet on the ground
+
+Playerbots sends bots to places that are not on the ground, and a bot has no
+game client to bring it down again: it stays wherever it was put, and its next
+walk starts from up there, a glide through the air. Most of it is
+playerbots' grind spots: a grid 50 yards a side with the height rounded to 50
+as well, so half of them are more than 12 yards above or below the ground. A
+bot walking to one stops under it, never gets within the 10 yards that count
+as there, and a minute and a half later playerbots teleports it there, into
+the air (or into the ground).
+
+- Every grind spot on that grid is moved onto the spawn point of a creature in
+  its square: where what the bot is going to grind stands, on the ground.
+- A bot standing more than 3 yards above the floor under it, or walking 6
+  yards above it, on two looks a second apart, falls to the ground as anyone
+  would. One that is meant to be up there is left alone: flying, swimming, on
+  a flight path, a boat or a vehicle, jumping, falling, knocked back,
+  floating down. No fall damage.
+- A bot inside the ground, with nothing under it, is put back on top.
+- Dungeons and battlegrounds are left alone, and so are bots a real player
+  plays or leads.
+
+Settings: `PlayerbotsPlus.Ground.*`.
 
 ## Getting back up
 
@@ -748,8 +773,9 @@ or hand in dungeon quests.
 
 See `CLAUDE.md` for the rules. The tests run without a server: the pricing,
 the text helpers, the ledger's words and sums, bot dungeons' choices (who goes,
-grey quests, wings, a full quest log, the level bands), and checks that the
-conf matches the code.
+grey quests, wings, a full quest log, the level bands), group quests' choices,
+city life's sums, drop chances, feet on the ground's grid and falls, and
+checks that the conf matches the code.
 
 ```bash
 bash tests/build.sh

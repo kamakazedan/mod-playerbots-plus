@@ -271,6 +271,10 @@ namespace pbp
     extern uint32_t    g_SpaceCooldownSeconds;
     extern float       g_SpaceRange;
 
+    // Feet on the ground (PlayerbotsPlusGround)
+    extern bool        g_GroundEnable;
+    extern float       g_GroundAirHeight;
+
     // Getting back up (PlayerbotsPlusRevive)
     extern bool        g_ReviveEnable;
     extern uint32_t    g_ReviveReleaseDelaySeconds;

@@ -3,6 +3,7 @@
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusFire.h"
+#include "PlayerbotsPlusGround.h"
 #include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusIndoors.h"
@@ -82,11 +83,12 @@ namespace
         PbpPetsStats const p = PbpPets_GetStats();
         PbpDuelsStats const d = PbpDuels_GetStats();
         PbpHangoutStats const h = PbpHangout_GetStats();
+        PbpGroundStats const g = PbpGround_GetStats();
         return fmt::format("Fixes: {} off stuck mounts, {} out of fires, {} given room to stand, {} off their mount "
-                           "indoors, {} released and {} ran back; marks: {} crowd control, {} saps; {} pets named; {} "
-                           "duels; {} stock lines muted.",
-                           k.stuck, f.stepped, sp.stepped, in.dismounted, r.released, r.returned, m.assigned, m.saps,
-                           p.named, h.duels + d.pactsHeld, PbpMute_GetDropped());
+                           "indoors, {} brought down out of the air, {} released and {} ran back; marks: {} crowd "
+                           "control, {} saps; {} pets named; {} duels; {} stock lines muted.",
+                           k.stuck, f.stepped, sp.stepped, in.dismounted, g.dropped, r.released, r.returned,
+                           m.assigned, m.saps, p.named, h.duels + d.pactsHeld, PbpMute_GetDropped());
     }
 
     // Everything counted since start, every part (what .pbp status said in
@@ -152,6 +154,17 @@ namespace
         out.push_back(fmt::format("Room to stand: {} - {} bots found standing in someone, {} stepped aside ({} of them "
                                   "hanging out, given a new place), {} with nowhere to step to just then.",
                                   OnOff(g_SpaceEnable), sp.crowded, sp.stepped, sp.moved, sp.nowhere));
+        PbpGroundStats const gr = PbpGround_GetStats();
+        std::string const squares = gr.loaded ? fmt::format("{} squares known, {} ms at startup", gr.squares,
+                                                            gr.loadMs)
+                                              : std::string("squares not worked out yet");
+        out.push_back(fmt::format("Feet on the ground: {} - {} grind spots off the ground moved onto a creature's "
+                                  "spawn in their square ({} with none known; {}); {} bots brought down out of the "
+                                  "air ({} walking through it, {} onto water; {} brought down three times in two "
+                                  "minutes and sent off to do something else); {} put back on top of the ground they "
+                                  "were inside.",
+                                  OnOff(g_GroundEnable), gr.spots, gr.noSpawn, squares, gr.dropped, gr.gliding,
+                                  gr.water, gr.sentOn, gr.raised));
         PbpReviveStats const r = PbpRevive_GetStats();
         out.push_back(fmt::format("Getting back up: {} - {} released, {} ran back in, {} stopped waiting for a rez. "
                                   "Muted bot lines: {}.",

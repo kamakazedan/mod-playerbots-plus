@@ -3,6 +3,7 @@
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusFire.h"
+#include "PlayerbotsPlusGround.h"
 #include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusIndoors.h"
@@ -51,11 +52,13 @@ namespace
             }
         }
 
-        // The world's loot tables are loaded by now: how likely each thing is
-        // to drop, for the market's prices.
+        // The world's loot tables and spawns are loaded by now: how likely
+        // each thing is to drop, for the market's prices, and where on the
+        // ground each of playerbots' grind spots is.
         void OnStartup() override
         {
             PbpDrops_Load();
+            PbpGround_Load();
         }
 
         void OnUpdate(uint32 diff) override
@@ -77,6 +80,7 @@ namespace
             PbpIndoors_Update(diff);
             PbpFire_Update(diff);
             PbpSpace_Update(diff);
+            PbpGround_Update(diff);
             // The full report, on the clock: switched off, it says so.
             PbpReport_Update(diff);
             if (!g_Pbp.enable)
