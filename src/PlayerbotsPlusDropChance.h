@@ -57,15 +57,20 @@ namespace PbpDrops
         std::unordered_set<uint32_t>          _working;   // a table that refers back to itself gives nothing more
     };
 
+    // A map a thing is found on: none, or no one map.
+    constexpr uint32_t kNoMap    = 0xFFFFFFFFu;
+    constexpr uint32_t kMapsMany = 0xFFFFFFFEu;
+
     // Where things drop from: a creature's loot (`many`: how many of those
     // creatures the world has), or a chest's (`chest`, `many` 0).
     struct Source
     {
         Table const* table = nullptr;
         uint32_t     many  = 0;
-        uint32_t     id    = 0;       // the caller's name for it (a creature's loot id), for From::top
-        float        level = 0.0f;    // a creature's level (over all of them, by how many)
-        bool         chest = false;   // a chest or a fishing hole rather than a creature
+        uint32_t     id    = 0;        // the caller's name for it (a creature's loot id), for From::top
+        float        level = 0.0f;     // a creature's level (over all of them, by how many)
+        uint32_t     map   = kNoMap;   // the map most of those creatures are on; kNoMap: none out in the world
+        bool         chest = false;    // a chest or a fishing hole rather than a creature
     };
 
     // Where something drops from among the creatures, for someone asking
@@ -79,6 +84,8 @@ namespace PbpDrops
         double   levelSq  = 0.0;    // ...and of its square: with levelSum, the middle and the spread
         uint32_t top[3]   = {};     // the source ids likeliest to give it, likeliest first (0: none)
         float    topChance[3] = {}; // ...the chance a kill of each gives it
+        uint32_t map      = kNoMap; // the map nine in ten of them are on, by how many (a dungeon's);
+                                    // kMapsMany: no one map; kNoMap: none out in the world
         bool     chests   = false;  // a chest or a fishing hole gives it too
     };
 

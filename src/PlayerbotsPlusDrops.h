@@ -34,6 +34,7 @@ struct PbpDropsFrom
     uint32_t creature[3]  = {};   // the likeliest, commonest of each loot table first (0: none)
     double   chancePct[3] = {};   // ...the chance a kill of it gives it, percent
     double   bestPct  = 0.0;      // the most any creature or chest gives it, percent
+    int32_t  onlyMap  = -1;       // the map nine in ten of those creatures are on (a dungeon's); -1: none is
     bool     chests   = false;    // a chest or a fishing hole gives it too
 };
 bool PbpDrops_Sources(uint32_t itemId, PbpDropsFrom& out);

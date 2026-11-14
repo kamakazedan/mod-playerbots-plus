@@ -63,14 +63,19 @@ void PbpDrops_Load()
     g_dropStats = {};
 
     // How many of each creature the world has: a spawn that may be one of
-    // two or three kinds counts a share to each (in sixths).
+    // two or three kinds counts a share to each (in sixths). And on which
+    // maps.
     std::unordered_map<uint32_t, uint32_t> spawned;
+    std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>> spawnedOn;   // creature -> map -> how many
     for (auto const& [spawnId, data] : sObjectMgr->GetAllCreatureData())
     {
         const uint32_t kinds = 1 + (data.id2 ? 1 : 0) + (data.id3 ? 1 : 0);
         for (uint32_t id : { data.id, data.id2, data.id3 })
             if (id)
+            {
                 spawned[id] += 6 / kinds;
+                spawnedOn[id][data.mapid] += 6 / kinds;
+            }
     }
 
     // The creatures' loot tables in use, with how many of those creatures
@@ -83,6 +88,7 @@ void PbpDrops_Load()
         uint32_t kinds     = 0;
         uint32_t commonest = 0;     // the creature with the most of them
         uint32_t most      = 0;
+        std::unordered_map<uint32_t, uint32_t> on;   // map -> how many of them are on it
     };
     std::unordered_map<uint32_t, Use> creatureLoot;   // loot id
     for (auto const& [entry, t] : *sObjectMgr->GetCreatureTemplates())
@@ -96,6 +102,9 @@ void PbpDrops_Load()
             u.levels += level * many;
             u.plain  += level;
             ++u.kinds;
+            if (auto m = spawnedOn.find(entry); m != spawnedOn.end())
+                for (auto const& [map, count] : m->second)
+                    u.on[map] += count;
             if (!u.commonest || many > u.most || (many == u.most && entry < u.commonest))
             {
                 u.commonest = entry;
@@ -126,6 +135,10 @@ void PbpDrops_Load()
         source.many  = u.many;
         source.id    = loot;
         source.level = float(u.many ? u.levels / u.many : (u.kinds ? u.plain / u.kinds : 0.0));
+        for (auto const& [map, count] : u.on)
+            if (source.map == PbpDrops::kNoMap || count > u.on.at(source.map) ||
+                (count == u.on.at(source.map) && map < source.map))
+                source.map = map;
         sources.push_back(source);
         g_lootCreature[loot] = u.commonest;
     }
@@ -171,6 +184,7 @@ bool PbpDrops_Sources(uint32_t itemId, PbpDropsFrom& out)
     out.spawns  = (d.from.many + 3) / 6;   // spawned counts sixths
     out.chests  = d.from.chests;
     out.bestPct = double(d.best) * 100.0;
+    out.onlyMap = (d.from.map == PbpDrops::kNoMap || d.from.map == PbpDrops::kMapsMany) ? -1 : int32_t(d.from.map);
     PbpDrops::Levels(d.from, out.minLevel, out.maxLevel);
     size_t n = 0;
     for (size_t i = 0; i < 3 && d.from.top[i]; ++i)

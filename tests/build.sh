@@ -4,8 +4,8 @@
 # choices (who goes, grey quests, wings, a full quest log), group quests'
 # (party size, what to ask for, what next), city life's sums (tempers,
 # rare mounts, rings of people, hops), drop chances from loot tables
-# (groups, references, containers) and feet on the ground's sums (playerbots'
-# grind grid, falls). Needs only g++:
+# (groups, references, containers, where a thing drops) and feet on the
+# ground's sums (playerbots' grind grid, falls). Needs only g++:
 # none of them has game types in it. Run from anywhere: bash tests/build.sh
 # (OUT=<dir> puts the binaries elsewhere).
 set -e

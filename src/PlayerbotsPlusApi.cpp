@@ -83,6 +83,7 @@ namespace PlayerbotsPlus
             out.chancePct[i] = from.chancePct[i];
         }
         out.bestPct = from.bestPct;
+        out.onlyMap = from.onlyMap;
         out.chests  = from.chests;
         return true;
     }

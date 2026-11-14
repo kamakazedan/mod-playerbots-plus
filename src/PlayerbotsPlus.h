@@ -93,6 +93,7 @@ namespace PlayerbotsPlus
         uint32_t creature[3]  = {};   // creature entries, the likeliest first; 0: no more
         double   chancePct[3] = {};   // ...the chance a kill of each gives it, percent
         double   bestPct  = 0.0;      // the most any one creature or chest gives it, percent
+        int32_t  onlyMap  = -1;       // the map nine in ten of those creatures are on (a dungeon's, say); -1: none is
         bool     chests   = false;    // a chest or a fishing hole gives it too
     };
     bool DropSourcesOf(uint32_t itemId, DropSources& out);

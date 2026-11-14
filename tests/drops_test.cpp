@@ -169,7 +169,8 @@ int main()
         const Table chest = { Item(1, 1.0f), Item(10, 5.0f), Item(12, 5.0f) };
         const Table two   = { Item(2, 2.0f) };
         const Table one   = { Item(2, 1.0f) };
-        auto src = [](Table const& t, uint32_t many, uint32_t id, float level, bool isChest = false)
+        auto src = [](Table const& t, uint32_t many, uint32_t id, float level, bool isChest = false,
+                      uint32_t map = PbpDrops::kNoMap)
         {
             PbpDrops::Source s;
             s.table = &t;
@@ -177,6 +178,7 @@ int main()
             s.id    = id;
             s.level = level;
             s.chest = isChest;
+            s.map   = map;
             return s;
         };
         const auto drops = PbpDrops::Drops({ src(low, 600, 1, 10.0f), src(mid, 300, 2, 14.0f),
@@ -222,6 +224,25 @@ int main()
               !PbpDrops::Levels(PbpDrops::Drops({ src(rare, 0, 4, 12.0f) }, refs, boxes)[1].from, lo, hi));
         Check("the reference's other one: no chest", from(11).kinds == 1 && !from(11).chests);
         Check("only a chest: no creature", from(12).kinds == 0 && from(12).top[0] == 0 && from(12).chests);
+        Eq("no map known: none", from(1).map, PbpDrops::kNoMap);
+
+        // A dungeon's: nine in ten of them on its map.
+        const Table sfk = { Item(20, 0.05f) };
+        const auto dungeon = PbpDrops::Drops({ src(sfk, 60, 30, 20.0f, false, 33), src(sfk, 50, 31, 19.0f, false, 33),
+                                               src(sfk, 0, 32, 21.0f, false, PbpDrops::kNoMap),
+                                               src(sfk, 12, 33, 20.0f, false, 0) },
+                                             refs, boxes);
+        Eq("nine in ten in one dungeon: its map", dungeon.at(20).from.map, 33);
+        const auto spread = PbpDrops::Drops({ src(sfk, 60, 30, 20.0f, false, 33), src(sfk, 50, 31, 19.0f, false, 0) },
+                                            refs, boxes);
+        Eq("on two maps alike: no one map", spread.at(20).from.map, PbpDrops::kMapsMany);
+        const auto five = PbpDrops::Drops({ src(sfk, 90, 30, 20.0f, false, 33), src(sfk, 1, 31, 20.0f, false, 0),
+                                            src(sfk, 1, 33, 20.0f, false, 1), src(sfk, 1, 34, 20.0f, false, 530),
+                                            src(sfk, 1, 35, 20.0f, false, 571) },
+                                          refs, boxes);
+        Eq("on five maps: no one map", five.at(20).from.map, PbpDrops::kMapsMany);
+        const auto unseen = PbpDrops::Drops({ src(sfk, 0, 32, 21.0f, false, PbpDrops::kNoMap) }, refs, boxes);
+        Eq("none out in the world: no map", unseen.at(20).from.map, PbpDrops::kNoMap);
     }
 
     // ---- how often, for a person ----------------------------------------------------------

@@ -130,6 +130,10 @@ namespace PbpDrops
             double   many  = 0.0;
             From     from;
             uint32_t topMany[3] = {};   // how many of each of from.top: of two as likely, the commoner first
+            uint32_t maps[4]    = {};   // the maps its creatures are on...
+            uint32_t mapMany[4] = {};   // ...how many on each
+            uint8_t  mapCount   = 0;
+            bool     spread     = false;   // on more maps than that: no one map
         };
         std::unordered_map<uint32_t, Sum> sums;
         auto note = [&sums](uint32_t item, double chance, Source const& source)
@@ -146,6 +150,21 @@ namespace PbpDrops
             }
             ++f.kinds;
             f.many += source.many;
+            if (source.map != kNoMap && source.many && !s.spread)
+            {
+                uint8_t i = 0;
+                while (i < s.mapCount && s.maps[i] != source.map)
+                    ++i;
+                if (i == s.mapCount)
+                {
+                    if (s.mapCount == 4)
+                        s.spread = true;
+                    else
+                        s.maps[s.mapCount++] = source.map;
+                }
+                if (!s.spread)
+                    s.mapMany[i] += source.many;
+            }
             f.levelSum += double(source.level) * source.many;
             f.levelSq  += double(source.level) * source.level * source.many;
             for (size_t i = 0; i < 3; ++i)
@@ -212,6 +231,20 @@ namespace PbpDrops
             d.best    = float(s.best);
             d.typical = s.many > 0.0 ? float(s.total / s.many) : 0.0f;
             d.from    = s.from;
+            if (s.spread)
+                d.from.map = kMapsMany;
+            else if (s.mapCount)
+            {
+                uint8_t main = 0;
+                uint64_t onMaps = 0;
+                for (uint8_t i = 0; i < s.mapCount; ++i)
+                {
+                    onMaps += s.mapMany[i];
+                    if (s.mapMany[i] > s.mapMany[main])
+                        main = i;
+                }
+                d.from.map = uint64_t(s.mapMany[main]) * 10 >= onMaps * 9 ? s.maps[main] : kMapsMany;
+            }
             out.emplace(item, d);
         }
         return out;
