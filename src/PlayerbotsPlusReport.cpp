@@ -7,6 +7,7 @@
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusIndoors.h"
 #include "PlayerbotsPlusLedger.h"
+#include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlusMarketPrice.h"
 #include "PlayerbotsPlusMarks.h"
@@ -57,11 +58,16 @@ namespace
     {
         PbpMarketStats const st = PbpMarket_GetStats();
         using PbpPrice::MoneyText;
+        PbpDropsStats const d = PbpDrops_GetStats();
+        const std::string drops = d.loaded ? fmt::format(" How rarely {} things drop, from {} loot tables ({} ms at "
+                                                         "startup), prices the rare ones up.",
+                                                         d.items, d.sources, d.ms)
+                                           : std::string(" Drop chances not worked out yet: priced by quality alone.");
         return fmt::format("Market: {} -- {} of the {} auctions up are bots'; {} visits: listed {} ({}), sold {} ({}), "
-                           "bought {} ({}), {} back unsold.",
+                           "bought {} ({}), {} back unsold.{}",
                            OnOff(g_Pbp.enable && g_Pbp.market.enable), st.botAuctions, st.allAuctions, st.visits,
                            st.listed, MoneyText(st.listedMoney), st.sold, MoneyText(st.soldMoney), st.bought,
-                           MoneyText(st.boughtMoney), st.expired);
+                           MoneyText(st.boughtMoney), st.expired, drops);
     }
 
     // The fixes that keep bots looking right, in a line.

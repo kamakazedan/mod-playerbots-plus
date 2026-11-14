@@ -241,13 +241,23 @@ PlayerbotsPlus.Market.Buy.MaterialsMaxPctOfValue = 200
 #   All per one item. "Wealth" is how much gold someone of a level has to
 #   spend: WealthBaseCopper * e^(level / WealthGrowthLevels) -- with the
 #   defaults about 2g at 10, 17g at 30, 117g at 50, 300g at 60, 2000g at 80.
+#
+#   With nobody else selling one, something is worth a multiple of its vendor
+#   price by quality (GearValuePct, GoodsValuePct), and far more the rarer it
+#   drops (Rarity*). How rarely is worked out at startup from the world's own
+#   loot tables, the way the game rolls them: its chance per kill of a
+#   creature that can drop it, over every one of them the world has -- or, for
+#   a thing only chests give, the best chest's. Lil Timmy's Peashooter (a
+#   blue gun for level 16, 14s 56c at a vendor) drops once in about 20,800
+#   such kills, and is worth about 5g 45s; a blue half as likely to drop is
+#   worth five times its colour's base, a fifth as likely 26 times.
 
 #    PlayerbotsPlus.Market.Price.GearValuePct
 #        What gear (weapons, armour) is worth when nobody else has one up, as a
 #        percentage of its vendor price, by quality: poor, common, uncommon,
-#        rare, epic, legendary, heirloom.
-#        Default: 100,250,500,1000,2500,4000,4000
-PlayerbotsPlus.Market.Price.GearValuePct = 100,250,500,1000,2500,4000,4000
+#        rare, epic, legendary, heirloom. Rarity multiplies it.
+#        Default: 100,250,500,1250,2500,4000,4000
+PlayerbotsPlus.Market.Price.GearValuePct = 100,250,500,1250,2500,4000,4000
 
 #    PlayerbotsPlus.Market.Price.GoodsValuePct
 #        The same for everything else: cloth, herbs, ore, potions...
@@ -269,7 +279,9 @@ PlayerbotsPlus.Market.Price.WealthGrowthLevels = 10.5
 #    PlayerbotsPlus.Market.Price.GearCapPctOfWealth
 #        One piece of gear never costs more than this share (percent) of the
 #        wealth at its level, by quality as above. A bot buying an upgrade
-#        pays no more than this at its own level.
+#        pays no more than this at its own level. Something rare finds richer
+#        buyers: its cap goes up as many times as rarity makes it worth more,
+#        but never past this share of the wealth at level 80.
 #        Default: 2,5,20,50,120,300,300
 PlayerbotsPlus.Market.Price.GearCapPctOfWealth = 2,5,20,50,120,300,300
 
@@ -277,6 +289,24 @@ PlayerbotsPlus.Market.Price.GearCapPctOfWealth = 2,5,20,50,120,300,300
 #        A full stack of anything else never costs more than this share.
 #        Default: 20
 PlayerbotsPlus.Market.Price.StackCapPctOfWealth = 20
+
+#    PlayerbotsPlus.Market.Price.RarityKneePct
+#    PlayerbotsPlus.Market.Price.RarityPower
+#    PlayerbotsPlus.Market.Price.RarityMaxFactor
+#        How much more a rare drop is worth, by its chance to drop (above):
+#            worth x (1 + (RarityKneePct / chance) ^ RarityPower)
+#        RarityKneePct, by quality as above, is the chance (percent) at which
+#        something is worth twice its colour's base (0: rarity does not count
+#        for that quality). Well above it, the base; below it, ever more: at
+#        power 2, each time the chance halves the extra goes up four times --
+#        at half the knee, 5 times the base; at a fifth, 26 times. Never more
+#        than RarityMaxFactor times the base. 0.0068% is once in about 14,700
+#        kills. Greens are left out by default: each world-drop green is rare,
+#        but there are hundreds of them, much alike.
+#        Default: 0,0,0,0.0068,0.0068,0.0068,0  2  100
+PlayerbotsPlus.Market.Price.RarityKneePct = 0,0,0,0.0068,0.0068,0.0068,0
+PlayerbotsPlus.Market.Price.RarityPower = 2
+PlayerbotsPlus.Market.Price.RarityMaxFactor = 100
 
 #    PlayerbotsPlus.Market.Price.UndercutPct
 #        How far under the cheapest one up a bot goes (percent, min:max).

@@ -34,7 +34,8 @@ class Player;
 // 5: city life (CityBusy, CitySpoke, CityGather; BotEvent's City* types).
 // 6: city life by temperament (SetTemperamentProvider), showing off
 // (BotEventType::CityShowOff, CityCalmDown).
-#define PLAYERBOTS_PLUS_API_VERSION 6
+// 7: what things are worth (ItemWorth) and how rarely they drop (DropChance).
+#define PLAYERBOTS_PLUS_API_VERSION 7
 
 namespace PlayerbotsPlus
 {
@@ -63,6 +64,19 @@ namespace PlayerbotsPlus
     // Called for every market event from now on, on the world thread. For
     // modules that want the bots to talk about their trading.
     void AddMarketListener(MarketListener listener);
+
+    // What one of it is worth with nobody selling one on the auction house:
+    // what a bot asks for it there, before shading it a little up or down
+    // (PlayerbotsPlus.Market.Price.*) -- a multiple of its vendor price by
+    // quality, far more the rarer it drops, within what someone of its level
+    // would pay (someone richer, the rarer it is). 0: no such item.
+    uint64_t ItemWorth(uint32_t itemId);
+
+    // How rarely it drops, in percent: per kill of a creature that can drop
+    // it, over all the world has of them -- or, for a thing only chests give,
+    // the best chest's. 0 when nothing drops it. From the world's own loot
+    // tables, worked out at startup.
+    double DropChance(uint32_t itemId);
 
     // ---- City hangouts (PlayerbotsPlus.Hangout.*)
 

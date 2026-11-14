@@ -19,6 +19,13 @@ namespace PbpPrice
                 return amount / 100 * pct;
             return amount * pct / 100;
         }
+
+        // `amount` times `factor` (1 or more), never past a sane ceiling.
+        uint64_t Times(uint64_t amount, double factor)
+        {
+            const double v = double(amount) * std::max(factor, 1.0);
+            return v >= 1e15 ? uint64_t(1e15) : uint64_t(v);
+        }
     }
 
     uint32_t LevelOf(ItemFacts const& item)
@@ -35,18 +42,46 @@ namespace PbpPrice
         return wealth >= 1e15 ? uint64_t(1e15) : uint64_t(wealth);
     }
 
+    double Rarity(Settings const& s, ItemFacts const& item)
+    {
+        const double knee = s.rarityKneePct[QualityIndex(item.quality)];
+        if (knee <= 0.0 || item.dropChancePct <= 0.0 || s.rarityPower <= 0.0)
+            return 1.0;
+        const double factor = 1.0 + std::pow(knee / item.dropChancePct, s.rarityPower);
+        return std::clamp(factor, 1.0, std::max(s.rarityMaxFactor, 1.0));
+    }
+
     uint64_t Value(Settings const& s, ItemFacts const& item)
     {
         const uint32_t pct = item.gear ? s.gearValuePct[QualityIndex(item.quality)] : s.goodsValuePct;
-        return std::max<uint64_t>(Percent(item.vendor, pct), uint64_t(item.vendor) + 1);
+        const uint64_t base = std::max<uint64_t>(Percent(item.vendor, pct), uint64_t(item.vendor) + 1);
+        return Times(base, Rarity(s, item));
     }
 
     uint64_t Cap(Settings const& s, ItemFacts const& item, uint32_t level)
     {
-        const uint64_t wealth = Wealth(s, level);
-        if (item.gear)
-            return std::max<uint64_t>(Percent(wealth, s.gearCapPct[QualityIndex(item.quality)]), 1);
-        return std::max<uint64_t>(Percent(wealth, s.stackCapPct) / std::max<uint32_t>(item.maxStack, 1), 1);
+        // At `level`, and -- for something rare, sought by richer people --
+        // as much more as it is worth for that, up to what someone at the
+        // top level would pay.
+        const uint32_t top = std::clamp<uint32_t>(s.topLevel, 1, 100);
+        auto at = [&](uint32_t lvl)
+        {
+            const uint64_t wealth = Wealth(s, lvl);
+            if (item.gear)
+                return std::max<uint64_t>(Percent(wealth, s.gearCapPct[QualityIndex(item.quality)]), 1);
+            return std::max<uint64_t>(Percent(wealth, s.stackCapPct) / std::max<uint32_t>(item.maxStack, 1), 1);
+        };
+        const uint64_t here = at(level);
+        const double   rare = Rarity(s, item);
+        if (rare <= 1.0)
+            return here;
+        return std::max(here, std::min(Times(here, rare), at(top)));
+    }
+
+    uint64_t Worth(Settings const& s, ItemFacts const& item)
+    {
+        const uint64_t floor = Floor(s, item);
+        return std::clamp(Value(s, item), floor, std::max(Cap(s, item, LevelOf(item)), floor));
     }
 
     uint64_t Floor(Settings const& s, ItemFacts const& item)

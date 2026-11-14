@@ -1,4 +1,5 @@
 #include "PlayerbotsPlus.h"
+#include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusMute.h"
@@ -59,6 +60,11 @@ namespace PlayerbotsPlus
     bool GoDuel(Player* a, Player* b)
     {
         return PbpDuels_Go(a, b);
+    }
+
+    double DropChance(uint32_t itemId)
+    {
+        return PbpDrops_ChancePct(itemId);
     }
 
     void CityBusy(Player* bot, uint32_t seconds)

@@ -154,6 +154,31 @@ Whether a bot can spare something or wants it comes from playerbots' own
 qualifier for as long as the bot is logged in, and the market asks about
 thousands of different auctions.
 
+## What things are worth
+
+With nothing on the auction house to go by, something is worth its vendor
+price times its quality's multiple times its rarity (`PbpPrice::Rarity`:
+`1 + (knee / chance) ^ power`), within its floor and its level's cap -- the
+cap raised by the same rarity, never past the top level's. The chance is
+worked out once, at startup (`OnStartup`: the world's loot is loaded by then),
+from the world database's loot tables by `PlayerbotsPlusDrops`; the sums are
+`PlayerbotsPlusDropChance` (pure, tested), the way this core rolls loot:
+
+- a group is one roll -- the rows with a chance in order, then the rest alike
+  -- and a reference with a GroupId is a member of that group, not a pick of
+  one of the referenced table's groups (that was another core's way);
+- a reference rolls its whole table MaxCount times when it comes up;
+  `Reference` may be negative (the core takes its absolute value);
+- a container a kill gives (a lockbox) counts its contents at its chance.
+
+The measure is the typical chance per kill -- over every spawn of every
+creature that drops it -- not the best source's. A world drop's best source is
+a few odd mobs (the Peashooter's eleven with a 0.5% roll of a table of ten),
+and on a steep curve that noise made two blues of a band 20 times apart.
+
+`PlayerbotsPlus::ItemWorth` and `DropChance` (API 7) give mod-ollama-chat the
+same worth for Trade chat, so the two never disagree.
+
 ## Bot dungeons and mod-dungeon-clear
 
 Bot dungeons (`PlayerbotsPlusDungeons`, `PlayerbotsPlusDungeonQuests`) are
@@ -285,8 +310,9 @@ more suggested players). Built without mod-dungeon-clear too.
 ## Pure files are tested
 
 `PlayerbotsPlusMarketPrice.{h,cpp}`, `PlayerbotsPlusText.{h,cpp}`,
-`PlayerbotsPlusLedgerText.{h,cpp}`, `PlayerbotsPlusDungeonsText.{h,cpp}` and
-`PlayerbotsPlusGroupQuestsText.{h,cpp}` have no game types in them, so they
+`PlayerbotsPlusLedgerText.{h,cpp}`, `PlayerbotsPlusDungeonsText.{h,cpp}`,
+`PlayerbotsPlusGroupQuestsText.{h,cpp}`, `PlayerbotsPlusCityLifeText.{h,cpp}`
+and `PlayerbotsPlusDropChance.{h,cpp}` have no game types in them, so they
 can be tested without a server. Keep it that way: `tests/build.sh`. The text
 test also checks the conf against the code: every key the code reads is in the
 conf, and the default mute list, hangout spots, companion lists and pet names

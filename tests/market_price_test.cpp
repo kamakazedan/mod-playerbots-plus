@@ -109,7 +109,7 @@ int main()
     // ---- listing with no market ----------------------------------------------
     {
         PbpPrice::ItemFacts blue60 = Gear(30000, 3, 60, 65);   // 3g vendor
-        const uint64_t value = Value(s, blue60);                // 30g
+        const uint64_t value = Value(s, blue60);                // 37g 50s
         const uint64_t low   = ListUnit(s, blue60, 0, 0, 0.0, 0.0);
         const uint64_t high  = ListUnit(s, blue60, 0, 0, 0.0, 0.999);
         Eq("guess 95% of worth", low, value * 95 / 100);
@@ -119,6 +119,49 @@ int main()
         PbpPrice::ItemFacts epic80 = Gear(200000, 4, 80, 213);   // 20g vendor, worth 500g
         const uint64_t price = ListUnit(s, epic80, 0, 0, 0.0, 0.5);
         True("epic at 80 about 500g", price > 4500000 && price < 5600000);
+    }
+
+    // ---- rarer, dearer ------------------------------------------------------------
+    {
+        auto blue = [](double chance)
+        {
+            PbpPrice::ItemFacts f = Gear(1456, 3, 16, 21);   // Lil Timmy's Peashooter
+            f.dropChancePct = chance;
+            return f;
+        };
+        auto near = [](double a, double b) { return a > b - 1e-9 && a < b + 1e-9; };
+        True("no drop known: as common", near(Rarity(s, blue(0.0)), 1.0));
+        True("at the knee: twice", near(Rarity(s, blue(0.0068)), 2.0));
+        True("half the knee: 5 times", near(Rarity(s, blue(0.0034)), 5.0));
+        True("a fifth of the knee: 26 times", near(Rarity(s, blue(0.00136)), 26.0));
+        True("well above the knee: about the same", Rarity(s, blue(0.5)) < 1.001);
+        True("never over the most", near(Rarity(s, blue(0.00001)), 100.0));
+        {
+            PbpPrice::ItemFacts green = Gear(1000, 2, 16, 21);
+            green.dropChancePct = 0.001;
+            True("greens: rarity does not count", near(Rarity(s, green), 1.0));
+        }
+        Eq("common blue: 12.5x vendor", Value(s, blue(0.0)), uint64_t(18200));
+        Eq("rare blue: 12.5x times its rarity", Value(s, blue(0.0034)), uint64_t(18200 * 5));
+
+        // The Peashooter drops once in about 20,800 kills of what can drop it:
+        // around 5-6 gold.
+        const uint64_t peashooter = Worth(s, blue(0.00481));
+        True("Peashooter about 5g 45s", peashooter > 54000 && peashooter < 55000);
+        Eq("...the cap at its level goes up by its rarity",
+           Cap(s, blue(0.00481), 16), uint64_t(double(Wealth(s, 16) * 50 / 100) * Rarity(s, blue(0.00481))));
+        {
+            PbpPrice::ItemFacts blue60 = Gear(30000, 3, 60, 65);
+            blue60.dropChancePct = 0.0001;
+            Eq("...but never past what someone at 80 pays for a blue", Cap(s, blue60, 60), Wealth(s, 80) * 50 / 100);
+        }
+        Eq("...and a common one's cap is its level's", Cap(s, blue(0.0), 16), Wealth(s, 16) * 50 / 100);
+        True("a fifth as likely: far more", Worth(s, blue(0.00481 / 5)) > peashooter * 10);
+        {
+            const uint64_t low  = ListUnit(s, blue(0.00481), 0, 0, 0.0, 0.0);
+            const uint64_t high = ListUnit(s, blue(0.00481), 0, 0, 0.0, 0.999);
+            True("listed between about 5g 18s and 6g 27s", low > 51000 && high < 63000 && low < high);
+        }
     }
 
     // ---- unsold, cheaper -------------------------------------------------------

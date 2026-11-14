@@ -10,7 +10,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <map>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -236,6 +238,29 @@ namespace
         {
             uint32_t v = 0;
             if (ToUInt(parts[i], v))
+                out[i] = v;
+            else
+                LOG_ERROR("module.playerbotsplus", "[Playerbots Plus] {}: '{}' is not a number", key, parts[i]);
+        }
+    }
+
+    // "0,0,0,0.0068": numbers with a fraction, one for each in `out`.
+    template <size_t N>
+    void ListF(char const* key, std::array<double, N>& out)
+    {
+        std::string def;
+        for (size_t i = 0; i < N; ++i)
+        {
+            std::ostringstream one;
+            one << out[i];
+            def += (i ? "," : "") + one.str();
+        }
+        const std::vector<std::string> parts = PbpSplit(sConfigMgr->GetOption<std::string>(key, def), ',');
+        for (size_t i = 0; i < N && i < parts.size(); ++i)
+        {
+            char* end = nullptr;
+            const double v = std::strtod(parts[i].c_str(), &end);
+            if (!parts[i].empty() && end && *end == '\0' && v >= 0.0)
                 out[i] = v;
             else
                 LOG_ERROR("module.playerbotsplus", "[Playerbots Plus] {}: '{}' is not a number", key, parts[i]);
@@ -899,6 +924,11 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     p.undercutMaxPct    = std::min<uint32_t>(p.undercutMaxPct, 50);
     p.undercutMinPct    = std::min(p.undercutMinPct, p.undercutMaxPct);
     p.relistDiscountPct = std::min<uint32_t>(U("PlayerbotsPlus.Market.Price.RelistDiscountPct", 15), 50);
+    ListF("PlayerbotsPlus.Market.Price.RarityKneePct", p.rarityKneePct);
+    p.rarityPower     = std::clamp(double(sConfigMgr->GetOption<float>("PlayerbotsPlus.Market.Price.RarityPower", 2.0f)),
+                                   0.0, 4.0);
+    p.rarityMaxFactor = std::clamp(
+        double(sConfigMgr->GetOption<float>("PlayerbotsPlus.Market.Price.RarityMaxFactor", 100.0f)), 1.0, 10000.0);
 
     if (m.sellMinQuality > m.sellMaxQuality)
         std::swap(m.sellMinQuality, m.sellMaxQuality);

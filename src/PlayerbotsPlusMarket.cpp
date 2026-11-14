@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlus.h"
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusMarketPrice.h"
 
@@ -250,6 +251,7 @@ namespace
         f.requiredLevel = proto->RequiredLevel;
         f.gear          = proto->Class == ITEM_CLASS_WEAPON || proto->Class == ITEM_CLASS_ARMOR;
         f.maxStack      = std::max<uint32_t>(proto->GetMaxStackSize(), 1);
+        f.dropChancePct = PbpDrops_ChancePct(proto->ItemId);
         return f;
     }
 
@@ -449,7 +451,10 @@ namespace
             return false;
         if (!proto->SellPrice)
             return false;   // worthless to anyone
-        if (proto->Bonding == BIND_WHEN_PICKED_UP || proto->Bonding == BIND_QUEST_ITEM)
+        // Only what could change hands: never a thing bound when picked up, a
+        // quest's, or bound to an account, nor one now bound to the bot.
+        if (proto->Bonding == BIND_WHEN_PICKED_UP || proto->Bonding == BIND_QUEST_ITEM ||
+            proto->Bonding == BIND_QUEST_ITEM1 || proto->HasFlag(ITEM_FLAG_IS_BOUND_TO_ACCOUNT))
             return false;
         if (proto->Class == ITEM_CLASS_QUEST || proto->Class == ITEM_CLASS_KEY || proto->StartQuest)
             return false;
@@ -1095,6 +1100,12 @@ namespace
 
 namespace PlayerbotsPlus
 {
+    uint64_t ItemWorth(uint32_t itemId)
+    {
+        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(itemId);
+        return proto ? PbpPrice::Worth(Cfg().price, FactsOf(proto)) : 0;
+    }
+
     void AddMarketListener(MarketListener listener)
     {
         if (listener)

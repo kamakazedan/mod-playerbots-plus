@@ -10,9 +10,11 @@
 // The idea is the one a real player goes by:
 //   - if it is already listed, ask a little under the cheapest one;
 //   - if it is not, ask what it is worth: a multiple of what a vendor pays,
-//     more for better quality;
+//     more for better quality, and far more the rarer it drops;
 //   - never ask more than someone of that level could sensibly pay (their
-//     "wealth"), and never so little that a vendor would have paid more;
+//     "wealth"; a rare thing finds richer buyers, never richer than someone
+//     at the top level), and never so little that a vendor would have paid
+//     more;
 //   - if it came back unsold, ask less next time.
 // --------------------------------------------------------------------------
 
@@ -28,8 +30,19 @@ namespace PbpPrice
     {
         // What something is worth, as a percentage of its vendor price: gear
         // (weapons, armour) by quality, everything else in one figure.
-        std::array<uint32_t, kQualities> gearValuePct  { 100, 250, 500, 1000, 2500, 4000, 4000 };
+        std::array<uint32_t, kQualities> gearValuePct  { 100, 250, 500, 1250, 2500, 4000, 4000 };
         uint32_t                         goodsValuePct = 300;
+
+        // Rarer drops are worth far more. By its chance to drop from a kill
+        // (ItemFacts::dropChancePct), something of a quality with a knee here
+        // (percent; 0: rarity does not count for it) is worth
+        //     what the above makes it  x  (1 + (knee / chance) ^ rarityPower)
+        // -- twice as much at the knee, about the same well above it, and
+        // ever more below it: at power 2, half the knee's chance is 5 times,
+        // a fifth of it 26 times. Never over `rarityMaxFactor` times.
+        std::array<double, kQualities> rarityKneePct { 0.0, 0.0, 0.0, 0.0068, 0.0068, 0.0068, 0.0 };
+        double                         rarityPower     = 2.0;
+        double                         rarityMaxFactor = 100.0;
 
         // Never listed for less than this percentage of the vendor price: the
         // house keeps 5% of a sale, so below about 106% a vendor pays more.
@@ -41,8 +54,12 @@ namespace PbpPrice
 
         // A single piece of gear never costs more than this share of the
         // wealth at its level; a whole stack of anything else, this share.
+        // As far as rarity makes it worth more, it finds richer buyers -- the
+        // cap goes up by as much -- but never richer than someone at
+        // `topLevel`.
         std::array<uint32_t, kQualities> gearCapPct  { 2, 5, 20, 50, 120, 300, 300 };
         uint32_t                         stackCapPct = 20;
+        uint32_t                         topLevel    = 80;
 
         // How far under the cheapest listing it goes, in percent.
         uint32_t undercutMinPct = 1;
@@ -60,6 +77,7 @@ namespace PbpPrice
         uint32_t requiredLevel = 0;
         bool     gear          = false;   // weapon or armour
         uint32_t maxStack      = 1;
+        double   dropChancePct = 0.0;     // its chance to drop from a kill (PbpDrops::Rarity), percent; 0: none known
     };
 
     // The level an item is for: its required level, else its item level, 1..80.
@@ -68,11 +86,19 @@ namespace PbpPrice
     // How much gold someone of `level` has to spend.
     uint64_t Wealth(Settings const& s, uint32_t level);
 
+    // How many times more it is worth for being rare: 1 for anything common,
+    // or of a quality rarity does not count for.
+    double Rarity(Settings const& s, ItemFacts const& item);
+
     // What one of it is worth by itself, with nothing on the market to go by.
     uint64_t Value(Settings const& s, ItemFacts const& item);
 
     // The most one of it should cost anyone of `level`.
     uint64_t Cap(Settings const& s, ItemFacts const& item, uint32_t level);
+
+    // What a bot asks for one with nobody else listing one, before it shades
+    // it up or down: its worth, within its floor and the cap at its level.
+    uint64_t Worth(Settings const& s, ItemFacts const& item);
 
     // Below this a vendor pays more.
     uint64_t Floor(Settings const& s, ItemFacts const& item);

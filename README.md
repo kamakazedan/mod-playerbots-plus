@@ -55,13 +55,25 @@ How a bot prices one item:
 1. If someone else already has one up, it asks a little under the cheapest
    one (1 to 5%). That includes the auction house bot's listings.
 2. If nobody does, it asks what the item is worth: a multiple of the vendor
-   price, higher for better quality.
+   price, higher for better quality, and far higher the rarer it drops.
 3. It never asks more than someone of the item's level could sensibly pay.
    Wealth by level is about 2g at 10, 17g at 30, 300g at 60 and 2000g at 80.
+   A rare item finds richer buyers, so its limit rises with its rarity, but
+   never past what a level 80 would pay.
 4. It never asks so little that a vendor would pay more. If the market is
    already below that, the bot keeps the item for a vendor.
 5. If an item comes back unsold, the bot asks 15% less next time. After a
    couple of tries it gives up on that item.
+
+How rare an item is comes from the server's own loot tables, worked out
+once at startup the way the game rolls them. It's the item's chance per kill
+of any mob that can drop it, averaged over every one the world has, or the
+best chest's for something only chests give. Blues and epics below a chance
+of 0.0068% (once in about 14,700 kills) are worth more, steeply: half that
+chance is 5 times the price, a fifth of it 26 times. Lil Timmy's Peashooter, a
+level 16 blue gun that drops about once in 20,800 kills, comes out at about
+5g 45s. With mod-ollama-chat, bots in Trade chat use the same worth, and say
+when something is a rare drop.
 
 Bots never list what playerbots gives them for free. Playerbots hands every
 random bot ammo, food and drink, potions, class reagents, sharpening stones,

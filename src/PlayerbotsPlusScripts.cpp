@@ -1,4 +1,5 @@
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusFire.h"
@@ -36,7 +37,8 @@ namespace
     public:
         PlayerbotsPlusWorldScript()
             : WorldScript("PlayerbotsPlusWorldScript",
-                          { WORLDHOOK_ON_AFTER_CONFIG_LOAD, WORLDHOOK_ON_UPDATE, WORLDHOOK_ON_SHUTDOWN }) { }
+                          { WORLDHOOK_ON_AFTER_CONFIG_LOAD, WORLDHOOK_ON_STARTUP, WORLDHOOK_ON_UPDATE,
+                            WORLDHOOK_ON_SHUTDOWN }) { }
 
         void OnAfterConfigLoad(bool reload) override
         {
@@ -47,6 +49,13 @@ namespace
                 PbpMarket_Reset();
                 PbpPets_Reset();
             }
+        }
+
+        // The world's loot tables are loaded by now: how likely each thing is
+        // to drop, for the market's prices.
+        void OnStartup() override
+        {
+            PbpDrops_Load();
         }
 
         void OnUpdate(uint32 diff) override
