@@ -1,6 +1,7 @@
 #ifndef PLAYERBOTS_PLUS_CONFIG_H
 #define PLAYERBOTS_PLUS_CONFIG_H
 
+#include "PlayerbotsPlusCityLifeText.h"
 #include "PlayerbotsPlusDungeonsText.h"
 #include "PlayerbotsPlusMarketPrice.h"
 
@@ -231,6 +232,18 @@ namespace pbp
     extern uint32_t    g_LifeFishMinMinutes;     // ...for this long
     extern uint32_t    g_LifeFishMaxMinutes;
     extern uint32_t    g_LifeFishPlaces;         // ...places to fish from, at most, round each spot
+    extern uint32_t    g_LifeWanderChance;       // a fidget that is a run off somewhere near, and back (percent)
+    extern float       g_LifeWanderRange;        // ...this far from its place at most, yards
+    extern uint32_t    g_LifeShowOffMinutes;     // a show-off's bout of showing off: a chance about every this
+    extern uint32_t    g_LifeShowOffMinSeconds;  // ...for this long
+    extern uint32_t    g_LifeShowOffMaxSeconds;
+    extern uint32_t    g_LifeShowOffLastChance;  // told to stop: one last go, for cheek (percent)
+    // How each kind of bot spends its time there (CityLife.Temperament.<Name>),
+    // by lower-case name; the default one is the CityLife.* and Hangout.*
+    // settings themselves. Who gets which when no chat module says: the shares.
+    extern PbpCityLife::Temperament g_LifeDefaultTemperament;
+    extern std::unordered_map<std::string, PbpCityLife::Temperament> g_LifeTemperaments;
+    extern std::vector<std::pair<std::string, uint32_t>> g_LifeTemperamentShares;
 
     // Stuck on a mount (PlayerbotsPlusStuck)
     extern bool        g_StuckEnable;

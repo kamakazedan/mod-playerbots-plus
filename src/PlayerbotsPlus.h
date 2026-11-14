@@ -32,7 +32,9 @@ class Player;
 // 1: the market. 2: hangouts, bot events and OwnLine. 3: duels talked into.
 // 4: group quests (BotEvent's GroupQuest* types, quest and need).
 // 5: city life (CityBusy, CitySpoke, CityGather; BotEvent's City* types).
-#define PLAYERBOTS_PLUS_API_VERSION 5
+// 6: city life by temperament (SetTemperamentProvider), showing off
+// (BotEventType::CityShowOff, CityCalmDown).
+#define PLAYERBOTS_PLUS_API_VERSION 6
 
 namespace PlayerbotsPlus
 {
@@ -122,6 +124,21 @@ namespace PlayerbotsPlus
     // CityBusy(bot, 0).
     void CityGather(std::vector<Player*> const& bots, uint32_t seconds);
 
+    // How lively each bot is in a city, by the kind of person it is: a chat
+    // module that gives its bots personalities says which temperament
+    // (PlayerbotsPlus.CityLife.Temperament.<Name>, matched without regard to
+    // case) a bot is. Asked on the world thread, once each time a bot gets to
+    // a hangout spot. "default" is the CityLife.* settings themselves; an
+    // empty answer is no answer, and the bot gets one by
+    // CityLife.TemperamentShares, as without a provider.
+    using TemperamentProvider = std::function<std::string(Player*)>;
+    void SetTemperamentProvider(TemperamentProvider provider);
+
+    // Someone told `bot` to stop showing off (BotEventType::CityShowOff): it
+    // stops -- now and then with one last go, for cheek -- and does not start
+    // again for a good while.
+    void CityCalmDown(Player* bot);
+
     // ---- What bots did, for a chat module to have them say
 
     enum class BotEventType : uint8_t
@@ -147,6 +164,10 @@ namespace PlayerbotsPlus
                            //    ("Swift Spectral Tiger"), `detail` how rare ("nobody else about has one"),
                            //    `have` how many came over, it too
         CityDance,         // a bot hanging out started dancing (`other` empty), or joined `other` dancing
+        CityShowOff,       // a bot hanging out (a temperament that shows off) has been making its mount rear up
+                           //    and roar over and over -- on foot, hopping about -- near a real player for a while:
+                           //    `what` its mount ("Swift Brown Wolf"; empty on foot), `verb` "rear" or "hop", `have`
+                           //    how many times so far. It goes on for a minute or so; CityCalmDown stops it.
     };
 
     struct BotEvent

@@ -76,6 +76,16 @@ namespace PlayerbotsPlus
         PbpHangout_Gather(bots, seconds);
     }
 
+    void SetTemperamentProvider(TemperamentProvider provider)
+    {
+        PbpHangout_SetTemperamentProvider(std::move(provider));
+    }
+
+    void CityCalmDown(Player* bot)
+    {
+        PbpHangout_CalmDown(bot);
+    }
+
     void AddBotEventListener(BotEventListener listener)
     {
         if (listener)

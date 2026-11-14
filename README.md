@@ -12,7 +12,7 @@ their own words.
 |---|---|
 | [The auction house](#the-auction-house) | Sell what they have no use for and buy upgrades, under their own names |
 | [City hangouts](#city-hangouts) | Gather where players do in the capitals: on a bench, mounted, or AFK |
-| [City life](#city-life) | Shift about, hop, dance, look at a rare mount, run errands, fish and fly in and out while they hang out |
+| [City life](#city-life) | Shift about, hop, run about, show off, dance, look at a rare mount, run errands, fish and fly in and out while they hang out |
 | [Stuck on a mount](#stuck-on-a-mount) | Stop getting on and off their mount at a herb they can't pick, and move on |
 | [On foot indoors](#on-foot-indoors) | Get off their mount in a bank, an inn or a cave, instead of standing at the counter on it |
 | [Out of the fire](#out-of-the-fire) | Step out of a campfire, bonfire or brazier, burning or not, instead of standing in it |
@@ -158,10 +158,22 @@ waiting about in a city shift their feet, look round, hop on the spot, dance
 and wander off to the mailbox. Bots hanging out do the same, but only near a
 real player, since nobody else would see it:
 
-- **Tempers:** about a third stay put the whole time, a few can't keep still,
-  and the rest shift about every minute or two: a step or two, a few hops, or
-  off on an errand or to fish. Nobody moves while it's talking or emoting, or
-  sat down or AFK.
+- **Temperaments:** each bot is a kind of person, which decides how it spends
+  its time there: a calm one mostly sits on a bench or goes AFK, a lively one
+  hops, rears its mount and runs about, and a clown can't keep still and shows
+  off. With mod-ollama-chat a bot's chat personality decides it (a joker is a
+  clown, a grumbler calm); without it, a share of each, the same bot always
+  the same kind.
+- **Tempers:** some stay put the whole time, some can't keep still, and the
+  rest shift about every minute or two: a step or two, a few hops, a run off
+  somewhere near and back, or off on an errand or to fish. Nobody moves while
+  it's talking or emoting, or sat down or AFK.
+- **Showing off:** now and then (about every quarter of an hour) a clown
+  spends a minute or so making its mount rear up and roar over and over, a
+  couple of seconds apart -- hopping about, where it can't ride. With
+  mod-ollama-chat, someone near it whose personality it gets on the nerves of
+  may tell it to stop; it laughs, says something cheeky now and then, and
+  stops -- sometimes after one last go.
 - **Looking round:** now and then, at someone stood close by. When someone
   says something in /say nearby, most of those about look round at them.
 - **Rearing:** those on a mount make it rear up or roar now and then, what
@@ -476,7 +488,9 @@ only in a build with
   a dungeon they haven't outgrown). A few quest log slots are kept free while
   a bot holds one, by dropping what a player would first: failed, grey, other
   zones, the lowest. A bot with one done walks to hand it in before it queues
-  again.
+  again. A bot on its way isn't teleported off somewhere for a level-up, nor
+  fetched to hang out in a city, but playerbots may still put it down where
+  it's walking to if it gets stuck on the way.
 - **Queueing.** Every half minute or so, a party is picked: a tank, a healer
   and three to do the damage, of one side and a level for the dungeon, those
   holding quests for it first. Each queues on their own, as a player does,
@@ -599,8 +613,15 @@ this builds on.
 - **Handing in.** Done, each hands it in where it's taken back, and one gone
   grey is dropped.
 - **Staying together.** A party member isn't teleported away while the party
-  gets together or is at its quest: playerbots teleports a bot that levels up
-  if it leads its group, and the party's leader levels as often as the rest.
+  gets together or is at its quest, nor a bot walking to take or hand one in:
+  playerbots teleports a bot that levels up if it leads its group, and the
+  party's leader levels as often as the rest. A teleport to the party's own
+  places (what the quest is for, the leader they're meeting, the giver) still
+  goes: that's playerbots putting a bot that got stuck on its way where it was
+  going.
+- **On its way.** The leader goes straight for what the quest is for, not
+  after every mob it passes or chatting to whoever's about on the way, and
+  still fights whatever attacks the party.
 
 `.pbp groupquests` shows how many parties are at what, and how they've gone;
 the full report (`.pbp report`) each party and what it is doing. Settings:

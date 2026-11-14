@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace PbpCityLife
@@ -48,6 +49,42 @@ namespace PbpCityLife
 
     // `lo`..`hi` seconds, `roll` 0..1 picking where in it. lo > hi swaps.
     uint32_t Between(uint32_t lo, uint32_t hi, double roll);
+
+    // A temperament (PlayerbotsPlus.CityLife.Temperament.<Name>): how a bot
+    // of that kind spends its time hanging out. Every one a percentage.
+    struct Temperament
+    {
+        uint32_t parked   = 30;   // of its visits, it stays put the whole time
+        uint32_t restless = 15;   // ...it cannot keep still
+        uint32_t jump     = 12;   // of its moves on foot, a few hops on the spot
+        uint32_t rear     = 15;   // ...on a mount, its mount rearing up or roaring
+        uint32_t wander   = 0;    // ...a run off somewhere near, and back
+        uint32_t showOff  = 0;    // every ShowOffMinutes or so, the chance of a bout of showing off
+        uint32_t bench    = 60;   // it sits on a free bench (Hangout.BenchChance)
+        uint32_t mounted  = 45;   // ...else on its mount, where it can ride (Hangout.MountedChance)
+        uint32_t sit      = 35;   // ...else on the ground (Hangout.SitChance)
+        uint32_t afk      = 35;   // it goes AFK there (Hangout.AfkChance)
+    };
+
+    // "parked:10|restless:60|jump:60": `base` with those changed (0 to 100).
+    // A part that is not a known key with such a number goes to `bad`,
+    // comma-separated, and changes nothing.
+    Temperament ParseTemperament(std::string const& text, Temperament base, std::string& bad);
+
+    // "calm:25|lively:20|clown:5": who gets which when nothing says, by
+    // percent, names in lower case. Bad parts go to `bad`.
+    std::vector<std::pair<std::string, uint32_t>> ParseShares(std::string const& text, std::string& bad);
+
+    // From `roll` 1..100: the first of `shares` it falls in, in order; ""
+    // (the default) for the rest.
+    std::string PickTemperament(uint32_t roll, std::vector<std::pair<std::string, uint32_t>> const& shares);
+
+    // 1..100, always the same for the same bot: its temperament does not
+    // change from one visit to the next.
+    uint32_t StableRoll(uint64_t guid);
+
+    // `name` in lower case, trimmed: how temperaments are matched.
+    std::string TemperamentKey(std::string const& name);
 }
 
 #endif // PLAYERBOTS_PLUS_CITY_LIFE_TEXT_H

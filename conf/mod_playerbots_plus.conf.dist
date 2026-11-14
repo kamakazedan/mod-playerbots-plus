@@ -921,12 +921,14 @@ PlayerbotsPlus.Hangout.TravelSeconds = 180
 #    PlayerbotsPlus.Hangout.AfkChance
 #        How it spends it, tried in this order: a bench (when one is free),
 #        mounted (when it can ride there), sat on the ground, else standing.
-#        AfkChance is on top of any of them.
-#        Default: 60, 45, 35, 35
-PlayerbotsPlus.Hangout.BenchChance = 60
+#        AfkChance is on top of any of them. These are the default
+#        temperament's (CITY LIFE): a temperament can have its own. Nobody sat
+#        down or AFK moves about, so the lower these, the livelier a city.
+#        Default: 50, 45, 30, 25
+PlayerbotsPlus.Hangout.BenchChance = 50
 PlayerbotsPlus.Hangout.MountedChance = 45
-PlayerbotsPlus.Hangout.SitChance = 35
-PlayerbotsPlus.Hangout.AfkChance = 35
+PlayerbotsPlus.Hangout.SitChance = 30
+PlayerbotsPlus.Hangout.AfkChance = 25
 
 #    PlayerbotsPlus.Hangout.BenchRange
 #    PlayerbotsPlus.Hangout.BenchWords
@@ -1069,16 +1071,37 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 #   out (CITY HANGOUTS) do the same -- only within Range yards of a real
 #   player, since nobody else would see it.
 #
-#     * Tempers: settling at a spot, each picks one. ParkedShare of them
-#       stay put the whole time, RestlessShare cannot keep still (something
-#       every RestlessMinSeconds to RestlessMaxSeconds), and the rest shuffle
-#       about every ShuffleMinSeconds to ShuffleMaxSeconds. Each time, it
-#       may go on an errand (ErrandChance) or fishing (FishChance), or hop
-#       about (JumpChance; on a mount, rear: RearChance), or else take a
-#       step or two within its spot
+#     * Temperaments: what kind of person each bot is, which decides how it
+#       spends its time there -- Temperament.<Name> lines, each changing some
+#       of the default (the settings in this section and Hangout.BenchChance,
+#       MountedChance, SitChance and AfkChance). With mod-ollama-chat, a
+#       bot's chat personality decides it (OllamaChat.CityLife.Temperaments
+#       there: a joker is a clown, a grumbler calm); without it, or for a
+#       bot it says nothing of, TemperamentShares, the same for a bot every
+#       time.
+#     * Tempers: settling at a spot, each picks one, by its temperament.
+#       ParkedShare of them stay put the whole time, RestlessShare cannot
+#       keep still (something every RestlessMinSeconds to
+#       RestlessMaxSeconds), and the rest shuffle about every
+#       ShuffleMinSeconds to ShuffleMaxSeconds. Each time, it may go on an
+#       errand (ErrandChance) or fishing (FishChance), or hop about
+#       (JumpChance; on a mount, rear: RearChance), or run about
+#       (WanderChance), or else take a step or two within its spot
 #       (StepMin to StepMax yards, walking WalkChance of the time). Nobody
 #       moves while it is talking or emoting (mod-ollama-chat says when),
 #       sat down, AFK, or about something else.
+#     * Running about (WanderChance): off at a run somewhere 8 to
+#       WanderRange yards from its place -- on that floor, in sight, with a
+#       way there -- a moment there, perhaps on to somewhere else (up to
+#       three), then back to its place.
+#     * Showing off (a temperament's showoff): every ShowOffMinutes or so,
+#       one that shows off may spend ShowOffMinSeconds to ShowOffMaxSeconds
+#       making its mount rear up and roar, over and over, a couple of
+#       seconds apart -- up on its mount first, where it can ride; where it
+#       cannot, hopping about instead. With mod-ollama-chat, someone near
+#       whom it gets on the nerves of may tell it to stop: it laughs it off
+#       and stops (ShowOffLastChance of the time with one last go, for
+#       cheek), and does not start again for twice ShowOffMinutes.
 #     * Looking round: every TurnMinSeconds to TurnMaxSeconds anyone, parked
 #       or not, looks round -- at someone stood within six yards, most times
 #       there is someone, or just a little turn. And when someone says
@@ -1165,15 +1188,16 @@ PlayerbotsPlus.CityLife.Range = 90
 #    PlayerbotsPlus.CityLife.RestlessMinSeconds
 #    PlayerbotsPlus.CityLife.RestlessMaxSeconds
 #        Tempers (see above): the percent that stay put and the percent that
-#        cannot keep still (the rest shuffle about), and how often (seconds,
-#        5 to 3600) the shufflers and the restless do something.
-#        Default: 30, 15, 60, 180, 20, 40
-PlayerbotsPlus.CityLife.ParkedShare = 30
-PlayerbotsPlus.CityLife.RestlessShare = 15
-PlayerbotsPlus.CityLife.ShuffleMinSeconds = 60
-PlayerbotsPlus.CityLife.ShuffleMaxSeconds = 180
-PlayerbotsPlus.CityLife.RestlessMinSeconds = 20
-PlayerbotsPlus.CityLife.RestlessMaxSeconds = 40
+#        cannot keep still (the rest shuffle about) -- the default
+#        temperament's -- and how often (seconds, 5 to 3600) the shufflers
+#        and the restless do something.
+#        Default: 15, 25, 40, 120, 15, 30
+PlayerbotsPlus.CityLife.ParkedShare = 15
+PlayerbotsPlus.CityLife.RestlessShare = 25
+PlayerbotsPlus.CityLife.ShuffleMinSeconds = 40
+PlayerbotsPlus.CityLife.ShuffleMaxSeconds = 120
+PlayerbotsPlus.CityLife.RestlessMinSeconds = 15
+PlayerbotsPlus.CityLife.RestlessMaxSeconds = 30
 
 #    PlayerbotsPlus.CityLife.StepMin
 #    PlayerbotsPlus.CityLife.StepMax
@@ -1198,19 +1222,66 @@ PlayerbotsPlus.CityLife.HeadTurnChance = 60
 
 #    PlayerbotsPlus.CityLife.JumpChance
 #        The percent of a shuffler's or a restless one's moves on foot that
-#        are a few hops on the spot. 0: nobody hops.
-#        Default: 12
-PlayerbotsPlus.CityLife.JumpChance = 12
+#        are a few hops on the spot (the default temperament's). 0: nobody
+#        hops.
+#        Default: 50
+PlayerbotsPlus.CityLife.JumpChance = 50
 
 #    PlayerbotsPlus.CityLife.RearChance
 #    PlayerbotsPlus.CityLife.RearBackChance
 #        Rearing (see above): the percent of a shuffler's or a restless one's
 #        moves on a mount that are its mount rearing up or roaring, once or a
-#        few times; and the percent of times each mounted one near someone
-#        who rears theirs does it back (at most two). 0: never.
-#        Default: 15, 30
-PlayerbotsPlus.CityLife.RearChance = 15
+#        few times (the default temperament's); and the percent of times each
+#        mounted one near someone who rears theirs does it back (at most
+#        two). 0: never.
+#        Default: 50, 30
+PlayerbotsPlus.CityLife.RearChance = 50
 PlayerbotsPlus.CityLife.RearBackChance = 30
+
+#    PlayerbotsPlus.CityLife.WanderChance
+#    PlayerbotsPlus.CityLife.WanderRange
+#        Running about (see above): the percent of a shuffler's or a restless
+#        one's moves that are a run off somewhere near and back (the default
+#        temperament's; 0: none), and how far from its place it goes (yards,
+#        8 to 60).
+#        Default: 15, 25
+PlayerbotsPlus.CityLife.WanderChance = 15
+PlayerbotsPlus.CityLife.WanderRange = 25
+
+#    PlayerbotsPlus.CityLife.ShowOffMinutes
+#    PlayerbotsPlus.CityLife.ShowOffMinSeconds
+#    PlayerbotsPlus.CityLife.ShowOffMaxSeconds
+#    PlayerbotsPlus.CityLife.ShowOffLastChance
+#        Showing off (see above), for a temperament with a showoff chance:
+#        about how often it gets that chance (minutes, 1 to 1440: half to one
+#        and a half times it, the first a third of the way in); how long a
+#        bout goes on (seconds, 10 to 600); and the percent of times one told
+#        to stop has one last go first.
+#        Default: 15, 45, 75, 35
+PlayerbotsPlus.CityLife.ShowOffMinutes = 15
+PlayerbotsPlus.CityLife.ShowOffMinSeconds = 45
+PlayerbotsPlus.CityLife.ShowOffMaxSeconds = 75
+PlayerbotsPlus.CityLife.ShowOffLastChance = 35
+
+#    PlayerbotsPlus.CityLife.Temperament.<Name>
+#        A kind of person (see above): changes to the default temperament,
+#        as "key:percent" parts, |-separated. Keys: parked, restless (its
+#        temper's shares), jump, rear, wander (of its moves), showoff (its
+#        chance at showing off, every ShowOffMinutes or so), bench, mounted,
+#        sit, afk (how it spends its visit, as Hangout.*Chance). Names are
+#        matched without regard to case; "default" is the settings
+#        themselves. With no Temperament lines at all, the three below.
+#        Default: (below)
+PlayerbotsPlus.CityLife.Temperament.Calm = "parked:50|restless:0|jump:15|rear:15|wander:0|bench:75|sit:50|afk:45|mounted:25"
+PlayerbotsPlus.CityLife.Temperament.Lively = "parked:5|restless:45|jump:60|rear:60|wander:30|bench:20|sit:10|afk:5|mounted:55"
+PlayerbotsPlus.CityLife.Temperament.Clown = "parked:0|restless:60|jump:70|rear:75|wander:30|bench:5|sit:5|afk:0|mounted:80|showoff:70"
+
+#    PlayerbotsPlus.CityLife.TemperamentShares
+#        Who is which when no chat module says (without mod-ollama-chat, or
+#        for a bot it says nothing of): "name:percent" parts, |-separated,
+#        each bot always the same one; the rest are the default.
+#        Default: "calm:25|lively:20|clown:5"
+PlayerbotsPlus.CityLife.TemperamentShares = "calm:25|lively:20|clown:5"
 
 #    PlayerbotsPlus.CityLife.Gawk
 #    PlayerbotsPlus.CityLife.GawkRareOwners

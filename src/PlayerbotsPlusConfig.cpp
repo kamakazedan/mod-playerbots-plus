@@ -32,9 +32,9 @@ namespace pbp
     uint32_t    g_HangoutTravelSeconds    = 180;
     uint32_t    g_HangoutFullMinutes      = 10;
     uint32_t    g_HangoutMountedChance    = 45;
-    uint32_t    g_HangoutBenchChance      = 60;
-    uint32_t    g_HangoutSitChance        = 35;
-    uint32_t    g_HangoutAfkChance        = 35;
+    uint32_t    g_HangoutBenchChance      = 50;
+    uint32_t    g_HangoutSitChance        = 30;
+    uint32_t    g_HangoutAfkChance        = 25;
     float       g_HangoutBenchRange       = 25.0f;
     float       g_HangoutHeightTolerance  = 6.0f;
     std::vector<std::string> g_HangoutBenchWords;
@@ -49,20 +49,20 @@ namespace pbp
 
     bool        g_LifeEnable               = true;
     float       g_LifeRange                = 90.0f;
-    uint32_t    g_LifeParkedShare          = 30;
-    uint32_t    g_LifeRestlessShare        = 15;
-    uint32_t    g_LifeShuffleMinSeconds    = 60;
-    uint32_t    g_LifeShuffleMaxSeconds    = 180;
-    uint32_t    g_LifeRestlessMinSeconds   = 20;
-    uint32_t    g_LifeRestlessMaxSeconds   = 40;
+    uint32_t    g_LifeParkedShare          = 15;
+    uint32_t    g_LifeRestlessShare        = 25;
+    uint32_t    g_LifeShuffleMinSeconds    = 40;
+    uint32_t    g_LifeShuffleMaxSeconds    = 120;
+    uint32_t    g_LifeRestlessMinSeconds   = 15;
+    uint32_t    g_LifeRestlessMaxSeconds   = 30;
     float       g_LifeStepMin              = 2.5f;
     float       g_LifeStepMax              = 7.0f;
     uint32_t    g_LifeWalkChance           = 30;
     uint32_t    g_LifeTurnMinSeconds       = 15;
     uint32_t    g_LifeTurnMaxSeconds       = 60;
     uint32_t    g_LifeHeadTurnChance       = 60;
-    uint32_t    g_LifeJumpChance           = 12;
-    uint32_t    g_LifeRearChance           = 15;
+    uint32_t    g_LifeJumpChance           = 50;
+    uint32_t    g_LifeRearChance           = 50;
     uint32_t    g_LifeRearBackChance       = 30;
     bool        g_LifeGawk                 = true;
     uint32_t    g_LifeGawkRareOwners       = 3;
@@ -91,6 +91,15 @@ namespace pbp
     uint32_t    g_LifeFishMinMinutes       = 3;
     uint32_t    g_LifeFishMaxMinutes       = 10;
     uint32_t    g_LifeFishPlaces           = 4;
+    uint32_t    g_LifeWanderChance         = 15;
+    float       g_LifeWanderRange          = 25.0f;
+    uint32_t    g_LifeShowOffMinutes       = 15;
+    uint32_t    g_LifeShowOffMinSeconds    = 45;
+    uint32_t    g_LifeShowOffMaxSeconds    = 75;
+    uint32_t    g_LifeShowOffLastChance    = 35;
+    PbpCityLife::Temperament g_LifeDefaultTemperament;
+    std::unordered_map<std::string, PbpCityLife::Temperament> g_LifeTemperaments;
+    std::vector<std::pair<std::string, uint32_t>> g_LifeTemperamentShares;
 
     bool        g_StuckEnable             = true;
     uint32_t    g_StuckMountCount         = 4;
@@ -292,6 +301,17 @@ namespace
         { "DalaranMerchants",   "571 5654.9 682.2 652.0 14 10 outside the Merchants' Bank in Dalaran" },
     };
 
+    // How the kinds of people about a city spend their time there
+    // (CityLife.Temperament.<Name>): changes to the default, which is the
+    // CityLife.* and Hangout.* settings. A chat module says which a bot is,
+    // by its personality; without one, TemperamentShares decides.
+    const std::pair<const char*, const char*> kDefaultTemperaments[] = {
+        { "Calm",   "parked:50|restless:0|jump:15|rear:15|wander:0|bench:75|sit:50|afk:45|mounted:25" },
+        { "Lively", "parked:5|restless:45|jump:60|rear:60|wander:30|bench:20|sit:10|afk:5|mounted:55" },
+        { "Clown",  "parked:0|restless:60|jump:70|rear:75|wander:30|bench:5|sit:5|afk:0|mounted:80|showoff:70" },
+    };
+    char const* const kDefaultTemperamentShares = "calm:25|lively:20|clown:5";
+
     // Each city's busiest places, where most of its people are: the Trade
     // District, the Commons, the Valley of Strength, the middle of Thunder
     // Bluff, the banks and auction houses.
@@ -336,11 +356,11 @@ namespace
         auto pct = [](char const* key, uint32_t def) { return std::min<uint32_t>(100, U(key, def)); };
         g_LifeEnable         = B("PlayerbotsPlus.CityLife.Enable", true);
         g_LifeRange          = std::clamp(F("PlayerbotsPlus.CityLife.Range", 90.0f), 20.0f, 250.0f);
-        g_LifeParkedShare    = pct("PlayerbotsPlus.CityLife.ParkedShare", 30);
-        g_LifeRestlessShare  = pct("PlayerbotsPlus.CityLife.RestlessShare", 15);
-        range("PlayerbotsPlus.CityLife.ShuffleMinSeconds", "PlayerbotsPlus.CityLife.ShuffleMaxSeconds", 60, 180, 5,
+        g_LifeParkedShare    = pct("PlayerbotsPlus.CityLife.ParkedShare", 15);
+        g_LifeRestlessShare  = pct("PlayerbotsPlus.CityLife.RestlessShare", 25);
+        range("PlayerbotsPlus.CityLife.ShuffleMinSeconds", "PlayerbotsPlus.CityLife.ShuffleMaxSeconds", 40, 120, 5,
               3600, g_LifeShuffleMinSeconds, g_LifeShuffleMaxSeconds);
-        range("PlayerbotsPlus.CityLife.RestlessMinSeconds", "PlayerbotsPlus.CityLife.RestlessMaxSeconds", 20, 40, 5,
+        range("PlayerbotsPlus.CityLife.RestlessMinSeconds", "PlayerbotsPlus.CityLife.RestlessMaxSeconds", 15, 30, 5,
               3600, g_LifeRestlessMinSeconds, g_LifeRestlessMaxSeconds);
         g_LifeStepMin        = std::clamp(F("PlayerbotsPlus.CityLife.StepMin", 2.5f), 1.0f, 20.0f);
         g_LifeStepMax        = std::clamp(F("PlayerbotsPlus.CityLife.StepMax", 7.0f), g_LifeStepMin, 30.0f);
@@ -348,8 +368,8 @@ namespace
         range("PlayerbotsPlus.CityLife.TurnMinSeconds", "PlayerbotsPlus.CityLife.TurnMaxSeconds", 15, 60, 3, 3600,
               g_LifeTurnMinSeconds, g_LifeTurnMaxSeconds);
         g_LifeHeadTurnChance = pct("PlayerbotsPlus.CityLife.HeadTurnChance", 60);
-        g_LifeJumpChance     = pct("PlayerbotsPlus.CityLife.JumpChance", 12);
-        g_LifeRearChance     = pct("PlayerbotsPlus.CityLife.RearChance", 15);
+        g_LifeJumpChance     = pct("PlayerbotsPlus.CityLife.JumpChance", 50);
+        g_LifeRearChance     = pct("PlayerbotsPlus.CityLife.RearChance", 50);
         g_LifeRearBackChance = pct("PlayerbotsPlus.CityLife.RearBackChance", 30);
         g_LifeGawk           = B("PlayerbotsPlus.CityLife.Gawk", true);
         g_LifeGawkRareOwners = std::min<uint32_t>(1000, U("PlayerbotsPlus.CityLife.GawkRareOwners", 3));
@@ -378,6 +398,54 @@ namespace
         range("PlayerbotsPlus.CityLife.FishMinMinutes", "PlayerbotsPlus.CityLife.FishMaxMinutes", 3, 10, 1, 60,
               g_LifeFishMinMinutes, g_LifeFishMaxMinutes);
         g_LifeFishPlaces     = std::min<uint32_t>(20, U("PlayerbotsPlus.CityLife.FishPlaces", 4));
+        g_LifeWanderChance   = pct("PlayerbotsPlus.CityLife.WanderChance", 15);
+        g_LifeWanderRange    = std::clamp(F("PlayerbotsPlus.CityLife.WanderRange", 25.0f), 8.0f, 60.0f);
+        g_LifeShowOffMinutes = std::clamp<uint32_t>(U("PlayerbotsPlus.CityLife.ShowOffMinutes", 15), 1, 1440);
+        range("PlayerbotsPlus.CityLife.ShowOffMinSeconds", "PlayerbotsPlus.CityLife.ShowOffMaxSeconds", 45, 75, 10,
+              600, g_LifeShowOffMinSeconds, g_LifeShowOffMaxSeconds);
+        g_LifeShowOffLastChance = pct("PlayerbotsPlus.CityLife.ShowOffLastChance", 35);
+
+        // Temperaments: the default is the settings above and the hangout's
+        // own (read before this); each named one changes some of it.
+        PbpCityLife::Temperament& base = g_LifeDefaultTemperament;
+        base          = PbpCityLife::Temperament();
+        base.parked   = g_LifeParkedShare;
+        base.restless = g_LifeRestlessShare;
+        base.jump     = g_LifeJumpChance;
+        base.rear     = g_LifeRearChance;
+        base.wander   = g_LifeWanderChance;
+        base.showOff  = 0;
+        base.bench    = g_HangoutBenchChance;
+        base.mounted  = g_HangoutMountedChance;
+        base.sit      = g_HangoutSitChance;
+        base.afk      = g_HangoutAfkChance;
+        g_LifeTemperaments.clear();
+        std::string bad;
+        auto addTemperament = [&bad](std::string const& name, std::string const& text)
+        {
+            std::string wrong;
+            const std::string key = PbpCityLife::TemperamentKey(name);
+            g_LifeTemperaments[key] = PbpCityLife::ParseTemperament(text, g_LifeDefaultTemperament, wrong);
+            if (!wrong.empty())
+                bad += (bad.empty() ? "" : "; ") + name + ": " + wrong;
+        };
+        const std::string prefix = "PlayerbotsPlus.CityLife.Temperament.";
+        const std::vector<std::string> keys = sConfigMgr->GetKeysByString(prefix);
+        if (keys.empty())
+            for (auto const& [name, text] : kDefaultTemperaments)
+                addTemperament(name, text);
+        for (std::string const& key : keys)
+            addTemperament(key.substr(prefix.size()), sConfigMgr->GetOption<std::string>(key, ""));
+        g_LifeTemperamentShares = PbpCityLife::ParseShares(
+            sConfigMgr->GetOption<std::string>("PlayerbotsPlus.CityLife.TemperamentShares", kDefaultTemperamentShares),
+            bad);
+        for (auto const& [name, share] : g_LifeTemperamentShares)
+            if (!g_LifeTemperaments.contains(name) && name != "default")
+                bad += (bad.empty() ? "" : "; ") + std::string("TemperamentShares: no temperament '") + name + "'";
+        if (!bad.empty())
+            LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.CityLife: could not read {} (want "
+                      "\"parked:N|restless:N|jump:N|rear:N|wander:N|showoff:N|bench:N|mounted:N|sit:N|afk:N\", each 0 "
+                      "to 100).", bad);
     }
 
     void LoadHangout()
@@ -397,9 +465,9 @@ namespace
         g_HangoutTravelSeconds   = std::max<uint32_t>(30, U("PlayerbotsPlus.Hangout.TravelSeconds", 180));
         g_HangoutFullMinutes     = std::clamp<uint32_t>(U("PlayerbotsPlus.Hangout.FullMinutes", 10), 1, 120);
         g_HangoutMountedChance   = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.MountedChance", 45));
-        g_HangoutBenchChance     = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.BenchChance", 60));
-        g_HangoutSitChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.SitChance", 35));
-        g_HangoutAfkChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.AfkChance", 35));
+        g_HangoutBenchChance     = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.BenchChance", 50));
+        g_HangoutSitChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.SitChance", 30));
+        g_HangoutAfkChance       = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.AfkChance", 25));
         g_HangoutBenchRange      = std::max(0.0f, F("PlayerbotsPlus.Hangout.BenchRange", 25.0f));
         g_HangoutHeightTolerance = std::max(1.0f, F("PlayerbotsPlus.Hangout.HeightTolerance", 6.0f));
         g_HangoutBenchWords.clear();
@@ -951,15 +1019,26 @@ void PlayerbotsPlus_LoadConfig(bool reload)
              pbp::g_MarksSapStar ? "on" : "off");
 
     if (pbp::g_LifeEnable)
+    {
+        std::string kinds;
+        for (auto const& [name, t] : pbp::g_LifeTemperaments)
+            kinds += (kinds.empty() ? "" : ", ") + name;
+        std::string shares;
+        for (auto const& [name, share] : pbp::g_LifeTemperamentShares)
+            shares += (shares.empty() ? "" : ", ") + name + " " + std::to_string(share) + "%";
         LOG_INFO(where,
                  "[Playerbots Plus] City life on, within {:.0f} yd of a real player: {}% parked, {}% restless, the "
-                 "rest fidget every {}-{} s; hops {}%, mounts rearing {}% (done back {}%), errands {}%, fishing "
-                 "{}%; rare mounts looked at {}, dance parties {}; flights in {}%, out {}%.",
+                 "rest fidget every {}-{} s; hops {}%, mounts rearing {}% (done back {}%), runs about {}%, errands "
+                 "{}%, fishing {}%; rare mounts looked at {}, dance parties {}; flights in {}%, out {}%. "
+                 "Temperaments: {} (without a chat module: {}); showing off about every {} min.",
                  pbp::g_LifeRange, pbp::g_LifeParkedShare, pbp::g_LifeRestlessShare, pbp::g_LifeShuffleMinSeconds,
                  pbp::g_LifeShuffleMaxSeconds, pbp::g_LifeJumpChance, pbp::g_LifeRearChance,
-                 pbp::g_LifeRearBackChance, pbp::g_LifeErrandChance,
+                 pbp::g_LifeRearBackChance, pbp::g_LifeWanderChance, pbp::g_LifeErrandChance,
                  pbp::g_LifeFish ? pbp::g_LifeFishChance : 0u, pbp::g_LifeGawk ? "on" : "off",
-                 pbp::g_LifeDance ? "on" : "off", pbp::g_LifeFlyInChance, pbp::g_LifeFlyOutChance);
+                 pbp::g_LifeDance ? "on" : "off", pbp::g_LifeFlyInChance, pbp::g_LifeFlyOutChance,
+                 kinds.empty() ? "none" : kinds, shares.empty() ? "everyone the default" : shares + ", the rest the default",
+                 pbp::g_LifeShowOffMinutes);
+    }
     else
         LOG_INFO(where, "[Playerbots Plus] City life off.");
 

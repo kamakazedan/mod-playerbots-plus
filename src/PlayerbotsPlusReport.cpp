@@ -115,13 +115,17 @@ namespace
                                   h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.lostNoRoom, h.lostSlow, h.lostBusy,
                                   h.lostElsewhere, h.lostLanding, h.redirected, h.foundFull, h.movedOn, h.cutShort,
                                   h.cameBack));
-        out.push_back(fmt::format("City life: {} - steps {}, looks round {}, hops {}, mounts reared {} ({} done back); "
+        out.push_back(fmt::format("City life: {} - steps {}, looks round {}, hops {}, mounts reared {} ({} done back), "
+                                  "runs about {}, show-offs {} ({} told to stop); "
                                   "rare mounts looked at {} (by {}); dance parties {} ({} joined in); walked over to "
                                   "talk {}; errands {} ({} got there; {} bankers, auctioneers and mailboxes known); "
-                                  "flew in {} ({} landed), flew out {}; fishing {} ({} casts, {} places to fish from).",
-                                  OnOff(g_LifeEnable), h.steps, h.turns, h.hops, h.rears, h.rearedBack, h.gawks,
+                                  "flew in {} ({} landed; {} too long, {} wanted before take-off, {} never took off, {} "
+                                  "came down elsewhere), flew out {}; fishing {} ({} casts, {} places to fish from).",
+                                  OnOff(g_LifeEnable), h.steps, h.turns, h.hops, h.rears, h.rearedBack, h.wanders,
+                                  h.showOffs, h.calmedDown, h.gawks,
                                   h.gawkers, h.dances, h.danced, h.gathered, h.errands, h.errandsDone, h.services,
-                                  h.flewIn, h.landed, h.flewOut, h.fished, h.casts, h.fishPlaces));
+                                  h.flewIn, h.landed, h.flyLate, h.flyWanted, h.flyNever, h.flyElsewhere, h.flewOut,
+                                  h.fished, h.casts, h.fishPlaces));
 
         PbpStuckStats const k = PbpStuck_GetStats();
         out.push_back(fmt::format("Stuck on a mount: {} - {} mounts noted, {} bots stuck ({} kept off what they were "

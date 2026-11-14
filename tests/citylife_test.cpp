@@ -5,6 +5,7 @@
 
 #include "PlayerbotsPlusCityLifeText.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -95,6 +96,59 @@ int main()
     Eq("roll 0.5: the middle", Between(20, 40, 0.5), 30);
     Eq("swapped ends", Between(40, 20, 0.0), 20);
     Eq("one value", Between(7, 7, 0.9), 7);
+
+    // ---- temperaments ---------------------------------------------------------------------
+    {
+        Temperament base;
+        base.parked = 15;
+        base.jump   = 50;
+        std::string bad;
+        Temperament const clown = ParseTemperament("parked:0| Restless:60 |jump:70|showoff:70|mounted:80", base, bad);
+        Is("a clean line: nothing bad", bad, "");
+        Eq("parked set", clown.parked, 0);
+        Eq("key case and spaces do not matter", clown.restless, 60);
+        Eq("jump set", clown.jump, 70);
+        Eq("showoff set", clown.showOff, 70);
+        Eq("mounted set", clown.mounted, 80);
+        Eq("rear kept from the base", clown.rear, base.rear);
+        Eq("afk kept from the base", clown.afk, base.afk);
+
+        bad.clear();
+        Temperament const odd = ParseTemperament("jump:150|nap:5|rear|sit:x|wander:30", base, bad);
+        Is("bad parts named", bad, "jump:150, nap:5, rear, sit:x");
+        Eq("a bad number changes nothing", odd.jump, 50);
+        Eq("the good part still counts", odd.wander, 30);
+        bad.clear();
+        Eq("empty: the base", ParseTemperament("", base, bad).parked, 15);
+        Is("empty: nothing bad", bad, "");
+
+        bad.clear();
+        auto const shares = ParseShares("Calm:25|lively:20| clown:5 |odd", bad);
+        Eq("three shares", shares.size(), 3);
+        Is("names in lower case", shares[0].first, "calm");
+        Is("bad share named", bad, "odd");
+        Is("roll 1: the first", PickTemperament(1, shares), "calm");
+        Is("roll 25: still the first", PickTemperament(25, shares), "calm");
+        Is("roll 26: the second", PickTemperament(26, shares), "lively");
+        Is("roll 50: the third", PickTemperament(50, shares), "clown");
+        Is("roll 51: the default", PickTemperament(51, shares), "");
+        Is("no shares: the default", PickTemperament(1, {}), "");
+
+        // The same bot, the same roll; bots spread over all of 1..100.
+        Eq("stable", StableRoll(4968), StableRoll(4968));
+        uint32_t low = 101, high = 0, firstTen = 0;
+        for (uint64_t g = 1; g <= 2000; ++g)
+        {
+            uint32_t const r = StableRoll(g);
+            low  = std::min(low, r);
+            high = std::max(high, r);
+            firstTen += r <= 10 ? 1 : 0;
+        }
+        Eq("lowest roll", low, 1);
+        Eq("highest roll", high, 100);
+        Eq("about a tenth in 1..10", firstTen > 140 && firstTen < 260, 1);
+        Is("key: trimmed, lower case", TemperamentKey("  Clown "), "clown");
+    }
 
     std::printf("%d/%d passed\n", g_checks - g_fails, g_checks);
     return g_fails ? 1 : 0;

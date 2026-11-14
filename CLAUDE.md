@@ -38,8 +38,10 @@ These hooks are the exception, and they touch nothing of the world:
   the world tick answers it.
 - `PbpDungeonsTeleportScript::OnPlayerBeforeTeleport` runs on whatever
   thread teleports the player. It reads only the list of run members and
-  their dungeon (`g_keepIn`) that the world tick publishes under a mutex, and
-  turns down a living member's teleport off that map.
+  their dungeon (`g_keepIn`), and of bots walking for a dungeon quest and
+  where to (`g_walkTo`, `PbpDungeonQuests_MayTeleport`), that the world tick
+  publishes under a mutex, and turns down a living member's teleport off
+  that map, and a walker's anywhere but where it is walking.
 - `PbpLedgerPlayerScript`'s hooks (money, loot, quest rewards, crafting,
   vendor buys, gear put on, consumables used) run on map threads, and the
   ledger's auction notes may come from any thread. They read the session's
@@ -95,21 +97,34 @@ open spot -- until fewer are there or `Hangout.FullMinutes` pass. Use
 
 What the crowd does while it hangs out (`PlayerbotsPlus.CityLife.*`) is part
 of a visit in `PlayerbotsPlusHangout.cpp`, not a module of its own: a step, a
-hop, an errand, fishing, a look at a rare mount, a dance or walking over to
-talk is the visit's `Act` (or its `Errand` and `Flying` phases), started only
-when it is `FreeForLife` and near a real player, and undone by `EndAct` and
-`Let` -- the dance state off, its own weapons back in its hands. Moving it
-goes through `Shift` (its AI stays held); a walk across the city (an errand,
-a flight) frees the AI and uses playerbots' own `go camp` and
-`ChangeToTravelFlight`. The sums with no game in them are
-`PlayerbotsPlusCityLifeText` (tested).
+hop, a run about, a bout of showing off, an errand, fishing, a look at a rare
+mount, a dance or walking over to talk is the visit's `Act` (or its `Errand`
+and `Flying` phases), started only when it is `FreeForLife` and near a real
+player, and undone by `EndAct` and `Let` -- the dance state off, its own
+weapons back in its hands. Moving it goes through `Shift` (its AI stays
+held); a walk across the city (an errand, a flight) frees the AI and uses
+playerbots' own `go camp` and `ChangeToTravelFlight`. The sums with no game
+in them are `PlayerbotsPlusCityLifeText` (tested).
+
+How lively a bot is there is its temperament (`CityLife.Temperament.<Name>`,
+`PbpCityLife::Temperament`, parsed in the pure file): settled once a visit
+(`EnsureTemperament`), from what a chat module says of it
+(`SetTemperamentProvider`) or else `TemperamentShares` by its guid
+(`StableRoll`: the same bot always the same kind). Its temper, its posture
+on arriving, whether it goes AFK and every chance a fidget rolls are read
+from the visit's temperament, never from the settings directly: the default
+temperament is those settings.
 
 The chat module tells it what it cannot see (`CityBusy`, `CitySpoke`,
 `CityGather`, API 5), and voices `BotEventType::CityMountShown` and
-`CityDance`. Those calls can come from inside a raised event (a dance emote
-played while the hangouts raise `CityDance`), so they only ever change a
-visit's fields, never add or remove one: a loop over `g_visits` may be under
-way.
+`CityDance`. From API 6 it says which temperament a bot is
+(`SetTemperamentProvider`, asked when a bot gets to a spot), voices
+`CityShowOff` (someone near telling the show-off to stop), and once that
+line is out calls `CityCalmDown`: the bout ends, now and then with one last
+go, and no other for twice `ShowOffMinutes`. Those calls can come from
+inside a raised event (a dance emote played while the hangouts raise
+`CityDance`), so they only ever change a visit's fields, never add or remove
+one: a loop over `g_visits` may be under way.
 
 ## Auctions and mail copy the game's own handlers
 
@@ -197,7 +212,11 @@ otherwise. This module must still build and run without it; check both ways.
   takes the members off the list (`LetOut`) before it sends them out.
 - Walks for quests use playerbots' own "go camp" (`rpgInfo.ChangeToGoCamp`),
   as hangouts do: hangouts leave a bot on its way to a camp alone, and these
-  leave a hanging-out one alone (`PbpHangout_Has`).
+  leave a hanging-out one alone (`PbpHangout_Has`). A hangout never fetches
+  a walker (`Wanted`: `PbpDungeonQuests_Walking`), and a walker is not
+  teleported anywhere but to where it walks (`PbpDungeonQuests_MayTeleport`):
+  playerbots' level-up teleport took walkers to another continent. Why a
+  walk was given up is counted (too slow, kept busy, taken off elsewhere).
 - With nobody free to heal, one who does the damage heals instead
   (`HealerStepIn`, picked in the pure `PickParty`). From the core's
   `MinDualSpecLevel` it heals on its second spec: dual spec learned as a
@@ -246,7 +265,17 @@ more suggested players). Built without mod-dungeon-clear too.
   disbands it): look the group up afresh after every removal.
 - A party member being taken away by playerbots' level-up teleport (the
   leader: `AutoTeleportForLevel` moves a grouped bot that leads) is turned
-  down (`PbpGroupQuestsTeleportScript`, on a list the world tick publishes).
+  down (`PbpGroupQuestsTeleportScript`, on a list the world tick publishes),
+  and so is a bot walking to take or hand in a group quest. A teleport to
+  within 80 yards of one of their own places (the quest's area and lairs,
+  the leader they are meeting, the giver walked to) goes: that is
+  playerbots' `MoveFarTo` giving up on a walk ("go camp") and putting the
+  bot where it was going. Turned down, it left a leader on a ledge 900
+  yards from the lair for every try it had.
+- Walked there by this module, the leader is stripped of grind and rpg
+  (`StripLeader`), but not "new rpg", which walks it: on the way it went
+  after every mob it passed. Playerbots' own questing (nothing known of
+  where they stand) gets them back.
 - Both quest log keepers keep both kinds of quest (`PbpGroupQuests_IsOne`,
   `PbpDungeonQuests_IsOne`): one dropping the other's to make room would
   undo it. Bot dungeons, dungeon-quest walks and hangouts leave a bot in a

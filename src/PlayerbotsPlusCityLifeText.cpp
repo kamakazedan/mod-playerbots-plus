@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusCityLifeText.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 
 namespace PbpCityLife
@@ -62,5 +63,132 @@ namespace PbpCityLife
         roll = std::clamp(roll, 0.0, 1.0);
         uint32_t const span = hi - lo;
         return lo + std::min<uint32_t>(span, uint32_t(std::floor(roll * double(span + 1))));
+    }
+
+    namespace
+    {
+        std::string Trim(std::string const& s)
+        {
+            size_t const a = s.find_first_not_of(" \t\r\n");
+            if (a == std::string::npos)
+                return {};
+            size_t const b = s.find_last_not_of(" \t\r\n");
+            return s.substr(a, b - a + 1);
+        }
+
+        std::vector<std::string> Parts(std::string const& text)
+        {
+            std::vector<std::string> out;
+            size_t from = 0;
+            while (from <= text.size())
+            {
+                size_t const bar = text.find('|', from);
+                std::string const part = Trim(text.substr(from, bar == std::string::npos ? std::string::npos
+                                                                                         : bar - from));
+                if (!part.empty())
+                    out.push_back(part);
+                if (bar == std::string::npos)
+                    break;
+                from = bar + 1;
+            }
+            return out;
+        }
+
+        // "key:number" with a number 0 to 100.
+        bool KeyNumber(std::string const& part, std::string& key, uint32_t& value)
+        {
+            size_t const colon = part.find(':');
+            if (colon == std::string::npos)
+                return false;
+            key = TemperamentKey(part.substr(0, colon));
+            std::string const digits = Trim(part.substr(colon + 1));
+            if (key.empty() || digits.empty() || digits.size() > 3 ||
+                !std::all_of(digits.begin(), digits.end(), [](char c) { return c >= '0' && c <= '9'; }))
+                return false;
+            value = uint32_t(std::stoul(digits));
+            return value <= 100;
+        }
+
+        void Note(std::string& bad, std::string const& part)
+        {
+            bad += (bad.empty() ? "" : ", ") + part;
+        }
+    }
+
+    std::string TemperamentKey(std::string const& name)
+    {
+        std::string out = Trim(name);
+        for (char& c : out)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        return out;
+    }
+
+    Temperament ParseTemperament(std::string const& text, Temperament base, std::string& bad)
+    {
+        for (std::string const& part : Parts(text))
+        {
+            std::string key;
+            uint32_t value = 0;
+            if (!KeyNumber(part, key, value))
+            {
+                Note(bad, part);
+                continue;
+            }
+            uint32_t* field = key == "parked"   ? &base.parked
+                            : key == "restless" ? &base.restless
+                            : key == "jump"     ? &base.jump
+                            : key == "rear"     ? &base.rear
+                            : key == "wander"   ? &base.wander
+                            : key == "showoff"  ? &base.showOff
+                            : key == "bench"    ? &base.bench
+                            : key == "mounted"  ? &base.mounted
+                            : key == "sit"      ? &base.sit
+                            : key == "afk"      ? &base.afk
+                                                : nullptr;
+            if (!field)
+            {
+                Note(bad, part);
+                continue;
+            }
+            *field = value;
+        }
+        return base;
+    }
+
+    std::vector<std::pair<std::string, uint32_t>> ParseShares(std::string const& text, std::string& bad)
+    {
+        std::vector<std::pair<std::string, uint32_t>> out;
+        for (std::string const& part : Parts(text))
+        {
+            std::string key;
+            uint32_t value = 0;
+            if (KeyNumber(part, key, value))
+                out.emplace_back(key, value);
+            else
+                Note(bad, part);
+        }
+        return out;
+    }
+
+    std::string PickTemperament(uint32_t roll, std::vector<std::pair<std::string, uint32_t>> const& shares)
+    {
+        uint32_t upTo = 0;
+        for (auto const& [name, share] : shares)
+        {
+            upTo += share;
+            if (roll <= upTo)
+                return name;
+        }
+        return {};
+    }
+
+    uint32_t StableRoll(uint64_t guid)
+    {
+        // splitmix64's finish: next-door guids land far apart.
+        uint64_t z = guid + 0x9E3779B97F4A7C15ull;
+        z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+        z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+        z ^= z >> 31;
+        return uint32_t(z % 100) + 1;
     }
 }

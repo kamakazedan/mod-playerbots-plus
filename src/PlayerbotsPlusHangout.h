@@ -4,6 +4,7 @@
 #include "PlayerbotsPlusReport.h"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -139,6 +140,15 @@ void PbpHangout_Busy(Player* bot, uint32_t seconds);
 void PbpHangout_Spoke(Player* speaker);
 void PbpHangout_Gather(std::vector<Player*> const& bots, uint32_t seconds);
 
+// Which temperament a bot is (PlayerbotsPlus::SetTemperamentProvider): asked
+// once a visit, when it gets to a spot. Empty: none (TemperamentShares).
+void PbpHangout_SetTemperamentProvider(std::function<std::string(Player*)> provider);
+
+// Showing off (PlayerbotsPlus::CityCalmDown): someone told it to stop, so it
+// does -- now and then with one last go, for cheek -- and does not start
+// again for a good while.
+void PbpHangout_CalmDown(Player* bot);
+
 // A real player's mount reared up (they pressed jump standing still on it):
 // some of the mounted ones hanging out near them may do it back. Called from
 // the packet hook (PbpRearScript), on whatever thread handles the packet: it
@@ -194,6 +204,9 @@ struct PbpHangoutStats
     uint64_t hops      = 0;   // little bouts of hopping
     uint64_t rears     = 0;   // ...on a mount: of rearing up or roaring
     uint64_t rearedBack = 0;  // did it back to someone near who reared
+    uint64_t wanders   = 0;   // ran off about the place, and back
+    uint64_t showOffs  = 0;   // bouts of showing off: a mount reared over and over (on foot, hopping about)
+    uint64_t calmedDown = 0;  // ...told to stop, and stopped
     uint64_t gawks     = 0;   // rare mounts looked at
     uint64_t gawkers   = 0;   // ...by this many, all told
     uint64_t dances    = 0;   // dance parties started
@@ -202,7 +215,11 @@ struct PbpHangoutStats
     uint64_t errands   = 0;   // off to a banker, an auctioneer or a mailbox
     uint64_t errandsDone = 0; // ...and got there
     uint64_t flewIn    = 0;   // fetched by flight path
-    uint64_t landed    = 0;   // ...and landed in the city
+    uint64_t landed    = 0;   // ...and landed in the city; or not:
+    uint64_t flyLate   = 0;   // ...still not there after a quarter of an hour
+    uint64_t flyWanted = 0;   // ...wanted for something else before it took off (a fight, mostly)
+    uint64_t flyNever  = 0;   // ...never took off (playerbots gave its flight up)
+    uint64_t flyElsewhere = 0;  // ...came down somewhere else
     uint64_t flewOut   = 0;   // left by flight path
     uint64_t fished    = 0;   // went fishing at the water's edge
     uint64_t casts     = 0;   // ...lines cast

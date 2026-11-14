@@ -2,6 +2,7 @@
 #include "PlayerbotsPlus.h"
 #include "PlayerbotsPlusCityLifeText.h"
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusDungeonQuests.h"
 #include "PlayerbotsPlusFire.h"
 #include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusSpace.h"
@@ -53,6 +54,7 @@
 #include <chrono>
 #include <cmath>
 #include <deque>
+#include <functional>
 #include <list>
 #include <mutex>
 #include <random>
@@ -115,7 +117,9 @@ namespace
         Gawking,    // over looking at someone's rare mount
         Dancing,    // dancing, in a dance party or with someone dancing (or about to join one)
         Chatting,   // over by who it is talking to in /say (a chat module's)
-        Fishing     // at the water's edge with a line out
+        Fishing,    // at the water's edge with a line out
+        Wandering,  // run off somewhere near (a leg or three), and back after
+        ShowingOff  // its mount rearing up and roaring over and over (on foot: hopping about), for a minute
     };
 
     struct Visit
@@ -186,9 +190,21 @@ namespace
         Clock::time_point rearAt{};              // someone near reared their mount: it does it back then
         ObjectGuid        rearTo;                // ...at them
         Clock::time_point rearedAt{};            // its own mount last reared
+        PbpCityLife::Temperament temperament;    // how it spends its time here (CityLife.Temperament.*)
+        std::string       temperamentName;       // ...which one, "" for the default
+        bool              temperamentSet = false;
+        uint32_t          wanderLegs  = 0;       // Wandering: runs still to go after this one
+        Clock::time_point nextShowOff{};         // one that shows off: its next chance to
+        Clock::time_point showOffSince{};        // ShowingOff: since when
+        Clock::time_point showOffTellAt{};       // ...a chat module told of it then (CityShowOff)
+        uint32_t          showOffCount = 0;      // ...rears or hops so far
+        bool              showOffRaised = false;
     };
 
     std::unordered_map<uint64_t, Visit>             g_visits;     // by bot guid
+    // Which temperament a bot is (a chat module's say, by its personality):
+    // PlayerbotsPlus::SetTemperamentProvider. Unset: CityLife.TemperamentShares.
+    std::function<std::string(Player*)>             g_temperamentProvider;
     std::unordered_map<uint64_t, Clock::time_point> g_cooldown;   // bot -> may hang out again from
     PbpHangoutStats                                    g_stats;
 
@@ -669,6 +685,10 @@ namespace
     {
         if (v.act == Act::Fishing)
             return "fishing at the water's edge";
+        if (v.act == Act::ShowingOff)
+            return bot->IsMounted() ? "making your mount rear up and roar, over and over" : "hopping about";
+        if (v.act == Act::Wandering)
+            return "wandering about";
         if (v.act == Act::Dancing && v.danceJoined)
             return "dancing";
         switch (v.posture)
@@ -698,13 +718,14 @@ namespace
 
     // Something wants the bot's own AI right now: an invite to answer (a
     // group, a guild, an arena team), a trade, a duel, a queue, a fight, a
-    // party it is getting together for a group quest. A held AI would see
-    // none of it.
+    // party it is getting together for a group quest, a walk to take or hand
+    // in a dungeon quest (fetched from one, the walk was lost). A held AI
+    // would see none of it.
     bool Wanted(Player* bot)
     {
         return !bot->IsAlive() || bot->IsInCombat() || bot->GetGroup() || bot->GetGroupInvite() ||
                bot->GetTradeData() || bot->duel || bot->GetGuildIdInvited() || bot->GetArenaTeamIdInvited() ||
-               Queued(bot) || PbpGroupQuests_Busy(bot);
+               Queued(bot) || PbpGroupQuests_Busy(bot) || PbpDungeonQuests_Walking(bot);
     }
 
     // Done with it: whatever this changed goes back, and its AI runs again
@@ -1282,12 +1303,40 @@ namespace
     // Here (or in the city, for one fetched while nobody is about). It rests
     // for as long as it hangs out, its own AI held from now on, and how it
     // spends it is settled where it can see the place.
+    // Its temperament, once a visit: what a chat module says of it (by its
+    // personality), else CityLife.TemperamentShares by its guid (the same
+    // every visit), else the default -- the CityLife.* and Hangout.*
+    // settings themselves. City life off: the default.
+    void EnsureTemperament(Player* bot, Visit& v)
+    {
+        if (v.temperamentSet)
+            return;
+        v.temperamentSet = true;
+        v.temperament    = g_LifeDefaultTemperament;
+        v.temperamentName.clear();
+        if (!g_LifeEnable)
+            return;
+        std::string name;
+        if (g_temperamentProvider)
+            name = PbpCityLife::TemperamentKey(g_temperamentProvider(bot));
+        if (name.empty())
+            name = PbpCityLife::PickTemperament(PbpCityLife::StableRoll(bot->GetGUID().GetRawValue()),
+                                                g_LifeTemperamentShares);
+        auto it = name.empty() ? g_LifeTemperaments.end() : g_LifeTemperaments.find(name);
+        if (it == g_LifeTemperaments.end())
+            return;
+        v.temperament     = it->second;
+        v.temperamentName = it->first;
+    }
+
     void Arrived(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
         ai->rpgInfo.ChangeToRest();
         ai->SetNextCheckDelay(kHoldMs);
+        EnsureTemperament(bot, v);
+        PbpCityLife::Temperament const& t = v.temperament;
         // Come out to fight someone: on its feet, at the keyboard, ready.
-        GameObject* bench = !v.forDuel && Roll(g_HangoutBenchChance) ? FindBench(bot, v) : nullptr;
+        GameObject* bench = !v.forDuel && Roll(t.bench) ? FindBench(bot, v) : nullptr;
         if (bench)
         {
             v.posture = Posture::Bench;
@@ -1296,13 +1345,13 @@ namespace
             v.by      = bench->GetPositionY();
             v.bz      = bench->GetPositionZ();
         }
-        else if (!v.forDuel && CanRide(bot, ai, v) && Roll(g_HangoutMountedChance))
+        else if (!v.forDuel && CanRide(bot, ai, v) && Roll(t.mounted))
             v.posture = Posture::Mounted;
-        else if (!v.forDuel && Roll(g_HangoutSitChance))
+        else if (!v.forDuel && Roll(t.sit))
             v.posture = Posture::Sit;
         else
             v.posture = Posture::Stand;
-        v.wantsAfk      = !v.forDuel && Roll(g_HangoutAfkChance);
+        v.wantsAfk      = !v.forDuel && Roll(t.afk);
         v.phase         = Phase::Approach;
         v.approachStart = now;
         if (v.posture == Posture::Bench)
@@ -1361,8 +1410,9 @@ namespace
         v.until = now + std::chrono::seconds(std::uniform_int_distribution<uint32_t>(lo, hi)(Rng()));
         ++g_stats.settled;
         if (g_PbpDebug)
-            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} hangs out at {}, {}{}.", bot->GetName(), v.spotName,
-                     DoingAt(v, bot), v.wantsAfk ? ", going AFK" : "");
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} hangs out at {}, {}{}{}.", bot->GetName(),
+                     v.spotName, DoingAt(v, bot), v.wantsAfk ? ", going AFK" : "",
+                     v.temperamentName.empty() ? std::string() : " (" + v.temperamentName + ")");
     }
 
     void StartDuel(Player* bot, PlayerbotAI* ai, Visit& v);
@@ -2191,10 +2241,14 @@ namespace
     // there. False: it never went, or went somewhere else.
     bool Fly(Player* bot, PlayerbotAI* ai, Visit& v, const PbpHangoutSpot& s, const Clock::time_point now)
     {
-        if (now - v.started > std::chrono::minutes(10) || (!bot->IsInFlight() && Wanted(bot)))
+        // A walk to its flight master and a flight across a continent can
+        // take a quarter of an hour.
+        const bool late = now - v.started > std::chrono::minutes(15);
+        if (late || (!bot->IsInFlight() && Wanted(bot)))
         {
             ++g_stats.gaveUp;
             ++g_stats.lostLanding;
+            ++(late ? g_stats.flyLate : g_stats.flyWanted);
             Let(bot, ai, v, false, now);
             return false;
         }
@@ -2210,6 +2264,7 @@ namespace
         {
             ++g_stats.gaveUp;   // never took off, or came down somewhere else
             ++g_stats.lostLanding;
+            ++(v.flewAt == Clock::time_point{} ? g_stats.flyNever : g_stats.flyElsewhere);
             Let(bot, ai, v, false, now);
             return false;
         }
@@ -2309,10 +2364,15 @@ namespace
         if (!v.lifeSet)
         {
             v.lifeSet = true;
+            EnsureTemperament(bot, v);
             v.temper  = PbpCityLife::PickTemper(std::uniform_int_distribution<uint32_t>(1, 100)(Rng()),
-                                                g_LifeParkedShare, g_LifeRestlessShare);
+                                                v.temperament.parked, v.temperament.restless);
             ScheduleFidget(v, now);
             v.nextTurn = now + Secs(g_LifeTurnMinSeconds, g_LifeTurnMaxSeconds);
+            // One that shows off: a chance at it every ShowOffMinutes or so,
+            // the first some way into its visit.
+            if (v.temperament.showOff)
+                v.nextShowOff = now + Secs(g_LifeShowOffMinutes * 20, g_LifeShowOffMinutes * 60);
         }
         Unit* with = v.actWith ? ObjectAccessor::GetUnit(*bot, v.actWith) : nullptr;
         switch (v.act)
@@ -2350,6 +2410,11 @@ namespace
                 bot->SetFacingTo(v.fishO);
                 v.nextCast = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(800, 2500)(Rng()));
                 v.castFails = 0;
+                break;
+            case Act::Wandering:
+                // Got there: a look round, a moment, then on or back.
+                bot->SetFacingTo(Frand(0.0f, kTwoPi));
+                v.actUntil = now + Secs(3, 10);
                 break;
             default:
                 break;
@@ -2529,8 +2594,59 @@ namespace
         return false;
     }
 
+    // ---- running about ---------------------------------------------------------------
+
+    // Somewhere to run to from where it is: 8 yards to WanderRange off, and
+    // no further than that from its own place; on that floor, in sight, with
+    // a way there (PlaceNear).
+    bool WanderPoint(Player* bot, const Visit& v, float& x, float& y, float& z)
+    {
+        const float homeX = v.away ? v.hx : v.x, homeY = v.away ? v.hy : v.y;
+        for (int tries = 0; tries < 2; ++tries)
+            if (PlaceNear(bot, v, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 8.0f,
+                          std::max(9.0f, g_LifeWanderRange), Frand(0.0f, kTwoPi), kTwoPi, false, x, y, z) &&
+                std::hypot(x - homeX, y - homeY) <= g_LifeWanderRange)
+                return true;
+        return false;
+    }
+
+    // Off at a run somewhere near -- a leg or three, a moment at each -- and
+    // back to its own place after (EndAct).
+    bool StartWander(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        if (!WanderPoint(bot, v, x, y, z))
+            return false;
+        LeavePlace(v);
+        v.act        = Act::Wandering;
+        v.wanderLegs = std::uniform_int_distribution<uint32_t>(0, 2)(Rng());
+        v.actUntil   = now + std::chrono::minutes(2);   // till it gets there (LifeSettle)
+        Shift(bot, ai, v, x, y, z, Roll(g_LifeWalkChance / 2), now);
+        ++g_stats.wanders;
+        return true;
+    }
+
+    // There, and its moment up: the next leg, or back to its place.
+    void WanderTick(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (now < v.actUntil || now < v.busyUntil || bot->isMoving())
+            return;
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        if (v.wanderLegs && !bot->IsInCombat() && WanderPoint(bot, v, x, y, z))
+        {
+            --v.wanderLegs;
+            v.actUntil = now + std::chrono::minutes(2);
+            Shift(bot, ai, v, x, y, z, Roll(g_LifeWalkChance / 2), now);
+            return;
+        }
+        EndAct(bot, ai, v, now);
+    }
+
+    bool StartShowOff(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now);
+
     // Now and then, near a real player: a look round, a step, a hop or
-    // three, an errand, a go at fishing.
+    // three, a run about, an errand, a go at fishing -- and for one that
+    // shows off, now and then a minute of it.
     void Fidget(Player* bot, PlayerbotAI* ai, Visit& v, const PbpHangoutSpot& s, const Clock::time_point now)
     {
         if (v.hops)
@@ -2561,6 +2677,13 @@ namespace
             if (!bot->isMoving() && v.posture != Posture::Bench)
                 LookRound(bot);
         }
+        // One that shows off (its temperament's ShowOff): its chance at it.
+        if (v.nextShowOff != Clock::time_point{} && now >= v.nextShowOff)
+        {
+            v.nextShowOff = now + Secs(g_LifeShowOffMinutes * 30, g_LifeShowOffMinutes * 90);
+            if (FreeForLife(bot, v, now) && Roll(v.temperament.showOff) && StartShowOff(bot, ai, v, now))
+                return;
+        }
         if (now < v.nextFidget)
             return;
         ScheduleFidget(v, now);
@@ -2578,15 +2701,20 @@ namespace
         if (roll > g_LifeErrandChance && roll <= g_LifeErrandChance + g_LifeFishChance &&
             StartFishing(bot, ai, v, s, now))
             return;
-        // A hop or three on foot; on a mount, a rear or three.
+        // A hop or three on foot; on a mount, a rear or three; else a run
+        // about, or a step -- as its temperament has it.
         const bool mounted = bot->IsMounted();
-        if (Roll(mounted ? g_LifeRearChance : g_LifeJumpChance))
+        const uint32_t hop  = mounted ? v.temperament.rear : v.temperament.jump;
+        const uint32_t pick = std::uniform_int_distribution<uint32_t>(1, 100)(Rng());
+        if (pick <= hop)
         {
             v.hops    = std::uniform_int_distribution<uint32_t>(1, 3)(Rng());
             v.nextHop = now;
             ++(mounted ? g_stats.rears : g_stats.hops);
             return;
         }
+        if (pick <= hop + v.temperament.wander && StartWander(bot, ai, v, now))
+            return;
         float x = 0.0f, y = 0.0f, z = 0.0f;
         if (PlaceNear(bot, v, v.x, v.y, v.z, g_LifeStepMin, g_LifeStepMax, Frand(0.0f, kTwoPi), kTwoPi, true, x, y, z))
         {
@@ -2632,6 +2760,90 @@ namespace
     {
         Unit::AuraEffectList const& mounts = who->GetAuraEffectsByType(SPELL_AURA_MOUNTED);
         return mounts.empty() ? 0 : mounts.front()->GetId();
+    }
+
+    // The mount it is on, as the game names it ("Swift Brown Wolf"); empty on foot.
+    std::string MountName(Unit* who)
+    {
+        SpellInfo const* info = sSpellMgr->GetSpellInfo(MountOf(who));
+        if (!info)
+            return {};
+        char const* name = info->SpellName[sWorld->GetDefaultDbcLocale()];
+        if (!name || !*name)
+            name = info->SpellName[LOCALE_enUS];
+        return name ? name : std::string();
+    }
+
+    // ---- showing off ---------------------------------------------------------------------
+
+    // A minute or so of its mount rearing up and roaring, over and over, the
+    // way some people do while they wait -- up on its mount first, on foot
+    // where it can ride; where it cannot, hopping about instead.
+    bool StartShowOff(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (!bot->IsMounted() && v.posture == Posture::Stand && CanRide(bot, ai, v))
+        {
+            v.posture = Posture::Mounted;
+            ai->DoSpecificAction("check mount state", Event(), true);
+        }
+        v.act           = Act::ShowingOff;
+        v.actUntil      = now + Secs(g_LifeShowOffMinSeconds, g_LifeShowOffMaxSeconds);
+        v.showOffSince  = now;
+        v.showOffTellAt = now + Secs(10, 20);
+        v.showOffCount  = 0;
+        v.showOffRaised = false;
+        v.nextHop       = now + std::chrono::milliseconds(1200);
+        ++g_stats.showOffs;
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} starts showing off at {}.", bot->GetName(),
+                     v.spotName);
+        return true;
+    }
+
+    // Again and again, a couple of seconds apart, till its time is up or
+    // someone has had enough of it (PbpHangout_CalmDown). A while into it,
+    // near a real player, a chat module hears of it (CityShowOff).
+    void ShowOffTick(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (now >= v.actUntil || bot->IsInCombat() || !bot->IsAlive())
+        {
+            EndAct(bot, ai, v, now);
+            return;
+        }
+        if (now < v.nextHop || now < v.busyUntil || bot->isMoving())
+            return;
+        const bool mounted = bot->IsMounted();
+        if (mounted)
+        {
+            if (Rear(bot))
+            {
+                if (!v.showOffCount && now - v.rearedAt > std::chrono::seconds(10))
+                    NoteRear(bot->GetGUID());   // the first: those near may do it back
+                v.rearedAt = now;
+                ++v.showOffCount;
+            }
+            v.nextHop = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(1700, 3000)(Rng()));
+        }
+        else if (now - v.showOffSince > std::chrono::seconds(4))
+        {
+            Hop(bot);   // its mount never came (or it has none): hopping about
+            ++v.showOffCount;
+            v.nextHop = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(900, 1600)(Rng()));
+        }
+        else
+            return;   // getting up on its mount
+        if (!v.showOffRaised && now >= v.showOffTellAt && v.showOffCount >= 3 && NearWatcher(bot, g_LifeRange))
+        {
+            v.showOffRaised = true;
+            PlayerbotsPlus::BotEvent e;
+            e.type = PlayerbotsPlus::BotEventType::CityShowOff;
+            e.bot  = bot->GetGUID();
+            e.what = mounted ? MountName(bot) : std::string();
+            e.verb = mounted ? "rear" : "hop";
+            e.have = v.showOffCount;
+            e.zone = PbpZoneName(bot);
+            PbpRaiseBotEvent(e);
+        }
     }
 
     // A few of those hanging out near `rider` come over to look at its rare mount.
@@ -2973,6 +3185,12 @@ namespace
                     continue;
                 case Act::Fishing:
                     FishTick(bot, ai, v, now);
+                    continue;
+                case Act::Wandering:
+                    WanderTick(bot, ai, v, now);
+                    continue;
+                case Act::ShowingOff:
+                    ShowOffTick(bot, ai, v, now);
                     continue;
                 default:
                     break;
@@ -3438,11 +3656,11 @@ PbpBrief PbpHangout_Brief(bool full)
                                       h.foundFull));
     }
     if (on && g_LifeEnable)
-        b.lines.push_back(fmt::format("City life: on -- {} steps, {} hops, {} mounts reared ({} done back), {} rare "
-                                      "mounts looked at, {} dance parties, {} errands, {} flew in, {} flew out, {} "
-                                      "went fishing.",
-                                      h.steps, h.hops, h.rears, h.rearedBack, h.gawks, h.dances, h.errands, h.flewIn,
-                                      h.flewOut, h.fished));
+        b.lines.push_back(fmt::format("City life: on -- {} steps, {} hops, {} mounts reared ({} done back), {} runs "
+                                      "about, {} show-offs ({} told to stop), {} rare mounts looked at, {} dance "
+                                      "parties, {} errands, {} flew in, {} flew out, {} went fishing.",
+                                      h.steps, h.hops, h.rears, h.rearedBack, h.wanders, h.showOffs, h.calmedDown,
+                                      h.gawks, h.dances, h.errands, h.flewIn, h.flewOut, h.fished));
     else
         b.lines.push_back("City life: off.");
     if (!on)
@@ -3462,7 +3680,9 @@ PbpBrief PbpHangout_Brief(bool full)
         const Looks& l = it->second;
         if (l.said && !l.found)
             nobody.push_back(s.key);
-        else if (l.Looked() >= 500 && l.found * 50 < l.Looked() && there[s.key] < RoomAt(s))
+        // A spot at least half full holds people: its turn-downs are the
+        // crowd and the edge of its floor, not a badly placed middle.
+        else if (l.Looked() >= 500 && l.found * 50 < l.Looked() && there[s.key] * 2 < RoomAt(s))
             hard.push_back(fmt::format("{} ({} of {} looks, mostly {})", s.key, l.found, l.Looked(), MostlyWhy(l)));
     }
     if (!nobody.empty())
@@ -3495,6 +3715,35 @@ void PbpHangout_At(const std::string& spotKey, std::vector<Player*>& settled, ui
         else
             settled.push_back(bot);
     }
+}
+
+void PbpHangout_SetTemperamentProvider(std::function<std::string(Player*)> provider)
+{
+    g_temperamentProvider = std::move(provider);
+}
+
+void PbpHangout_CalmDown(Player* bot)
+{
+    if (!bot || g_visits.empty())
+        return;
+    auto it = g_visits.find(bot->GetGUID().GetRawValue());
+    if (it == g_visits.end() || it->second.act != Act::ShowingOff)
+        return;
+    Visit& v = it->second;
+    const auto now = Clock::now();
+    EndAct(bot, AiOf(bot), v, now);
+    ++g_stats.calmedDown;
+    // Told off: not again for a good while -- and now and then one last go,
+    // for cheek, once it has had its laugh.
+    v.nextShowOff = now + std::chrono::minutes(g_LifeShowOffMinutes * 2);
+    if (std::uniform_int_distribution<uint32_t>(1, 100)(Rng()) <= g_LifeShowOffLastChance)
+    {
+        v.hops    = 1;
+        v.nextHop = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(3500, 6000)(Rng()));
+    }
+    if (g_PbpDebug)
+        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} was told to stop showing off, and does.",
+                 bot->GetName());
 }
 
 void PbpHangout_NoteRear(Player* player)
