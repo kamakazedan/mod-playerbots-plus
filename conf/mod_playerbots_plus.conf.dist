@@ -1044,7 +1044,8 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 #       every RestlessMinSeconds to RestlessMaxSeconds), and the rest shuffle
 #       about every ShuffleMinSeconds to ShuffleMaxSeconds. Each time, it
 #       may go on an errand (ErrandChance) or fishing (FishChance), or hop
-#       about (JumpChance), or else take a step or two within its spot
+#       about (JumpChance; on a mount, rear: RearChance), or else take a
+#       step or two within its spot
 #       (StepMin to StepMax yards, walking WalkChance of the time). Nobody
 #       moves while it is talking or emoting (mod-ollama-chat says when),
 #       sat down, AFK, or about something else.
@@ -1055,7 +1056,14 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 #       there that is not busy looks round at them HeadTurnChance of the
 #       time, a moment later.
 #     * Hopping (JumpChance): one to three hops on the spot, a second or so
-#       apart, a player's jump high -- on foot or mounted.
+#       apart, a player's jump high.
+#     * Rearing (RearChance): on a mount, jumping standing still is the
+#       mount rearing up or roaring instead -- once, or a few times a
+#       couple of seconds apart, the way people do. Someone near rearing
+#       theirs, a real player or not, now and then gets one or two of the
+#       mounted ones within 20 yards doing it back a moment later, turned
+#       to them (RearBackChance) -- not more than every six seconds for
+#       one rider, and one doing it back is not done back to.
 #     * Rare mounts (Gawk): someone near a real player in a city gets on a
 #       mount that GawkRareOwners or fewer of everyone online have learned
 #       (counted every ten minutes; the rider counts). GawkMin to GawkMax of
@@ -1159,10 +1167,20 @@ PlayerbotsPlus.CityLife.TurnMaxSeconds = 60
 PlayerbotsPlus.CityLife.HeadTurnChance = 60
 
 #    PlayerbotsPlus.CityLife.JumpChance
-#        The percent of a shuffler's or a restless one's moves that are a few
-#        hops on the spot. 0: nobody hops.
+#        The percent of a shuffler's or a restless one's moves on foot that
+#        are a few hops on the spot. 0: nobody hops.
 #        Default: 12
 PlayerbotsPlus.CityLife.JumpChance = 12
+
+#    PlayerbotsPlus.CityLife.RearChance
+#    PlayerbotsPlus.CityLife.RearBackChance
+#        Rearing (see above): the percent of a shuffler's or a restless one's
+#        moves on a mount that are its mount rearing up or roaring, once or a
+#        few times; and the percent of times each mounted one near someone
+#        who rears theirs does it back (at most two). 0: never.
+#        Default: 15, 30
+PlayerbotsPlus.CityLife.RearChance = 15
+PlayerbotsPlus.CityLife.RearBackChance = 30
 
 #    PlayerbotsPlus.CityLife.Gawk
 #    PlayerbotsPlus.CityLife.GawkRareOwners

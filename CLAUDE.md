@@ -26,6 +26,10 @@ These hooks are the exception, and they touch nothing of the world:
 - `PbpFireScript::OnDamage` runs on map threads. It only notes who was burned
   by damage nobody dealt (a trap of the world's own) under a mutex; the world
   tick finds the fire and walks the bot out of it.
+- `PbpRearScript::CanPacketReceive` sees every packet anyone sends, on
+  whatever thread handles it. It looks at the opcode only, and for a mount
+  reared (`CMSG_MOUNTSPECIAL_ANIM`, which the world thread handles) notes who
+  under a mutex; city life's tick has those near do it back.
 - `PbpMuteScript::CanPacketSend` runs on whatever thread sends the packet. It
   reads only a snapshot (patterns and bot guids) published from the world
   thread, and `PlayerbotsPlus::OwnLine` is a thread-local counter.

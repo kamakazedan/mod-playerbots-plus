@@ -163,6 +163,9 @@ real player, since nobody else would see it:
   sat down or AFK.
 - **Looking round:** now and then, at someone stood close by. When someone
   says something in /say nearby, most of those about look round at them.
+- **Rearing:** those on a mount make it rear up or roar now and then, what
+  jumping standing still on a mount does. Do it on yours near them and one or
+  two may do it back.
 - **Rare mounts:** when someone gets on a mount that hardly anyone online has
   (counted from what everyone has learned), two to four of those nearby wander
   over and stand round them for a look, pointing, clapping or cheering, then

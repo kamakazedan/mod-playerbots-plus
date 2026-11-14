@@ -192,7 +192,9 @@ namespace pbp
     extern uint32_t    g_LifeTurnMinSeconds;     // between one look round and the next
     extern uint32_t    g_LifeTurnMaxSeconds;
     extern uint32_t    g_LifeHeadTurnChance;     // someone speaks in /say: each near enough turns to them (percent)
-    extern uint32_t    g_LifeJumpChance;         // a fidget that is a hop or three (percent)
+    extern uint32_t    g_LifeJumpChance;         // a fidget that is a hop or three, on foot (percent)
+    extern uint32_t    g_LifeRearChance;         // ...on a mount: its rear or roar, once or a few times (percent)
+    extern uint32_t    g_LifeRearBackChance;     // someone near rears theirs: each mounted near does it back (percent)
     extern bool        g_LifeGawk;               // a rare mount gets looked at
     extern uint32_t    g_LifeGawkRareOwners;     // ...rare: at most this many online have one
     extern uint32_t    g_LifeGawkMin;            // ...this many come over

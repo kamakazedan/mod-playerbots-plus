@@ -62,6 +62,8 @@ namespace pbp
     uint32_t    g_LifeTurnMaxSeconds       = 60;
     uint32_t    g_LifeHeadTurnChance       = 60;
     uint32_t    g_LifeJumpChance           = 12;
+    uint32_t    g_LifeRearChance           = 15;
+    uint32_t    g_LifeRearBackChance       = 30;
     bool        g_LifeGawk                 = true;
     uint32_t    g_LifeGawkRareOwners       = 3;
     uint32_t    g_LifeGawkMin              = 2;
@@ -347,6 +349,8 @@ namespace
               g_LifeTurnMinSeconds, g_LifeTurnMaxSeconds);
         g_LifeHeadTurnChance = pct("PlayerbotsPlus.CityLife.HeadTurnChance", 60);
         g_LifeJumpChance     = pct("PlayerbotsPlus.CityLife.JumpChance", 12);
+        g_LifeRearChance     = pct("PlayerbotsPlus.CityLife.RearChance", 15);
+        g_LifeRearBackChance = pct("PlayerbotsPlus.CityLife.RearBackChance", 30);
         g_LifeGawk           = B("PlayerbotsPlus.CityLife.Gawk", true);
         g_LifeGawkRareOwners = std::min<uint32_t>(1000, U("PlayerbotsPlus.CityLife.GawkRareOwners", 3));
         range("PlayerbotsPlus.CityLife.GawkMin", "PlayerbotsPlus.CityLife.GawkMax", 2, 4, 1, 8, g_LifeGawkMin,
@@ -944,10 +948,11 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     if (pbp::g_LifeEnable)
         LOG_INFO(where,
                  "[Playerbots Plus] City life on, within {:.0f} yd of a real player: {}% parked, {}% restless, the "
-                 "rest fidget every {}-{} s; hops {}%, errands {}%, fishing {}%; rare mounts looked at {}, dance "
-                 "parties {}; flights in {}%, out {}%.",
+                 "rest fidget every {}-{} s; hops {}%, mounts rearing {}% (done back {}%), errands {}%, fishing "
+                 "{}%; rare mounts looked at {}, dance parties {}; flights in {}%, out {}%.",
                  pbp::g_LifeRange, pbp::g_LifeParkedShare, pbp::g_LifeRestlessShare, pbp::g_LifeShuffleMinSeconds,
-                 pbp::g_LifeShuffleMaxSeconds, pbp::g_LifeJumpChance, pbp::g_LifeErrandChance,
+                 pbp::g_LifeShuffleMaxSeconds, pbp::g_LifeJumpChance, pbp::g_LifeRearChance,
+                 pbp::g_LifeRearBackChance, pbp::g_LifeErrandChance,
                  pbp::g_LifeFish ? pbp::g_LifeFishChance : 0u, pbp::g_LifeGawk ? "on" : "off",
                  pbp::g_LifeDance ? "on" : "off", pbp::g_LifeFlyInChance, pbp::g_LifeFlyOutChance);
     else

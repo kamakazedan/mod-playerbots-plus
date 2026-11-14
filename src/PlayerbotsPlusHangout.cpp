@@ -53,6 +53,7 @@
 #include <cmath>
 #include <deque>
 #include <list>
+#include <mutex>
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
@@ -181,6 +182,9 @@ namespace
         Clock::time_point nextCast{};
         uint32_t          castFails   = 0;
         Clock::time_point flewAt{};              // Flying: last seen in the air
+        Clock::time_point rearAt{};              // someone near reared their mount: it does it back then
+        ObjectGuid        rearTo;                // ...at them
+        Clock::time_point rearedAt{};            // its own mount last reared
     };
 
     std::unordered_map<uint64_t, Visit>             g_visits;     // by bot guid
@@ -2371,6 +2375,75 @@ namespace
         bot->GetMotionMaster()->MoveJump(x, y, z, PbpCityLife::HopSpeed(std::max(0.25f, d)), PbpCityLife::kHopRise);
     }
 
+    // Its mount rears up, or roars: what pressing jump standing still on a
+    // mount does. The game's own handler for it (CMSG_MOUNTSPECIAL_ANIM),
+    // which shows it to everyone about.
+    bool Rear(Player* bot)
+    {
+        if (!bot->IsMounted() || bot->isMoving() || !bot->GetSession())
+            return false;
+        WorldPacket nothing(CMSG_MOUNTSPECIAL_ANIM, 0);
+        bot->GetSession()->HandleMountSpecialAnimOpcode(nothing);
+        return true;
+    }
+
+    // Who reared their mount: a real player (the packet hook, PbpHangout_NoteRear)
+    // or one hanging out, of its own accord -- never one doing it back, or a
+    // crowd would answer itself for ever.
+    std::mutex              g_rearMutex;
+    std::vector<ObjectGuid> g_rearNotes;
+    std::unordered_map<uint64_t, Clock::time_point> g_rearAnswered;   // who was last done back to, when
+
+    void NoteRear(const ObjectGuid& who)
+    {
+        std::lock_guard<std::mutex> lock(g_rearMutex);
+        if (g_rearNotes.size() < 64)
+            g_rearNotes.push_back(who);
+    }
+
+    // Someone reared their mount: one or two of the mounted ones hanging out
+    // near them do it back, a moment later -- now and then, and not every
+    // time someone does it over and over.
+    void RearBack(const ObjectGuid& who, const Clock::time_point now)
+    {
+        constexpr float kRearBackRange = 20.0f;
+        if (!g_LifeRearBackChance)
+            return;
+        auto last = g_rearAnswered.find(who.GetRawValue());
+        if (last != g_rearAnswered.end() && now - last->second < std::chrono::seconds(6))
+            return;
+        Player* rider = ObjectAccessor::FindConnectedPlayer(who);
+        if (!rider || !rider->IsInWorld() || !rider->IsMounted())
+            return;
+        std::vector<std::pair<Visit*, Player*>> could;
+        for (auto& [guid, v] : g_visits)
+        {
+            if (guid == who.GetRawValue() || v.phase != Phase::Settled || v.act != Act::None || v.afkSet ||
+                v.forDuel || v.map != rider->GetMapId() || v.rearAt != Clock::time_point{} || now < v.busyUntil ||
+                now - v.rearedAt < std::chrono::seconds(20) ||
+                std::hypot(v.x - rider->GetPositionX(), v.y - rider->GetPositionY()) > kRearBackRange)
+                continue;
+            Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+            if (bot && bot->IsInWorld() && bot->IsMounted() && !bot->isMoving() &&
+                bot->GetExactDist(rider) <= kRearBackRange && bot->IsWithinLOSInMap(rider))
+                could.emplace_back(&v, bot);
+        }
+        std::shuffle(could.begin(), could.end(), Rng());
+        uint32_t answered = 0;
+        for (auto& [v, bot] : could)
+        {
+            if (answered >= 2)
+                break;
+            if (!Roll(g_LifeRearBackChance))
+                continue;
+            v->rearAt = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(600, 2200)(Rng()));
+            v->rearTo = who;
+            ++answered;
+        }
+        if (answered)
+            g_rearAnswered[who.GetRawValue()] = now;
+    }
+
     // Looks round: at someone stood close by, or just a little turn.
     void LookRound(Player* bot)
     {
@@ -2463,9 +2536,21 @@ namespace
         {
             if (now >= v.nextHop && !bot->isMoving())
             {
-                Hop(bot);
+                // On a mount, jump standing still is a rear or a roar: one
+                // after another, a little apart; the first for those near
+                // to answer.
+                const bool mounted = bot->IsMounted();
+                if (!mounted)
+                    Hop(bot);
+                else if (Rear(bot))
+                {
+                    if (now - v.rearedAt > std::chrono::seconds(10))
+                        NoteRear(bot->GetGUID());
+                    v.rearedAt = now;
+                }
                 --v.hops;
-                v.nextHop = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(900, 1700)(Rng()));
+                v.nextHop = now + std::chrono::milliseconds(mounted ? std::uniform_int_distribution<int>(1600, 2800)(Rng())
+                                                                    : std::uniform_int_distribution<int>(900, 1700)(Rng()));
             }
             return;
         }
@@ -2492,11 +2577,13 @@ namespace
         if (roll > g_LifeErrandChance && roll <= g_LifeErrandChance + g_LifeFishChance &&
             StartFishing(bot, ai, v, s, now))
             return;
-        if (Roll(g_LifeJumpChance))
+        // A hop or three on foot; on a mount, a rear or three.
+        const bool mounted = bot->IsMounted();
+        if (Roll(mounted ? g_LifeRearChance : g_LifeJumpChance))
         {
             v.hops    = std::uniform_int_distribution<uint32_t>(1, 3)(Rng());
             v.nextHop = now;
-            ++g_stats.hops;
+            ++(mounted ? g_stats.rears : g_stats.hops);
             return;
         }
         float x = 0.0f, y = 0.0f, z = 0.0f;
@@ -2825,6 +2912,13 @@ namespace
         for (Player* p : sRandomPlayerbotMgr.GetPlayers())
             if (p && p->IsInWorld() && PbpIsRealPlayer(p))
                 g_lifeWatchers.push_back(p);
+        std::vector<ObjectGuid> reared;
+        {
+            std::lock_guard<std::mutex> lock(g_rearMutex);
+            reared.swap(g_rearNotes);
+        }
+        for (const ObjectGuid& who : reared)
+            RearBack(who, now);
         for (auto& [guid, v] : g_visits)
         {
             if (v.phase != Phase::Settled)
@@ -2833,6 +2927,22 @@ namespace
             PlayerbotAI* ai = bot ? AiOf(bot) : nullptr;
             if (!bot || !ai || !bot->IsInWorld() || bot->IsBeingTeleported())
                 continue;
+            // Someone near reared their mount: it does it back, looking at them.
+            if (v.rearAt != Clock::time_point{} && now >= v.rearAt)
+            {
+                v.rearAt = Clock::time_point{};
+                Unit* who = ObjectAccessor::GetUnit(*bot, v.rearTo);
+                if (who && v.act == Act::None && now >= v.busyUntil && bot->IsMounted() && !bot->isMoving() &&
+                    who->GetExactDist(bot) < 25.0f)
+                {
+                    bot->SetFacingToObject(who);
+                    if (Rear(bot))
+                    {
+                        v.rearedAt = now;
+                        ++g_stats.rearedBack;
+                    }
+                }
+            }
             // Someone spoke near it: it looks round at them.
             if (v.turnAt != Clock::time_point{} && now >= v.turnAt)
             {
@@ -2879,6 +2989,8 @@ namespace
         for (auto it = g_gawkedAt.begin(); it != g_gawkedAt.end();)
             it = now - it->second > std::chrono::minutes(g_LifeGawkCooldownMinutes + 1) ? g_gawkedAt.erase(it)
                                                                                          : std::next(it);
+        for (auto it = g_rearAnswered.begin(); it != g_rearAnswered.end();)
+            it = now - it->second > std::chrono::minutes(1) ? g_rearAnswered.erase(it) : std::next(it);
     }
 
     void LetAllGo(const Clock::time_point now)
@@ -3288,6 +3400,13 @@ void PbpHangout_At(const std::string& spotKey, std::vector<Player*>& settled, ui
         else
             settled.push_back(bot);
     }
+}
+
+void PbpHangout_NoteRear(Player* player)
+{
+    if (!player || !g_LifeEnable || !g_LifeRearBackChance)
+        return;
+    NoteRear(player->GetGUID());
 }
 
 void PbpHangout_Busy(Player* bot, uint32_t seconds)

@@ -59,8 +59,9 @@ class Player;
 //
 // City life (PlayerbotsPlus.CityLife.*): near a real player the crowd is not
 // a painting. Each settled bot gets a temper (stays put, shuffles, can't keep
-// still) and, free and near someone real, now and then takes a step, hops,
-// looks round, walks off to a banker, an auctioneer or a mailbox, or goes
+// still) and, free and near someone real, now and then takes a step, hops
+// (on a mount, rears it: done back when someone near rears theirs), looks
+// round, walks off to a banker, an auctioneer or a mailbox, or goes
 // fishing at the water's edge; a few wander over to look at someone's rare
 // mount; someone starts a dance and others join in (a real player dancing
 // too); some of those fetched fly in to the city's flight master, and some
@@ -136,6 +137,12 @@ void PbpHangout_Busy(Player* bot, uint32_t seconds);
 void PbpHangout_Spoke(Player* speaker);
 void PbpHangout_Gather(std::vector<Player*> const& bots, uint32_t seconds);
 
+// A real player's mount reared up (they pressed jump standing still on it):
+// some of the mounted ones hanging out near them may do it back. Called from
+// the packet hook (PbpRearScript), on whatever thread handles the packet: it
+// only notes who, under a mutex, for the world tick.
+void PbpHangout_NoteRear(Player* player);
+
 // How full each city is: its spots taken together, by the city their names
 // end with ("outside the bank in Thunder Bluff" -> "Thunder Bluff").
 struct PbpHangoutCity
@@ -177,6 +184,8 @@ struct PbpHangoutStats
     uint64_t steps     = 0;   // stepped to another place at their spot
     uint64_t turns     = 0;   // looked round (someone near, someone speaking)
     uint64_t hops      = 0;   // little bouts of hopping
+    uint64_t rears     = 0;   // ...on a mount: of rearing up or roaring
+    uint64_t rearedBack = 0;  // did it back to someone near who reared
     uint64_t gawks     = 0;   // rare mounts looked at
     uint64_t gawkers   = 0;   // ...by this many, all told
     uint64_t dances    = 0;   // dance parties started

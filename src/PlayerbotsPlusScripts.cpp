@@ -20,8 +20,11 @@
 #include "ChatCommand.h"
 #include "Config.h"
 #include "Log.h"
+#include "Opcodes.h"
 #include "Player.h"
 #include "ScriptMgr.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 using namespace Acore::ChatCommands;
 
@@ -77,6 +80,23 @@ namespace
         void OnShutdown() override
         {
             PbpLedger_Shutdown();
+        }
+    };
+
+    // A real player reared their mount (jump, standing still on it): those
+    // hanging out near them may do it back (city life). Every packet anyone
+    // sends comes through here, on whatever thread handles it: the opcode
+    // first, and then only a note of who, under a mutex.
+    class PbpRearScript : public ServerScript
+    {
+    public:
+        PbpRearScript() : ServerScript("PbpRearScript", { SERVERHOOK_CAN_PACKET_RECEIVE }) { }
+
+        bool CanPacketReceive(WorldSession* session, WorldPacket const& packet) override
+        {
+            if (packet.GetOpcode() == CMSG_MOUNTSPECIAL_ANIM && session)
+                PbpHangout_NoteRear(session->GetPlayer());
+            return true;
         }
     };
 
@@ -181,11 +201,13 @@ namespace
                                      h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.lostNoRoom, h.lostSlow,
                                      h.lostBusy, h.lostElsewhere, h.lostLanding, h.redirected, h.foundFull, h.movedOn,
                                      h.cutShort, h.cameBack);
-            handler->PSendSysMessage("City life: {} - steps {}, looks round {}, hops {}; rare mounts looked at {} "
-                                     "(by {}); dance parties {} ({} joined in); walked over to talk {}; errands {} "
-                                     "({} got there; {} bankers, auctioneers and mailboxes known); flew in {} ({} "
-                                     "landed), flew out {}; fishing {} ({} casts, {} places to fish from).",
-                                     onOff(pbp::g_LifeEnable), h.steps, h.turns, h.hops, h.gawks, h.gawkers, h.dances,
+            handler->PSendSysMessage("City life: {} - steps {}, looks round {}, hops {}, mounts reared {} ({} done "
+                                     "back); rare mounts looked at {} (by {}); dance parties {} ({} joined in); "
+                                     "walked over to talk {}; errands {} ({} got there; {} bankers, auctioneers and "
+                                     "mailboxes known); flew in {} ({} landed), flew out {}; fishing {} ({} casts, {} "
+                                     "places to fish from).",
+                                     onOff(pbp::g_LifeEnable), h.steps, h.turns, h.hops, h.rears, h.rearedBack,
+                                     h.gawks, h.gawkers, h.dances,
                                      h.danced, h.gathered, h.errands, h.errandsDone, h.services, h.flewIn, h.landed,
                                      h.flewOut, h.fished, h.casts, h.fishPlaces);
             std::string cities;
@@ -405,6 +427,7 @@ void Addmod_playerbots_plusScripts()
     new PbpStuckScript();
     new PbpFireScript();
     new PbpMuteScript();
+    new PbpRearScript();
     new PbpGroupQuestsTeleportScript();
 #if PBP_BOT_DUNGEONS
     new PbpDungeonsPacketScript();
