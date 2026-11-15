@@ -298,7 +298,8 @@ namespace
     const std::pair<const char*, const char*> kDefaultHangoutSpots[] = {
         { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 16 the Trade District in Stormwind" },
         { "StormwindAuction",   "0 -8815.2 652.9 94.9 14 12 outside the auction house in Stormwind" },
-        { "StormwindBank",      "0 -8914.0 621.5 99.6 14 10 the bank in Stormwind" },
+        { "StormwindAuctionHall", "0 -8814.8 666.5 95.5 10 4 the auction house in Stormwind" },
+        { "StormwindBank",      "0 -8914.0 621.5 99.6 14 5 the bank in Stormwind" },
         { "StormwindFountain",  "0 -8869.0 643.0 96.4 18 12 by the fountain in the Trade District in Stormwind" },
         { "StormwindValley",    "0 -8955.0 525.0 96.4 20 10 the Valley of Heroes in Stormwind" },
         { "StormwindCathedral", "0 -8635.0 800.0 97.0 24 14 Cathedral Square in Stormwind" },
@@ -309,6 +310,7 @@ namespace
         { "StormwindGates",     "0 -9100.0 380.0 93.8 22 14 outside the gates of Stormwind" },
         { "IronforgeCommons",   "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge" },
         { "OrgrimmarValley",    "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar" },
+        { "OrgrimmarAuctionHall", "1 1678.0 -4450.6 19.3 12 8 the auction house in Orgrimmar" },
         { "OrgrimmarBank",      "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar" },
         { "OrgrimmarCourtyard", "1 1578.0 -4412.0 8.5 30 18 the middle of the Valley of Strength in Orgrimmar" },
         { "OrgrimmarGateway",   "1 1527.0 -4408.0 18.0 22 10 just inside the gates of Orgrimmar" },
@@ -345,10 +347,10 @@ namespace
     // District, the Commons, the Valley of Strength, the middle of Thunder
     // Bluff, the banks and auction houses.
     char const* const kDefaultHotSpots =
-        "StormwindTrade|StormwindAuction|StormwindBank|StormwindFountain|IronforgeCommons|OrgrimmarValley|"
-        "OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|"
-        "DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|"
-        "DalaranMerchants";
+        "StormwindTrade|StormwindAuction|StormwindAuctionHall|StormwindBank|StormwindFountain|IronforgeCommons|"
+        "OrgrimmarValley|OrgrimmarAuctionHall|OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|"
+        "ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|"
+        "DalaranBank|DalaranRuneweaver|DalaranMerchants";
 
     // The city weights playerbots sends its bots to the cities' bankers by,
     // read as it reads them (its keys and defaults), by the city a spot's name

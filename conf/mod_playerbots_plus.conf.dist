@@ -1010,15 +1010,21 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        key each; capacity 0 turns one off. With no Spot keys at all, these
 #        are the defaults:
 #          Orgrimmar: the Valley of Strength -- in front of the inn and the
-#          auction house, the bank, the open middle of it and just inside the
-#          gates (the middle and the gates' z are a little above the ground,
-#          so a place may be found up the slopes too) -- the Drag, the Valley
-#          of Honor, and outside the city the gates and the zeppelin tower.
-#          Stormwind: the Trade District, outside the auction house and the
-#          bank, round the fountain and down to the foot of the bank's steps
-#          (its middle to one side, toward the steps: the statue is no
-#          window), the Valley of Heroes, Cathedral Square, the Mage Quarter,
-#          the Dwarven District, Old Town, the harbor and outside the gates.
+#          auction house, inside the auction house before its counter, the
+#          bank, the open middle of it and just inside the gates (the middle
+#          and the gates' z are a little above the ground, so a place may be
+#          found up the slopes too) -- the Drag, the Valley of Honor, and
+#          outside the city the gates and the zeppelin tower.
+#          Stormwind: the Trade District, outside the auction house and
+#          inside it before its counter, the bank (inside, among its benches:
+#          a small room, so a small part), round the fountain and down to
+#          the foot of the bank's steps (its middle to one side, toward the
+#          steps: the statue is no window), the Valley of Heroes, Cathedral
+#          Square, the Mage Quarter, the Dwarven District, Old Town, the
+#          harbor and outside the gates.
+#          The two auction houses' middles are where a player stands before
+#          the auctioneers (60.8, 70.7 and 54.9, 63.7 on the city maps), at
+#          the height of an NPC that stands on that floor.
 #          Thunder Bluff: the middle of it (its teleport point), among the
 #          trainers and below the auction house, and outside the bank.
 #          Dalaran (from level 68, both sides): outside both banks, Runeweaver
@@ -1038,7 +1044,8 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        Elf and Draenei lands, 571 Northrend.
 PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 16 the Trade District in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindAuction = "0 -8815.2 652.9 94.9 14 12 outside the auction house in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 10 the bank in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindAuctionHall = "0 -8814.8 666.5 95.5 10 4 the auction house in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 5 the bank in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindFountain = "0 -8869.0 643.0 96.4 18 12 by the fountain in the Trade District in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindValley = "0 -8955.0 525.0 96.4 20 10 the Valley of Heroes in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindCathedral = "0 -8635.0 800.0 97.0 24 14 Cathedral Square in Stormwind"
@@ -1049,6 +1056,7 @@ PlayerbotsPlus.Hangout.Spot.StormwindHarbor = "0 -8565.5 1195.5 5.4 20 8 the har
 PlayerbotsPlus.Hangout.Spot.StormwindGates = "0 -9100.0 380.0 93.8 22 14 outside the gates of Stormwind"
 PlayerbotsPlus.Hangout.Spot.IronforgeCommons = "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarValley = "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarAuctionHall = "1 1678.0 -4450.6 19.3 12 8 the auction house in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarBank = "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarCourtyard = "1 1578.0 -4412.0 8.5 30 18 the middle of the Valley of Strength in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarGateway = "1 1527.0 -4408.0 18.0 22 10 just inside the gates of Orgrimmar"
@@ -1090,7 +1098,7 @@ PlayerbotsPlus.Hangout.Spot.DalaranMerchants = "571 5654.9 682.2 652.0 14 10 out
 PlayerbotsPlus.Hangout.CityWeights = 1
 PlayerbotsPlus.Hangout.Places = 0
 PlayerbotsPlus.Hangout.HotShare = 75
-PlayerbotsPlus.Hangout.HotSpots = "StormwindTrade|StormwindAuction|StormwindBank|StormwindFountain|IronforgeCommons|OrgrimmarValley|OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|DalaranMerchants"
+PlayerbotsPlus.Hangout.HotSpots = "StormwindTrade|StormwindAuction|StormwindAuctionHall|StormwindBank|StormwindFountain|IronforgeCommons|OrgrimmarValley|OrgrimmarAuctionHall|OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|DalaranMerchants"
 
 #    PlayerbotsPlus.Hangout.RoomPerBot
 #        Square yards each person at a spot needs: a spot with room for more
