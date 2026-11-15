@@ -2,6 +2,7 @@
 #include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusHangout.h"
+#include "PlayerbotsPlusLooted.h"
 #include "PlayerbotsPlusMute.h"
 #include "PlayerbotsPlusUtil.h"
 
@@ -65,6 +66,11 @@ namespace PlayerbotsPlus
     double DropChance(uint32_t itemId)
     {
         return PbpDrops_ChancePct(itemId);
+    }
+
+    bool LootedByBot(Player* bot, Item* item)
+    {
+        return PbpLooted_IsLooted(bot, item);
     }
 
     bool DropSourcesOf(uint32_t itemId, DropSources& out)

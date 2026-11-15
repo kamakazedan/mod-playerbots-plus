@@ -8,6 +8,7 @@
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusIndoors.h"
 #include "PlayerbotsPlusLedger.h"
+#include "PlayerbotsPlusLooted.h"
 #include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlusMarketPrice.h"
@@ -112,6 +113,14 @@ namespace
         out.push_back(fmt::format("Not listed, cheaper than a vendor already: {}. Taken down, not their own loot: {}. "
                                   "Mail left, bags full: {}.",
                                   st.tooCheap, st.takenDown, st.bagsFull));
+        PbpLootedStats const lo = PbpLooted_GetStats();
+        out.push_back(fmt::format("Only their own loot sold: {} stacks bots looted themselves known ({} since startup); "
+                                  "{} had something else added and {} went to someone else, so are not theirs to "
+                                  "sell; {} used up or gone. {} stacks asked about before selling (the auction "
+                                  "house, Trade chat), {} not their own loot. {} things stored for bots noted ({} "
+                                  "loot, {} notes dropped); written {} times.",
+                                  lo.known, lo.marked, lo.joined, lo.moved, lo.gone, lo.asked, lo.refused, lo.stored,
+                                  lo.looted, lo.dropped, lo.writes));
 
         PbpHangoutStats const h = PbpHangout_GetStats();
         out.push_back(fmt::format("City hangouts: {} - {} hanging out ({} AFK), {} on their way, {} spots ({} with an "

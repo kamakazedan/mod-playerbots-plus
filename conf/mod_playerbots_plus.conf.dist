@@ -84,7 +84,12 @@ PlayerbotsPlus.Report.File = "PlayerbotsPlusReport.log"
 #   rather than a vendor: anything of common (white) quality or better that is
 #   not soulbound, not for its quests, not for its professions and not worth
 #   wearing -- cloth, leather, herbs and ore it has no profession for, gear it
-#   will never put on. One whole stack per auction.
+#   will never put on. One whole stack per auction, and only one it looted
+#   itself: never what playerbots hands it for nothing (gear, ammo, food,
+#   potions, reagents, stones, oils), nor anything it bought, was given, made
+#   or got from a quest. Each stack a bot loots is remembered (in the
+#   characters database, playerbots_plus_looted) until something that is not
+#   loot is added to it; Trade chat goes by the same (mod-ollama-chat).
 #
 #   What it asks, per one: a little under the cheapest one already up (any
 #   seller's, the auction house bot's too); if there is none, what it is worth

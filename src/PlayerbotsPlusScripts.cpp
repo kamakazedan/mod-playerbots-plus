@@ -8,6 +8,7 @@
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusIndoors.h"
 #include "PlayerbotsPlusLedger.h"
+#include "PlayerbotsPlusLooted.h"
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlusMarketPrice.h"
 #include "PlayerbotsPlusMarks.h"
@@ -59,6 +60,8 @@ namespace
         {
             PbpDrops_Load();
             PbpGround_Load();
+            // What each bot looted itself: the only things bots sell.
+            PbpLooted_Load();
         }
 
         void OnUpdate(uint32 diff) override
@@ -67,6 +70,9 @@ namespace
             // looks at what they have (the ledger), and anything this tick
             // pays them is counted next tick, before the next look.
             PbpLedger_Update(diff);
+            // What each bot looted itself, the only things it sells: kept
+            // with the module switched off too, for Trade chat's sake.
+            PbpLooted_Update(diff);
             // These two also run with the module switched off: they let go
             // whoever they are holding (sat down, AFK, kept on foot). The
             // fires' notes are taken either way, so none pile up.
@@ -96,6 +102,7 @@ namespace
         void OnShutdown() override
         {
             PbpLedger_Shutdown();
+            PbpLooted_Shutdown();
         }
     };
 
@@ -332,6 +339,7 @@ void Addmod_playerbots_plusScripts()
     new PlayerbotsPlusAuctionScript();
     new PlayerbotsPlusCommandScript();
     new PbpLedgerPlayerScript();
+    new PbpLootedPlayerScript();
     new PbpStuckScript();
     new PbpFireScript();
     new PbpMuteScript();

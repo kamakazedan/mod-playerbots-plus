@@ -13,3 +13,4 @@ tests/ground_test
 .idea/
 *.swp
 *~
+tests/looted_test

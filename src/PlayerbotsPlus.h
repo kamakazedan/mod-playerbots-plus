@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+class Item;
 class Player;
 
 // 1: the market. 2: hangouts, bot events and OwnLine. 3: duels talked into.
@@ -36,7 +37,8 @@ class Player;
 // (BotEventType::CityShowOff, CityCalmDown).
 // 7: what things are worth (ItemWorth) and how rarely they drop (DropChance).
 // 8: where things drop (DropSourcesOf).
-#define PLAYERBOTS_PLUS_API_VERSION 8
+// 9: only its own loot is sold (LootedByBot).
+#define PLAYERBOTS_PLUS_API_VERSION 9
 
 namespace PlayerbotsPlus
 {
@@ -97,6 +99,16 @@ namespace PlayerbotsPlus
         bool     chests   = false;    // a chest or a fishing hole gives it too
     };
     bool DropSourcesOf(uint32_t itemId, DropSources& out);
+
+    // ---- A bot sells only what it looted itself (PlayerbotsPlusLooted)
+
+    // Did `bot` loot this stack itself -- from a kill, a chest, a herb or an
+    // ore vein, a skinned beast, fishing, or won on a roll -- with nothing but
+    // more loot added to it since? A bot sells only such a stack, wherever it
+    // sells: never what playerbots handed it for nothing (its gear, ammo,
+    // food, potions, reagents, stones and oils), nor anything it bought, was
+    // given, made or got from a quest. `item` is one in its bags.
+    bool LootedByBot(Player* bot, Item* item);
 
     // ---- City hangouts (PlayerbotsPlus.Hangout.*)
 

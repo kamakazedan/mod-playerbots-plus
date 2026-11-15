@@ -48,6 +48,10 @@ These hooks are the exception, and they touch nothing of the world:
   own account id and the item's template, and note under a mutex; the world
   tick decides whose bot it was (`IsInRandomAccountList`, the character
   cache) and adds it up. Never look up a random bot from a map thread.
+- `PbpLootedPlayerScript`'s hooks (an item stored, looted, won on a roll,
+  moved out of or into the bags) run on map threads. They note the stack's
+  guid and counts under a mutex, and the world tick (or a question, first)
+  sorts them out.
 
 ## An Item* in a hook may already be freed
 
@@ -144,6 +148,31 @@ removed with `RemoveMail` is deleted here: the core leaves that to its caller.
 same order, without the declined names a client sends. It only touches a pet
 that still has the name it was tamed with (its family's: "Cat"), because
 playerbots' own "rename pet" command leaves the game's renamed flag set.
+
+## A bot sells only what it looted itself
+
+The user's rule for every playerbot, wherever it sells -- the auction house
+here, Trade chat in mod-ollama-chat: only what it looted itself, from a kill,
+a chest, a herb or an ore vein, a skinned beast, fishing, or won on a roll.
+Never what playerbots hands it for nothing (gear, ammo, food, potions,
+reagents, stones, oils, poisons, bags, again at every refresh), nor anything
+bought, given, made or a quest's. A list of free things is not enough: the
+weightstones playerbots hands out are Consumable/Other, not Item Enhancement,
+and "selling [Adamantite Weightstone] x20, 3g 30s!" went out in Trade.
+
+`PlayerbotsPlusLooted` keeps it by the stack, in `playerbots_plus_looted`: a
+stack that came out of a loot window or a roll whole (`StoreNewItem` with the
+loot or roll hook straight after, paired by a note id) is its loot, and stays
+so while only more loot joins it. Topped up by anything else -- a store with
+no loot hook, a trade's, the post's (`OnPlayerAfterMoveItemToInventory` into
+a stack that was not away), or more in it than last seen -- it is not, however
+little that was; up for auction or in the post (`away`) and back whole, it
+still is. The sums are `PbpLooted` (`PlayerbotsPlusLootedRules`, pure,
+tested). It can only err the safe way: some loot no longer counted, never a
+free thing sold. Anything new that sells asks `PbpLooted_IsLooted` (another
+module, `PlayerbotsPlus::LootedByBot`, API 9) of the very stack it sells, last,
+and sells nothing when it says no. `HandedOutFree` and `SoldByVendors` stay as
+kinds of thing never to list.
 
 ## Playerbots' judgement, not ours
 
@@ -366,9 +395,10 @@ the cheap first look. Never the falling flag: a bot can be left with it.
 `PlayerbotsPlusMarketPrice.{h,cpp}`, `PlayerbotsPlusText.{h,cpp}`,
 `PlayerbotsPlusLedgerText.{h,cpp}`, `PlayerbotsPlusDungeonsText.{h,cpp}`,
 `PlayerbotsPlusGroupQuestsText.{h,cpp}`, `PlayerbotsPlusCityLifeText.{h,cpp}`,
-`PlayerbotsPlusDropChance.{h,cpp}` and `PlayerbotsPlusGroundGrid.{h,cpp}` have
-no game types in them, so they can be tested without a server. Keep it that
-way: `tests/build.sh`. The text test also checks the conf against the code:
+`PlayerbotsPlusDropChance.{h,cpp}`, `PlayerbotsPlusGroundGrid.{h,cpp}` and
+`PlayerbotsPlusLootedRules.{h,cpp}` have no game types in them, so they can be
+tested without a server. Keep it that way: `tests/build.sh`. The text test
+also checks the conf against the code:
 every key the code reads is in the conf, and the default mute list, hangout
 spots, companion lists and pet names are the same in both.
 

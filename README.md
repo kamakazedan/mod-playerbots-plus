@@ -40,7 +40,7 @@ players do:
 - **They list what they have no use for:** cloth, leather, herbs and ore they
   have no profession for, and gear they will never wear. That's whatever
   playerbots itself would take to the auction house rather than a vendor, as
-  long as the bot looted or made it.
+  long as the bot looted it itself.
 - **They buy:** an upgrade they can afford (playerbots decides what counts as
   an upgrade), or materials their profession uses to skill up. They put the
   upgrade on straight away.
@@ -77,12 +77,19 @@ level 16 blue gun that drops about once in 20,800 kills, comes out at about
 when something is a rare drop. Asked where to find something, they say what
 drops it, about what level those are and how rarely, from the same tables.
 
-Bots never list what playerbots gives them for free. Playerbots hands every
-random bot ammo, food and drink, potions, class reagents, sharpening stones,
-weightstones, oils and poisons, and tops them up every few hours. Selling those
-would make gold out of nothing, so they stay out of the auction house. So does
-anything a vendor sells. A bot that listed such things before this rule takes
-those auctions down on its next visit.
+A bot only ever sells what it looted itself: from a kill, a chest, a herb or
+an ore vein, a skinned beast, fishing, or won on a roll. Playerbots hands every
+random bot gear, ammo, food and drink, potions, class reagents, sharpening
+stones, weightstones, oils and poisons, and tops them up every few hours.
+Selling those would make gold out of nothing, so they are never sold, and
+neither is anything a bot bought, was given, made or got from a quest. That
+goes for Trade chat too, with mod-ollama-chat. Each stack a bot loots is
+remembered (in the characters database, so a restart forgets nothing) until
+something that is not loot is added to it: playerbots topping it up, say.
+What bots already had when this came in is not known to be loot, so it is
+never sold either. Anything a vendor sells stays out of the auction house as
+well, and a bot that listed such things before takes those auctions down on
+its next visit.
 
 Bots don't walk to the auctioneer: being anywhere in the city is enough.
 Shattrath and Dalaran count as cities too. Neither has an auction house, so a

@@ -3,6 +3,7 @@
 #include "PlayerbotsPlusConfig.h"
 #include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusLedger.h"
+#include "PlayerbotsPlusLooted.h"
 #include "PlayerbotsPlusMarketPrice.h"
 
 #include "AuctionHouseMgr.h"
@@ -434,8 +435,9 @@ namespace
         return sold.contains(entry);
     }
 
-    // Only what a bot looted or made goes up: never its free supplies, never
-    // what a vendor sells.
+    // Kinds of thing that are never loot of a bot's own: its free supplies,
+    // what a vendor sells. Whether this very stack is its loot is
+    // PbpLooted's (Listable).
     bool OwnLoot(ItemTemplate const* proto)
     {
         return !HandedOutFree(proto) && !SoldByVendors(proto->ItemId);
@@ -470,7 +472,12 @@ namespace
         if (it != state.expiries.end() && it->second > m.maxRelists)
             return false;   // nobody wants it: it goes to a vendor in the end
 
-        return !NeededForQuest(bot, proto->ItemId);
+        if (NeededForQuest(bot, proto->ItemId))
+            return false;
+        // Only what it looted itself: never what playerbots handed it for
+        // nothing, nor anything it bought, was given, made or got from a
+        // quest (PlayerbotsPlusLooted).
+        return PbpLooted_IsLooted(bot, item);
     }
 
     uint32_t PickHours()
