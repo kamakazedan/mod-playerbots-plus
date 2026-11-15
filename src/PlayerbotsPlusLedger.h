@@ -22,6 +22,10 @@
 //   - every Ledger.CensusMinutes, a look at all of them: gold held, item
 //     level by level band, professions, who is in the dungeon queue, what
 //     they carry and have in the bank, and who has what up for auction.
+//   - by level band: the gold above, playerbots' top-ups, auction house
+//     buys and where gear came from, and each band's bot-minutes, online and
+//     with their AI running (counted at each look), so what a bot gets an
+//     hour of play at each level can be worked out.
 //
 // Kept in the characters database (playerbots_plus_ledger), a row per day
 // and figure, written every Ledger.FlushMinutes and at shutdown, kept for

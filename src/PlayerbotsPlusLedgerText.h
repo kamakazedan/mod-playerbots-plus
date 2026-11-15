@@ -100,6 +100,20 @@ namespace PbpLedger
     // 1234567 -> "1,234,567".
     std::string Count(int64_t n);
 
+    // Copper an hour, from a sum over `minutes`: "12g", "34s". "-" with no
+    // time to go by.
+    std::string AnHour(int64_t copper, int64_t minutes);
+
+    // By level band, a line for each band with time counted in it
+    // ("time.b<band>", "time.active.b<band>": bot-minutes online, and with
+    // their AI running): its bot-hours; what a bot got an hour of play -- all
+    // the game paid it ("gold.in.b<band>"), of that looted and quest rewards
+    // -- and spent on the auction house; playerbots' own top-ups and what it
+    // took back an hour online ("gold.free.b<band>", "gold.gone.b<band>");
+    // and where the gear put on came from ("gear.<from>.b<band>"). Empty when
+    // no band has time yet.
+    std::vector<std::string> ByBand(std::map<std::string, int64_t> const& flows);
+
     // What .pbp economy prints, after a `title` line of the caller's.
     // `flows`: everything taken over the days asked for, summed ("gold.in",
     // "loot.herb", "gear.looted", ...), over `withData` days that have

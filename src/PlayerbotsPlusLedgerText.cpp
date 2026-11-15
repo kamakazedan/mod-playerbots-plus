@@ -185,6 +185,35 @@ namespace PbpLedger
         }
     }
 
+    std::string AnHour(int64_t copper, int64_t minutes)
+    {
+        return minutes > 0 ? Gold(copper * 60 / minutes) : std::string("-");
+    }
+
+    std::vector<std::string> ByBand(std::map<std::string, int64_t> const& flows)
+    {
+        std::vector<std::string> out;
+        auto F = [&flows](std::string const& key) { return Get(flows, key); };
+        for (uint32_t b = 0; b < kBands; ++b)
+        {
+            const std::string k = ".b" + std::to_string(b);
+            const int64_t online = F("time" + k), playing = F("time.active" + k);
+            if (online <= 0)
+                continue;
+            out.push_back(BandName(b) + ": " + Count(online / 60) + " bot-hours online, " + Count(playing / 60) +
+                          " with their AI running -- an hour of play, got " + AnHour(F("gold.in" + k), playing) +
+                          " (looted " + AnHour(F("gold.loot" + k), playing) + ", quest rewards " +
+                          AnHour(F("gold.quests" + k), playing) + "), spent " +
+                          AnHour(F("ah.bought.value" + k), playing) + " on the auction house; playerbots' top-ups " +
+                          AnHour(F("gold.free" + k), online) + " an hour online (took back " +
+                          AnHour(F("gold.gone" + k), online) + "); gear put on: handed out " +
+                          Count(F("gear.handout" + k)) + ", looted " + Count(F("gear.looted" + k)) + ", quests " +
+                          Count(F("gear.quest" + k)) + ", the auction house " + Count(F("gear.bought" + k)) +
+                          ", vendors " + Count(F("gear.vendor" + k)) + ", made " + Count(F("gear.made" + k)) + ".");
+        }
+        return out;
+    }
+
     std::vector<std::string> NowKeys()
     {
         std::vector<std::string> keys = { "now.time", "now.bots", "now.gold", "now.prof.gatherers",
@@ -217,6 +246,17 @@ namespace PbpLedger
         out.push_back("Auction house: " + Count(F("ah.listed")) + " listed, " + Count(F("ah.sold")) + " sold for " +
                       Gold(F("ah.sold.value")) + ", " + Count(F("ah.bought")) + " bought for " +
                       Gold(F("ah.bought.value")) + ", " + Count(F("ah.expired")) + " back unsold.");
+        std::string hour;
+        for (uint32_t b = 0; b < kBands; ++b)
+        {
+            const std::string k = ".b" + std::to_string(b);
+            const int64_t playing = F("time.active" + k);
+            if (playing > 0)
+                hour += (hour.empty() ? "" : ", ") + BandName(b) + " " + AnHour(F("gold.in" + k), playing) + " (" +
+                        AnHour(F("gold.loot" + k), playing) + ")";
+        }
+        if (!hour.empty())
+            out.push_back("Got an hour of play (looted), by level: " + hour + ".");
         if (now.empty())
             out.push_back("No look at the bots yet since the server started.");
         else
@@ -312,6 +352,15 @@ namespace PbpLedger
                       ", oils, stones and poisons " + Count(F("used.enhancement")) + ", other " +
                       Count(F("used.other")) + ".");
 
+        // ---- by level, an hour of a bot's time ----
+        const std::vector<std::string> bands = ByBand(flows);
+        if (!bands.empty())
+        {
+            out.push_back("By level (a bot's time counted at each look at them):");
+            for (std::string const& line : bands)
+                out.push_back("  " + line);
+        }
+
         // ---- the latest look at them ----
         if (now.empty())
         {
@@ -325,15 +374,15 @@ namespace PbpLedger
                       " online, holding " + Gold(N("now.gold")) + " -- " + Gold(bots ? N("now.gold") / bots : 0) +
                       " each on average, " + Gold(top ? N("now.gold.b5") / top : 0) + " at level 80.");
 
-        std::string bands;
+        std::string levels;
         for (uint32_t b = 0; b < kBands; ++b)
         {
             const std::string key = std::to_string(b);
-            bands += (bands.empty() ? "" : ", ") + BandName(b) + " " +
-                     Average(N("now.ilvl.b" + key), N("now.geared.b" + key)) + " (" + Count(N("now.bots.b" + key)) +
-                     " bots)";
+            levels += (levels.empty() ? "" : ", ") + BandName(b) + " " +
+                      Average(N("now.ilvl.b" + key), N("now.geared.b" + key)) + " (" + Count(N("now.bots.b" + key)) +
+                      " bots)";
         }
-        out.push_back("Average item level by level: " + bands + ".");
+        out.push_back("Average item level by level: " + levels + ".");
 
         std::string professions;
         for (Profession const& p : kProfessions)

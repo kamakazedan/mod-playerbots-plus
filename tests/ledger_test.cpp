@@ -236,6 +236,34 @@ int main()
         True("brief: nothing yet", Brief({}, {}, 0).size() == 1 && Has(Brief({}, {}, 0), "No figures yet"));
     }
 
+    // By level band: an hour of a bot's time.
+    {
+        std::map<std::string, int64_t> f = {
+            { "time.b1", 600 },          { "time.active.b1", 120 },     // 10 hours online, 2 of them playing
+            { "gold.in.b1", 200000 },    { "gold.loot.b1", 100000 },    // 20g, 10g of it looted
+            { "gold.quests.b1", 40000 }, { "ah.bought.value.b1", 60000 },
+            { "gold.free.b1", 50000 },   { "gold.gone.b1", 10000 },
+            { "gear.handout.b1", 300 },  { "gear.looted.b1", 4 },       { "gear.bought.b1", 2 },
+            { "time.b5", 60 },                                           // an hour online, none of it playing
+        };
+        const std::vector<std::string> lines = ByBand(f);
+        True("by band: the two with time", lines.size() == 2);
+        True("by band: 20-39", Has(lines, "20-39: 10 bot-hours online, 2 with their AI running -- an hour of play, "
+                                          "got 10g (looted 5g, quest rewards 2g), spent 3g on the auction house; "
+                                          "playerbots' top-ups 50s an hour online (took back 10s); gear put on: "
+                                          "handed out 300, looted 4, quests 0, the auction house 2, vendors 0, "
+                                          "made 0."));
+        True("by band: 80, nobody playing", Has(lines, "80: 1 bot-hours online, 0 with their AI running -- an hour "
+                                                       "of play, got - (looted -"));
+        True("by band: nothing yet", ByBand({}).empty());
+        True("an hour", AnHour(30000, 30) == "6g" && AnHour(1, 0) == "-");
+        const std::vector<std::string> report = Report("t", f, {}, 1);
+        True("report: by level", Has(report, "By level (a bot's time counted at each look at them):") &&
+                                     Has(report, "  20-39: 10 bot-hours"));
+        True("brief: an hour by level", Has(Brief(f, {}, 1), "Got an hour of play (looted), by level: 20-39 10g "
+                                                             "(5g)."));
+    }
+
     std::printf("%d/%d passed\n", g_checks - g_fails, g_checks);
     return g_fails ? 1 : 0;
 }

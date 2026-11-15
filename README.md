@@ -528,6 +528,13 @@ bots count, not anyone's own.
 - **A look at all of them, every half hour:** gold held, item level by level,
   professions, who is in the dungeon queue, the trade goods they carry and
   what is in their banks, and who has what up for auction.
+- **By level, an hour of a bot's time:** for each level band, its bot-hours
+  online and with the bot's AI running (playerbots runs only some at a time),
+  what a bot got an hour of play (all the game paid it, of that looted and
+  quest rewards), what it spent on the auction house, playerbots' top-ups an
+  hour online, and where the gear it put on came from. The numbers to decide
+  by before its free gear is turned off: whether a bot at each level earns
+  enough to buy its own.
 
 `.pbp economy [days]` gives the short of it (the last 7 days unless you
 say), from the console or SOAP as well as in game, and the full report

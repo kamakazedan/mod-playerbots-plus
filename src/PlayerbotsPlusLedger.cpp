@@ -21,7 +21,9 @@
 #include "World.h"
 #include "WorldSession.h"
 
+#include "PlayerbotAI.h"
 #include "PlayerbotAIConfig.h"
+#include "PlayerbotMgr.h"
 #include "RandomPlayerbotMgr.h"
 
 #include <algorithm>
@@ -106,6 +108,7 @@ namespace
         uint64_t other   = 0;       // an auction's buyer
         int64_t  amount  = 0;       // copper, or how many
         int64_t  extra   = 0;       // an auction's deposit, or the house's cut
+        uint8_t  level   = 0;       // the player's, then: its level band's figures
     };
 
     std::mutex        g_noteMutex;
@@ -156,6 +159,7 @@ namespace
         n.entry   = item->GetEntry();
         n.amount  = count;
         n.node    = node;
+        n.level   = uint8_t(player->GetLevel());
         Push(n);
     }
 
@@ -199,6 +203,7 @@ namespace
         n.entry   = stored.entry;
         n.amount  = count;
         n.node    = node;
+        n.level   = uint8_t(player->GetLevel());
         Push(n);
     }
 
@@ -212,6 +217,7 @@ namespace
         n.account = account;
         n.guid    = player->GetGUID().GetRawValue();
         n.amount  = copper;
+        n.level   = uint8_t(player->GetLevel());
         Push(n);
     }
 
@@ -348,6 +354,12 @@ namespace
         return who;
     }
 
+    // ".b2": the level band a figure of a bot of `level` goes in too.
+    std::string BandKey(uint32_t level)
+    {
+        return ".b" + std::to_string(PbpLedger::Band(level));
+    }
+
     void NoteOrigin(uint64_t item, From from)
     {
         if (g_origin.size() >= kKeepOrigins)
@@ -373,6 +385,7 @@ namespace
         }
         const std::string key = std::string("gear.") + FromKey(from);
         Add(key, 1);
+        Add(key + BandKey(n.level), 1);
         if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(n.entry))
             Add(key + ".ilvl", proto->ItemLevel);
     }
@@ -410,6 +423,8 @@ namespace
                 {
                     Add("ah.bought", 1);
                     Add("ah.bought.value", n.amount);
+                    Add("ah.bought.value" + BandKey(sCharacterCache->GetCharacterLevelByGuid(ObjectGuid(n.other))),
+                        n.amount);
                     Add(std::string("ah.bought.") + WhoKey(owner), 1);
                     Add(std::string("ah.bought.") + WhoKey(owner) + ".value", n.amount);
                     if (proto && PbpLedger::IsGear(proto->Class))
@@ -440,14 +455,20 @@ namespace
         switch (n.kind)
         {
             case NoteKind::Money:
-                Add(n.amount > 0 ? "gold.in" : "gold.out", std::llabs(n.amount));
+            {
+                const std::string key = n.amount > 0 ? "gold.in" : "gold.out";
+                Add(key, std::llabs(n.amount));
+                Add(key + BandKey(n.level), std::llabs(n.amount));
                 g_paid[n.guid] += n.amount;
                 return;
+            }
             case NoteKind::LootMoney:
                 Add("gold.loot", n.amount);
+                Add("gold.loot" + BandKey(n.level), n.amount);
                 return;
             case NoteKind::QuestMoney:
                 Add("gold.quests", n.amount);
+                Add("gold.quests" + BandKey(n.level), n.amount);
                 return;
             case NoteKind::Equip:
                 PutOn(n);
@@ -557,11 +578,28 @@ namespace
         {
             const int64_t rest = money - had->second - paid;
             if (rest > 0)
+            {
                 Add("gold.free", rest);
+                Add("gold.free.b" + b, rest);
+            }
             else if (rest < 0)
+            {
                 Add("gold.gone", -rest);
+                Add("gold.gone.b" + b, -rest);
+            }
         }
         g_had[raw] = money;
+
+        // Its time, by level band, for what a bot gets an hour: online, and
+        // with its AI running. Playerbots runs only some random bots at a time
+        // (Playerbots.BotActiveAlone), and one it is not running gets nothing;
+        // which ones changes every minute or so, so a look at each half hour
+        // counts it fairly over a day. A look stands for the minutes since the
+        // one before.
+        const int64_t minutes = Cfg().censusMinutes;
+        Add("time.b" + b, minutes);
+        if (PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot); ai && ai->IsActivityAllowedCached())
+            Add("time.active.b" + b, minutes);
 
         v["now.bots"] += 1;
         v["now.bots.b" + b] += 1;
