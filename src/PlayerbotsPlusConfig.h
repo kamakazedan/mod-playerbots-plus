@@ -276,6 +276,10 @@ namespace pbp
     extern bool        g_GroundEnable;
     extern float       g_GroundAirHeight;
 
+    // Bots playerbots is not running just now (PlayerbotsPlusInactive)
+    extern bool        g_InactiveEnable;
+    extern float       g_InactiveUnseenYards;
+
     // Getting back up (PlayerbotsPlusRevive)
     extern bool        g_ReviveEnable;
     extern uint32_t    g_ReviveReleaseDelaySeconds;

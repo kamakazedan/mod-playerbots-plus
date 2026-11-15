@@ -7,6 +7,7 @@
 
 #include "PlayerbotAI.h"
 #include "PlayerbotMgr.h"
+#include "RandomPlayerbotMgr.h"
 
 
 bool PbpIsBotPlayer(Player* player)
@@ -30,6 +31,15 @@ bool PbpGroupHasRealPlayer(Player* who)
         return false;
     for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
         if (PbpIsRealPlayer(ref->GetSource()))
+            return true;
+    return false;
+}
+
+bool PbpRealPlayerNear(uint32_t map, float x, float y, float z, float range)
+{
+    for (Player* p : sRandomPlayerbotMgr.GetPlayers())
+        if (p && p->IsInWorld() && p->GetMapId() == map && PbpIsRealPlayer(p) &&
+            p->GetExactDistSq(x, y, z) < range * range)
             return true;
     return false;
 }

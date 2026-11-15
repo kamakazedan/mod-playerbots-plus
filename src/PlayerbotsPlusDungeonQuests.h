@@ -16,7 +16,9 @@
 //   * walks idle random bots to the givers of those quests on the continent
 //     they are on, within BotDungeons.QuestRange, for quests that suit them
 //     (their level, not grey, one they may take), and takes them there:
-//     playerbots' own "go camp" walk gets them to the giver;
+//     playerbots' own "go camp" walk gets them to the giver (or, while
+//     playerbots is not running the bot and nobody would see, it is put
+//     there: PlayerbotsPlusInactive);
 //   * keeps a bot holding one from filling its log: BotDungeons.KeepLogFree
 //     slots are kept free by letting go of what a player would first --
 //     failed quests, grey ones, ones for other zones, the lowest -- never a
@@ -93,6 +95,7 @@ struct PbpDungeonQuestsStats
     uint64_t walksSlow  = 0;   // ...not there in BotDungeons.QuestWalkMinutes
     uint64_t walksBusy  = 0;   // ...playerbots kept giving it other things to do on the way
     uint64_t walksAway  = 0;   // ...taken off elsewhere: grouped, off the map, queued, hanging out
+    uint64_t walksPut   = 0;   // walks made at once: playerbots not running the bot, nobody near (PbpPutWhereGoing)
     uint64_t keptOn     = 0;   // teleports away from a walk turned down (a level-up, mostly)
     uint64_t handIns    = 0;   // bots sent to hand some in
     uint64_t handedIn   = 0;   // dungeon quests handed in (by anyone's hand)

@@ -123,6 +123,8 @@ namespace pbp
     float       g_SpaceRange              = 120.0f;
     bool        g_GroundEnable            = true;
     float       g_GroundAirHeight         = 3.0f;
+    bool        g_InactiveEnable          = true;
+    float       g_InactiveUnseenYards     = 150.0f;
 
     bool        g_ReviveEnable              = true;
     uint32_t    g_ReviveReleaseDelaySeconds = 5;
@@ -603,6 +605,9 @@ namespace
         g_GroundEnable    = B("PlayerbotsPlus.Ground.Enable", true);
         g_GroundAirHeight = std::clamp(F("PlayerbotsPlus.Ground.AirHeight", 3.0f), 2.0f, 20.0f);
 
+        g_InactiveEnable      = B("PlayerbotsPlus.Inactive.Enable", true);
+        g_InactiveUnseenYards = std::clamp(F("PlayerbotsPlus.Inactive.UnseenYards", 150.0f), 50.0f, 1000.0f);
+
         g_ReviveEnable              = B("PlayerbotsPlus.Revive.Enable", true);
         g_ReviveReleaseDelaySeconds = U("PlayerbotsPlus.Revive.ReleaseDelaySeconds", 5);
         g_ReviveWaitForRezSeconds   = U("PlayerbotsPlus.Revive.WaitForRezSeconds", 60);
@@ -1045,12 +1050,12 @@ void PlayerbotsPlus_LoadConfig(bool reload)
         : std::string();
     LOG_INFO(where,
              "[Playerbots Plus] City hangouts {} ({} spots, room for {}{}; fetched from elsewhere {}), stuck mounts "
-             "{}, on foot indoors {}, out of fires {}, room to stand {}, getting back up {}, raid marks {} (sapping "
-             "the star {}).",
+             "{}, on foot indoors {}, out of fires {}, room to stand {}, walks of bots playerbots is not running made "
+             "at once {} (nobody within {:.0f} yd), getting back up {}, raid marks {} (sapping the star {}).",
              pbp::g_HangoutEnable ? "on" : "off", pbp::g_HangoutSpots.size(), places, shared,
              pbp::g_HangoutBringIn ? "on" : "off", pbp::g_StuckEnable ? "on" : "off",
              pbp::g_IndoorsEnable ? "on" : "off", pbp::g_FireEnable ? "on" : "off",
-             pbp::g_SpaceEnable ? "on" : "off",
+             pbp::g_SpaceEnable ? "on" : "off", pbp::g_InactiveEnable ? "on" : "off", pbp::g_InactiveUnseenYards,
              pbp::g_ReviveEnable ? "on" : "off", pbp::g_MarksEnable ? "on" : "off",
              pbp::g_MarksSapStar ? "on" : "off");
 

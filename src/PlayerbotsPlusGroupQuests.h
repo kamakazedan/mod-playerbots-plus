@@ -113,6 +113,9 @@ struct PbpGroupQuestsStats
     uint64_t walksSlow  = 0;   // ...not there in GroupQuests.WalkMinutes
     uint64_t walksBusy  = 0;   // ...playerbots kept giving it other things to do on the way
     uint64_t walksAway  = 0;   // ...taken off elsewhere: grouped, off the map, queued, hanging out
+    uint64_t walksPut   = 0;   // walks made at once: playerbots not running the bot, nobody near (PbpPutWhereGoing)
+    uint64_t partyPut   = 0;   // ...for the party: one put by its leader, the leader (and those with it) on its way
+    uint64_t engaged    = 0;   // members brought into the party's fight, standing by while it went on
     uint64_t asks       = 0;   // asks for help in General
     uint64_t answers    = 0;   // ...answered by one who came along
     uint64_t parties    = 0;   // parties that got together and went

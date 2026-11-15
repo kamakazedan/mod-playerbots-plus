@@ -649,8 +649,9 @@ PlayerbotsPlus.BotDungeons.QuestRange = 1500
 #    PlayerbotsPlus.BotDungeons.QuestLookMinutes
 #        Bots sent off to take or hand in quests, all told, a minute; a walk
 #        not there after this many minutes is given up (and that place not
-#        walked to again by that bot); and a bot is looked at for quests at
-#        most this often.
+#        walked to again by that bot; one playerbots is not running is put
+#        there at once while nobody would see -- Inactive.*); and a bot is
+#        looked at for quests at most this often.
 #        Default: 10, 15, 30
 PlayerbotsPlus.BotDungeons.QuestWalksPerMinute = 10
 PlayerbotsPlus.BotDungeons.QuestWalkMinutes = 15
@@ -711,10 +712,13 @@ PlayerbotsPlus.BotDungeons.KeepLogFree = 3
 #       does the quest. The leader goes for what it is for -- what it asks to
 #       be killed, or what drops what it asks for: walks up to it when it is
 #       in sight, and the party's tank pulls it (the leader, with none), the
-#       others following and fighting with it, elites and all; waits where it
-#       stands (its spawn) when it is not about, the way people camp a named
-#       one, trying the next where several stand; and leaves it to
-#       playerbots' questing where none is known.
+#       others following and fighting with it, elites and all (once it fights
+#       one of them, everyone of the party within 50 yards is in the fight);
+#       waits where it stands (its spawn) when it is not about, the way
+#       people camp a named one, trying the next where several stand; and
+#       leaves it to playerbots' questing where none is known. Bots
+#       playerbots is not running walk nowhere: with nobody about, they are
+#       put where they were going (Inactive.*).
 #       Then every other group quest of the zone two of them hold, those
 #       without it leaving; then it breaks up, and they ask again only after
 #       CooldownMinutes. A quest done is never gone back to.
@@ -756,7 +760,9 @@ PlayerbotsPlus.GroupQuests.Enable = 0
 #        hand one in); how many bots are sent to take some or hand one in a
 #        minute, all told (0-600); how long a walk may take before it is given
 #        up (1-240 minutes; a party's walk to the quest's place too, which
-#        then counts as a failed try); and how often an idle bot is looked at
+#        then counts as a failed try; one playerbots is not running is put
+#        there at once while nobody would see -- Inactive.*); and how often
+#        an idle bot is looked at
 #        for one to hand in, quests to take or help to ask for (1-1440
 #        minutes).
 #        Default: 1500, 10, 15, 20
@@ -1682,6 +1688,57 @@ PlayerbotsPlus.Ground.Enable = 1
 #        a ledge cuts through the air for a moment). 2 to 20.
 #        Default: 3
 PlayerbotsPlus.Ground.AirHeight = 3
+
+###############################################################################
+#
+#   BOTS PLAYERBOTS IS NOT RUNNING
+#
+#   Playerbots runs only some of its random bots at a time:
+#   Playerbots.BotActiveAlone of them, taken in turns a minute at a time, and
+#   fewer the slower the world tick (its SmartScale). One near a real player
+#   or in a real player's zone, fighting, in a dungeon or a queue, or grouped
+#   with a real player always runs. One it has not picked just now does
+#   nothing at all: it stands where it is, <AFK>, whatever it was on its way
+#   to do -- and in a group of bots, everyone does while the leader does.
+#   Out in the world, away from the few real players, that is nearly every
+#   bot nearly all the time (with BotActiveAlone 15 and a busy tick, one in
+#   ten or fewer): the walks this module sends bots on got nowhere. A bot
+#   sent to a dungeon quest's giver took an hour or never got there, a group
+#   quest's party never got together, and its leader stood three tries
+#   running where it was, while the party's fights were the puller's alone.
+#
+#   So while nobody would see it, a walk of this module's that playerbots is
+#   not running is made at once: the bot is put where it was going, the way
+#   playerbots itself puts a bot whose walk gets nowhere where it was going,
+#   and city hangouts fetch a bot into a city nobody is in. That is:
+#   - one walking to a dungeon quest's giver or ender, or a group quest's:
+#     put a few steps from them;
+#   - one walking to its party's leader to get together: put by the leader;
+#   - a party on its way to what its quest is for: put by the nearest place
+#     it stands, or where it would pull it from (each of the party out of a
+#     fight comes along), and one of the party left behind by its leader;
+#   - one walking to its place at a city hangout: put there.
+#   "Nobody would see" is no real player within UnseenYards of where the bot
+#   is or of where it is put. With someone that near either end, it walks
+#   when its turn comes, as it did before.
+#
+#   And a group quest's party fights as one: once what it is there for
+#   fights one of them, everyone of the party within 50 yards is in the
+#   fight (playerbots runs a bot in a fight, picked or not). That is part
+#   of group quests, not of this; it is always on.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Inactive.Enable
+#        Default: 1
+PlayerbotsPlus.Inactive.Enable = 1
+
+#    PlayerbotsPlus.Inactive.UnseenYards
+#        How far from a real player a bot has to be, both where it is and
+#        where it is put, to be put there (yards; the game shows others up
+#        to about 100 away). 50 to 1000.
+#        Default: 150
+PlayerbotsPlus.Inactive.UnseenYards = 150
 
 ###############################################################################
 #

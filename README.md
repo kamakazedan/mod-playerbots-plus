@@ -323,6 +323,25 @@ the air (or into the ground).
 
 Settings: `PlayerbotsPlus.Ground.*`.
 
+## Bots playerbots isn't running
+
+Playerbots runs only some of its random bots at a time
+(`Playerbots.BotActiveAlone`, taken in turns a minute at a time, and fewer
+still when the server is busy). One near a real player or in their zone,
+fighting, in a dungeon or a queue always runs; the rest stand where they are,
+AFK, until their turn comes round. Away from the players that's nearly every
+bot nearly all the time, so the walks this module sends bots on went nowhere:
+to a dungeon quest's giver, a group quest's, the party getting together, its
+way to what the quest is for, a hangout spot.
+
+While nobody would see it, such a bot is put where it was going instead, the
+way playerbots itself puts a bot whose walk gets nowhere where it was going,
+and hangouts fetch a bot into a city nobody is in. "Nobody would see" is no
+real player within 150 yards of where it is or where it's put; with one that
+near, it walks when its turn comes, as before. The report counts them.
+
+Settings: `PlayerbotsPlus.Inactive.*`.
+
 ## Getting back up
 
 Playerbots leaves a bot that dies near a player lying where it fell until it's
@@ -639,8 +658,10 @@ this builds on.
   from wherever they are in the zone (15 minutes), and does the quest. The
   leader goes for what the quest is for, the named elite or whatever drops
   what it asks for: walks up to it, the party's tank pulls it (the leader if
-  there's none), and the rest follow and fight it with them. When it isn't
-  about they wait where it spawns, the way people camp a named mob. Then the
+  there's none), and the rest follow and fight it with them: once it's
+  fighting one of them, everyone of the party within 50 yards is in the fight.
+  When it isn't about they wait where it spawns, the way people camp a named
+  mob. Then the
   next group quest of the zone two of them hold, those without it leaving, and
   so on until they've none left together. A quest done is never gone back to.
 - **Failing.** A wipe, one of them dying 3 times, 10 minutes at the quest's
@@ -661,8 +682,9 @@ this builds on.
   its quest, nor a bot walking to take or hand one in: playerbots teleports a
   bot that levels up if it leads its group, and the party's leader levels as
   often as the rest. A teleport to the party's own places (what the quest is
-  for, the leader they're meeting, the giver) still goes: that's playerbots
-  putting a bot that got stuck on its way where it was going.
+  for, their leader, the giver) still goes: that's playerbots putting a bot
+  that got stuck on its way where it was going, or this module putting one
+  there that playerbots isn't running (below).
 - **On its way.** The leader goes straight for what the quest is for, not
   after every mob it passes or chatting to whoever's about on the way, and
   still fights whatever attacks the party.

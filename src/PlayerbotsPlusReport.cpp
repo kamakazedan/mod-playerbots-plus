@@ -115,12 +115,14 @@ namespace
 
         PbpHangoutStats const h = PbpHangout_GetStats();
         out.push_back(fmt::format("City hangouts: {} - {} hanging out ({} AFK), {} on their way, {} spots ({} with an "
-                                  "inn to arrive at). Sent {}, fetched from elsewhere {} ({} gone back), settled {}, "
-                                  "never got there {} ({} no room at the spot, {} too slow, {} given something else "
-                                  "to do, {} went elsewhere, {} never landed), sent on to another spot in the city {}, "
-                                  "spots found full {} times, moved on {}, cut short {}, back from AFK {}.",
+                                  "inn to arrive at). Sent {}, fetched from elsewhere {} ({} gone back), settled {} "
+                                  "({} put at their place, playerbots not running them and nobody about), never got "
+                                  "there {} ({} no room at the spot, {} too slow, {} given something else to do, {} "
+                                  "went elsewhere, {} never landed), sent on to another spot in the city {}, spots "
+                                  "found full {} times, moved on {}, cut short {}, back from AFK {}.",
                                   OnOff(g_HangoutEnable), h.hanging, h.away, h.onTheWay, h.spots, h.withInn, h.sent,
-                                  h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.lostNoRoom, h.lostSlow, h.lostBusy,
+                                  h.broughtIn, h.sentBack, h.settled, h.putThere, h.gaveUp, h.lostNoRoom, h.lostSlow,
+                                  h.lostBusy,
                                   h.lostElsewhere, h.lostLanding, h.redirected, h.foundFull, h.movedOn, h.cutShort,
                                   h.cameBack));
         out.push_back(fmt::format("City life: {} - steps {}, looks round {}, hops {}, mounts reared {} ({} done back), "

@@ -6,6 +6,7 @@
 #include "PlayerbotsPlusDungeonsText.h"
 #include "PlayerbotsPlusGroupQuestsText.h"
 #include "PlayerbotsPlusHangout.h"
+#include "PlayerbotsPlusInactive.h"
 #include "PlayerbotsPlusUtil.h"
 
 #include "CellImpl.h"
@@ -40,6 +41,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <deque>
 #include <list>
 #include <map>
@@ -821,6 +823,14 @@ namespace
                 ++it;
                 continue;
             }
+            // Playerbots not running it just now, it walks nowhere: put
+            // there while nobody would see (PlayerbotsPlusInactive).
+            if (!w.there && PbpPutWhereGoing(bot, w.spot.map, w.spot.x, w.spot.y, w.spot.z, 4.0f))
+            {
+                ++g_stats.walksPut;
+                ++it;
+                continue;
+            }
             float const dist = bot->GetExactDist(w.spot.x, w.spot.y, w.spot.z);
             bool const going = GoingTo(ai, w.spot.map, w.spot.x, w.spot.y, w.spot.z, 2.0f);
             if (w.there || dist <= 12.0f || (!going && dist <= 30.0f))
@@ -930,14 +940,15 @@ namespace
         std::vector<uint32> done;             // quests it did or gave up on: not gone back to
         std::unordered_set<uint64> arrived;   // Meeting: got to the leader
         bool leaderStripped = false;          // Questing: the leader's wander-about strategies are off (StripLeader)
+        Clock::time_point lastPut;            // Questing: some of it last put where it was going (PutParty, KeepUp)
     };
     std::map<uint32, Party> g_parties;   // by id: the oldest first
     uint32 g_nextParty = 1;
 
     // Members of a party getting together or at it, and those walking for
     // one, kept there (PbpGroupQuestsTeleportScript) -- but for a teleport to
-    // one of their own places: what the quest is for, its middle, the leader
-    // they are getting together with, the giver they are walking to. That is
+    // one of their own places: what the quest is for, its middle, their
+    // leader, the giver they are walking to. That is
     // playerbots getting one stuck on the way there to it ("go camp" gives up
     // walking after a while and takes it there), and turning it down left a
     // leader stuck on a ledge 900 yards from the lair for every try it had.
@@ -968,9 +979,10 @@ namespace
                 for (Spot const& lair : q->second.lairs)
                     places.push_back({ lair.map, lair.x, lair.y });
             }
-            if (p.phase == Phase::Meeting)
-                if (Player* leader = InWorld(p.leader))
-                    places.push_back({ leader->GetMapId(), leader->GetPositionX(), leader->GetPositionY() });
+            // The leader too: one getting together goes to it, and one left
+            // behind is put by it (KeepUp).
+            if (Player* leader = InWorld(p.leader))
+                places.push_back({ leader->GetMapId(), leader->GetPositionX(), leader->GetPositionY() });
             for (uint64 m : p.members)
                 keep[m] = places;
         }
@@ -1315,6 +1327,12 @@ namespace
                              leader->GetPositionZ(), 15.0f))
                     ai->rpgInfo.ChangeToGoCamp(WorldPosition(leader->GetMapId(), leader->GetPositionX(),
                                                              leader->GetPositionY(), leader->GetPositionZ()));
+                // Playerbots not running it, it walks nowhere: put by the
+                // leader while nobody would see. It joins on the next look.
+                if (!leader->IsBeingTeleported() &&
+                    PbpPutWhereGoing(bot, leader->GetMapId(), leader->GetPositionX(), leader->GetPositionY(),
+                                     leader->GetPositionZ(), 5.0f))
+                    ++g_stats.partyPut;
                 continue;
             }
             // There: into the party, as it would be invited and say yes.
@@ -1602,6 +1620,107 @@ namespace
             target->AI()->AttackStart(puller);
     }
 
+    constexpr float kKeepUp      = 40.0f;   // one of the party further than this from its leader is left behind
+    constexpr float kEngageRange = 50.0f;   // ...and one this near a fight of the party's is in it
+    constexpr auto  kPutEvery    = std::chrono::seconds(10);   // a party put somewhere at most this often
+
+    // The party, put with its leader where the leader was walking to.
+    // Playerbots not running the leader -- nor, so, anyone in its group: a
+    // bot follows suit with its leader -- they walk nowhere. While nobody
+    // would see (PlayerbotsPlusInactive), the leader is put there and each
+    // of the rest out of a fight with it; at most every kPutEvery, so a
+    // place it cannot do what it went for from is not hopped to again and
+    // again. True: the leader was.
+    bool PutParty(Party& p, Player* leader, uint32 map, float x, float y, float z, float within,
+                  Clock::time_point now)
+    {
+        if (now - p.lastPut < kPutEvery || !PbpPutWhereGoing(leader, map, x, y, z, within))
+            return false;
+        p.lastPut = now;
+        ++g_stats.partyPut;
+        if (!p.solo)
+            for (uint64 m : p.members)
+                if (m != p.leader)
+                    if (Player* bot = InWorld(m); bot && PbpPutWhereGoing(bot, map, x, y, z, within + 3.0f))
+                        ++g_stats.partyPut;
+        return true;
+    }
+
+    // Where the party would pull `target` from: on the floor, kPullRange
+    // less ten yards from it, on the leader's side (or near that), in sight of
+    // it and out of the water.
+    bool ReachOf(Player* leader, Creature* target, float& x, float& y, float& z)
+    {
+        Map* map = target->GetMap();
+        uint32 const phase = leader->GetPhaseMask();
+        float const tx = target->GetPositionX(), ty = target->GetPositionY(), tz = target->GetPositionZ();
+        float const toward = target->GetAngle(leader);
+        float const dist = kPullRange - 10.0f;
+        for (int i = 0; i < 7; ++i)
+        {
+            float const angle = toward + 0.5f * float((i + 1) / 2) * (i % 2 ? 1.0f : -1.0f);
+            float const px = tx + dist * std::cos(angle);
+            float const py = ty + dist * std::sin(angle);
+            float const pz = map->GetHeight(phase, px, py, tz + 5.0f, true, 15.0f);
+            if (pz <= INVALID_HEIGHT || std::fabs(pz - tz) > 8.0f || map->IsInWater(phase, px, py, pz, 2.0f))
+                continue;
+            if (!map->isInLineOfSight(px, py, pz + 1.5f, tx, ty, tz + 1.5f, phase, LINEOFSIGHT_ALL_CHECKS,
+                                      VMAP::ModelIgnoreFlags::Nothing))
+                continue;
+            x = px;
+            y = py;
+            z = pz;
+            return true;
+        }
+        return false;
+    }
+
+    // One of the party left behind -- playerbots running the leader on its
+    // way and not it, or the leader put somewhere it was not -- is put by the
+    // leader while nobody would see.
+    void KeepUp(Party& p, Player* leader, Clock::time_point now)
+    {
+        if (p.solo || !leader->IsAlive() || leader->IsBeingTeleported() || now - p.lastPut < kPutEvery)
+            return;
+        for (uint64 m : p.members)
+            if (m != p.leader)
+                if (Player* bot = InWorld(m); bot && bot->GetMapId() == leader->GetMapId() &&
+                                              bot->GetExactDist(leader) > kKeepUp &&
+                                              PbpPutWhereGoing(bot, leader->GetMapId(), leader->GetPositionX(),
+                                                               leader->GetPositionY(), leader->GetPositionZ(), 5.0f))
+                {
+                    p.lastPut = now;
+                    ++g_stats.partyPut;
+                }
+    }
+
+    // What the party is for, fighting one of them: everyone of the party near
+    // it is in the fight, as a party is. Playerbots runs a bot standing about
+    // (one it has not picked just now) only once that one is in a fight, so
+    // the rest stood and watched the puller fight it alone, and die.
+    void Engage(Party& p, GroupQuest const& q)
+    {
+        if (p.solo)
+            return;
+        std::vector<Creature*> fights;
+        for (uint64 m : p.members)
+            if (Player* bot = InWorld(m); bot && bot->IsAlive() && bot->IsInCombat())
+                for (Unit* attacker : bot->getAttackers())
+                    if (Creature* c = attacker ? attacker->ToCreature() : nullptr;
+                        c && c->IsAlive() && IsTarget(q, c->GetEntry()) &&
+                        std::find(fights.begin(), fights.end(), c) == fights.end())
+                        fights.push_back(c);
+        for (Creature* c : fights)
+            for (uint64 m : p.members)
+                if (Player* bot = InWorld(m); bot && bot->IsAlive() && !bot->IsInCombat() &&
+                                              !bot->IsBeingTeleported() && bot->IsWithinDistInMap(c, kEngageRange) &&
+                                              bot->IsValidAttackTarget(c))
+                {
+                    c->EngageWithTarget(bot);
+                    ++g_stats.engaged;
+                }
+    }
+
     // How the leader spent a try with nothing moving forward, for the log.
     std::string Spent(Party const& p, Player* leader)
     {
@@ -1776,6 +1895,7 @@ namespace
         if (progress > p.progress || far || atIt)
             Moved(p, now);
         p.progress = progress;
+        Engage(p, q);
         if (now - p.progressAt >= std::chrono::minutes(Cfg().noProgressMinutes))
         {
             std::string const why = "nothing moved forward: " + Sighting(leader, q) + Spent(p, leader);
@@ -1805,6 +1925,10 @@ namespace
                         z = leader->GetPositionZ();
                     ai->rpgInfo.ChangeToGoCamp(WorldPosition(q.map, q.areaX, q.areaY, z));
                 }
+                // Not running, it goes nowhere: put by the nearest lair of
+                // what it is for (on the ground, where its middle may not be).
+                if (Spot const* lair = NearestLair(leader, q))
+                    PutParty(p, leader, lair->map, lair->x, lair->y, lair->z, 15.0f, now);
             }
             else if (Creature* target = NearestTarget(leader, q))
             {
@@ -1821,10 +1945,18 @@ namespace
                     Pull(puller, target);
                     Moved(p, now);
                 }
-                else if (!inReach && !GoingTo(ai, target->GetMapId(), target->GetPositionX(), target->GetPositionY(),
-                                              target->GetPositionZ(), 15.0f))
-                    ai->rpgInfo.ChangeToGoCamp(WorldPosition(target->GetMapId(), target->GetPositionX(),
-                                                             target->GetPositionY(), target->GetPositionZ()));
+                else if (!inReach)
+                {
+                    if (!GoingTo(ai, target->GetMapId(), target->GetPositionX(), target->GetPositionY(),
+                                 target->GetPositionZ(), 15.0f))
+                        ai->rpgInfo.ChangeToGoCamp(WorldPosition(target->GetMapId(), target->GetPositionX(),
+                                                                 target->GetPositionY(), target->GetPositionZ()));
+                    // Not running, it goes nowhere: put where it would pull
+                    // from, and pulls on the next look.
+                    float x = 0.0f, y = 0.0f, z = 0.0f;
+                    if (ReachOf(leader, target, x, y, z))
+                        PutParty(p, leader, target->GetMapId(), x, y, z, 3.0f, now);
+                }
             }
             else if (size_t index = SIZE_MAX; Spot const* lair = NearestLair(leader, q, p.emptyLairs, &index))
             {
@@ -1837,6 +1969,8 @@ namespace
                     p.lair = SIZE_MAX;
                     if (!GoingTo(ai, lair->map, lair->x, lair->y, lair->z, 15.0f))
                         ai->rpgInfo.ChangeToGoCamp(WorldPosition(lair->map, lair->x, lair->y, lair->z));
+                    // Not running, it goes nowhere: put there.
+                    PutParty(p, leader, lair->map, lair->x, lair->y, lair->z, 15.0f, now);
                 }
                 else
                 {
@@ -1872,6 +2006,7 @@ namespace
                         ai->rpgInfo.ChangeToDoQuest(p.quest, quest);
             }
         }
+        KeepUp(p, leader, now);
         if (now >= p.nextStrip)
         {
             p.nextStrip = now + std::chrono::seconds(10);
@@ -2181,8 +2316,10 @@ PbpBrief PbpGroupQuests_Brief(bool full)
                           std::to_string(st.handedIn) + " handed in), " + std::to_string(st.walksLost) +
                           " walks given up (" + std::to_string(st.walksSlow) + " too slow, " +
                           std::to_string(st.walksBusy) + " kept given other things to do, " +
-                          std::to_string(st.walksAway) + " taken off elsewhere); " + std::to_string(st.asks) +
-                          " asks for help, " + std::to_string(st.answers) + " answered.");
+                          std::to_string(st.walksAway) + " taken off elsewhere), " + std::to_string(st.walksPut) +
+                          " put there with nobody about; " + std::to_string(st.asks) + " asks for help, " +
+                          std::to_string(st.answers) + " answered; " + std::to_string(st.partyPut) +
+                          " put with their party, " + std::to_string(st.engaged) + " brought into its fight.");
     if (!on)
         return b;
     if (st.parties + st.solos >= 3 && !st.done)
@@ -2226,9 +2363,12 @@ std::vector<std::string> PbpGroupQuests_Status()
                   std::to_string(st.taken) + " taken), " + std::to_string(st.handIns) + " to hand one in (" +
                   std::to_string(st.handedIn) + " handed in), " + std::to_string(st.walksLost) +
                   " walks given up (" + std::to_string(st.walksSlow) + " too slow, " + std::to_string(st.walksBusy) +
-                  " kept given other things to do, " + std::to_string(st.walksAway) + " taken off elsewhere); " +
-                  std::to_string(st.asks) + " asks for help, " + std::to_string(st.answers) +
-                  " answered; " + std::to_string(st.parties) + " parties went, " + std::to_string(st.solos) +
+                  " kept given other things to do, " + std::to_string(st.walksAway) + " taken off elsewhere), " +
+                  std::to_string(st.walksPut) + " put where they were going (playerbots not running them, nobody "
+                  "about); " + std::to_string(st.asks) + " asks for help, " + std::to_string(st.answers) +
+                  " answered; " + std::to_string(st.partyPut) + " put with their party the same way, " +
+                  std::to_string(st.engaged) + " standing by brought into its fight; " +
+                  std::to_string(st.parties) + " parties went, " + std::to_string(st.solos) +
                   " went alone; " + std::to_string(st.done) + " quests done, " + std::to_string(st.failedTries) +
                   " tries failed; let go: " + std::to_string(st.gaveUp) + " after their tries, " +
                   std::to_string(st.greyGone) + " grey; " + std::to_string(st.made) + " log slots made; " +

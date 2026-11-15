@@ -19,6 +19,10 @@ inline bool PbpIsRealPlayer(Player* player)
 // Someone in this player's group is a real player.
 bool PbpGroupHasRealPlayer(Player* who);
 
+// A real player on `map` within `range` yards of the point: they would see a
+// bot turn up there, or vanish from it.
+bool PbpRealPlayerNear(uint32_t map, float x, float y, float z, float range);
+
 PlayerbotAI* PbpAiOf(Player* player);
 
 // The zone it is in, by name ("Elwynn Forest"); empty when unknown.

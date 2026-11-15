@@ -2020,8 +2020,8 @@ PbpBrief PbpDungeons_Brief(bool full)
                               " to hand some in (" + std::to_string(q.handedIn) + " handed in), " +
                               std::to_string(q.walksLost) + " walks given up (" + std::to_string(q.walksSlow) +
                               " too slow, " + std::to_string(q.walksBusy) + " kept given other things to do, " +
-                              std::to_string(q.walksAway) + " taken off elsewhere), " + std::to_string(q.walking) +
-                              " on their way now.");
+                              std::to_string(q.walksAway) + " taken off elsewhere), " + std::to_string(q.walksPut) +
+                              " put there with nobody about, " + std::to_string(q.walking) + " on their way now.");
     }
     if (!on)
         return b;
@@ -2153,7 +2153,9 @@ std::vector<std::string> PbpDungeons_Status()
                       " walks given up (" + std::to_string(q.walksSlow) + " too slow, " +
                       std::to_string(q.walksBusy) + " kept given other things to do, " +
                       std::to_string(q.walksAway) + " taken off elsewhere; " + std::to_string(q.keptOn) +
-                      " teleports away from a walk turned down); " + std::to_string(q.made) +
+                      " teleports away from a walk turned down); " + std::to_string(q.walksPut) +
+                      " put where they were going, playerbots not running them and nobody about; " +
+                      std::to_string(q.made) +
                       " log slots made; let go: " +
                       std::to_string(q.greyGone) + " grey, " + std::to_string(q.triesGone) + " after " +
                       std::to_string(s.questRuns) + " runs; " + std::to_string(q.walking) + " on their way now.");

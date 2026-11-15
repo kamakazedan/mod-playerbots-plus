@@ -5,6 +5,7 @@
 #include "PlayerbotsPlusDungeonsText.h"
 #include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusHangout.h"
+#include "PlayerbotsPlusInactive.h"
 #include "PlayerbotsPlusUtil.h"
 
 #if PBP_BOT_DUNGEONS
@@ -586,6 +587,15 @@ namespace
             }
             if (!bot->IsAlive() || bot->IsInCombat())
             {
+                ++it;
+                continue;
+            }
+            // Playerbots not running it just now, it walks nowhere: put
+            // there while nobody would see (PlayerbotsPlusInactive). It takes
+            // them or hands one in on the next look.
+            if (!w.there && PbpPutWhereGoing(bot, w.spot.map, w.spot.x, w.spot.y, w.spot.z, 4.0f))
+            {
+                ++g_stats.walksPut;
                 ++it;
                 continue;
             }

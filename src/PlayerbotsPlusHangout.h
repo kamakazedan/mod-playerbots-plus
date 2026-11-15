@@ -184,6 +184,7 @@ struct PbpHangoutStats
 {
     uint64_t sent      = 0;   // set off for a spot
     uint64_t settled   = 0;   // got there and settled
+    uint64_t putThere  = 0;   // ...put at its place, playerbots not running it and nobody about (PbpPutWhereGoing)
     uint64_t gaveUp    = 0;   // never got there:
     uint64_t lostNoRoom    = 0;   // ...fetched, and no place found for it at the spot
     uint64_t lostSlow      = 0;   // ...on the way longer than Hangout.TravelSeconds

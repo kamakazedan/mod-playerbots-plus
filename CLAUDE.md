@@ -241,11 +241,13 @@ otherwise. This module must still build and run without it; check both ways.
   takes the members off the list (`LetOut`) before it sends them out.
 - Walks for quests use playerbots' own "go camp" (`rpgInfo.ChangeToGoCamp`),
   as hangouts do: hangouts leave a bot on its way to a camp alone, and these
-  leave a hanging-out one alone (`PbpHangout_Has`). A hangout never fetches
-  a walker (`Wanted`: `PbpDungeonQuests_Walking`), and a walker is not
-  teleported anywhere but to where it walks (`PbpDungeonQuests_MayTeleport`):
-  playerbots' level-up teleport took walkers to another continent. Why a
-  walk was given up is counted (too slow, kept busy, taken off elsewhere).
+  leave a hanging-out one alone (`PbpHangout_Has`). One playerbots is not
+  running is put there (*Bots playerbots is not running*). A hangout never
+  fetches a walker (`Wanted`: `PbpDungeonQuests_Walking`), and a walker is
+  not teleported anywhere but to where it walks
+  (`PbpDungeonQuests_MayTeleport`): playerbots' level-up teleport took
+  walkers to another continent. Why a walk was given up is counted (too
+  slow, kept busy, taken off elsewhere).
 - With nobody free to heal, one who does the damage heals instead
   (`HealerStepIn`, picked in the pure `PickParty`). From the core's
   `MinDualSpecLevel` it heals on its second spec: dual spec learned as a
@@ -297,10 +299,10 @@ more suggested players). Built without mod-dungeon-clear too.
   down (`PbpGroupQuestsTeleportScript`, on a list the world tick publishes),
   and so is a bot walking to take or hand in a group quest. A teleport to
   within 80 yards of one of their own places (the quest's area and lairs,
-  the leader they are meeting, the giver walked to) goes: that is
-  playerbots' `MoveFarTo` giving up on a walk ("go camp") and putting the
-  bot where it was going. Turned down, it left a leader on a ledge 900
-  yards from the lair for every try it had.
+  their leader, the giver walked to) goes: that is playerbots' `MoveFarTo`
+  giving up on a walk ("go camp") and putting the bot where it was going,
+  or this module putting one there. Turned down, it left a leader on a
+  ledge 900 yards from the lair for every try it had.
 - Walked there by this module, the leader is stripped of grind and rpg
   (`StripLeader`), but not "new rpg", which walks it: on the way it went
   after every mob it passed. Playerbots' own questing (nothing known of
@@ -316,7 +318,34 @@ more suggested players). Built without mod-dungeon-clear too.
   dying `GroupQuests.Deaths` times in a try, fails it and breaks the party
   up for now. The party's tank pulls (`PlayerbotAI::IsTank`), and a quest
   with an elite to kill is asked for and answered only at its level (`UpTo`).
+- A party fights as one (`Engage`): once what it is for fights one of
+  them, the rest within 50 yards are put in the fight the way the core puts
+  someone in one (`EngageWithTarget`). Playerbots runs a bot in a fight
+  whether it picked it or not; left out, the rest stood and watched the
+  puller die.
 - What they say is mod-ollama-chat's: `BotEventType::GroupQuest*`.
+
+## Bots playerbots is not running
+
+Playerbots runs only some random bots' AI at a time
+(`Playerbots.BotActiveAlone`, a rotation a minute at a time, cut further by
+its SmartScale when the tick is slow); one near a real player or in one's
+zone, fighting, in a dungeon or a queue, or grouped with a real player
+always runs. `PlayerbotAI::IsActivityAllowedCached()` says which
+(`PbpInactive`). One not running does nothing -- a "go camp" goes nowhere,
+and a group of bots follows suit with its leader -- so out in the world
+nearly every walk this module sends a bot on stalled: walks given up as too
+slow, parties never together, group quests never done.
+
+`PlayerbotsPlusInactive` puts such a walker where it was going while nobody
+would see (`PbpPutWhereGoing`: no real player within `Inactive.UnseenYards`
+of either end), as playerbots' own `MoveFarTo` does for a walk that gets
+nowhere and hangouts do for a city nobody is in: dungeon-quest and
+group-quest walks, getting together, a party's way to its lair or to where
+it would pull (`PutParty`, `ReachOf`), one of a party left behind (`KeepUp`),
+a hangout walk. A new walk of this module's does the same. Never touch the
+AI's own activity (`allowActive` is protected, and a bot made to run would
+cost what playerbots' throttle saves).
 
 ## Feet on the ground
 

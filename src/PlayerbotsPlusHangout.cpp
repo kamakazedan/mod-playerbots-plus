@@ -5,6 +5,7 @@
 #include "PlayerbotsPlusDungeonQuests.h"
 #include "PlayerbotsPlusFire.h"
 #include "PlayerbotsPlusGroupQuests.h"
+#include "PlayerbotsPlusInactive.h"
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusText.h"
 #include "PlayerbotsPlusUtil.h"
@@ -425,22 +426,11 @@ namespace
         return fallback;
     }
 
-    // A real player anywhere near a place, on its map: they would see a bot
-    // appear there, or vanish.
-    bool RealPlayerNear(uint32_t map, float x, float y, float z, float range)
-    {
-        for (Player* p : sRandomPlayerbotMgr.GetPlayers())
-            if (p && p->IsInWorld() && p->GetMapId() == map && PbpIsRealPlayer(p) &&
-                p->GetExactDistSq(x, y, z) < range * range)
-                return true;
-        return false;
-    }
-
     // Someone would see a bot appear at this spot: in its zone, or near
     // enough over the zone line (the gates, from inside the city).
     bool Watched(const PbpHangoutSpot& s, uint32_t zone)
     {
-        return g_watched.contains(WatchKey(s.map, zone)) || RealPlayerNear(s.map, s.x, s.y, s.z, 250.0f);
+        return g_watched.contains(WatchKey(s.map, zone)) || PbpRealPlayerNear(s.map, s.x, s.y, s.z, 250.0f);
     }
 
     // In the spot's zone -- or, for one outside a city's gates, near it from
@@ -768,8 +758,8 @@ namespace
     bool SendBack(Player* bot, PlayerbotAI* ai, const Visit& v)
     {
         if (!ai || !bot->IsInWorld() || bot->IsBeingTeleported() || Wanted(bot) || bot->GetVehicle() ||
-            RealPlayerNear(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 150.0f) ||
-            RealPlayerNear(v.fromMap, v.fromX, v.fromY, v.fromZ, 150.0f))
+            PbpRealPlayerNear(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 150.0f) ||
+            PbpRealPlayerNear(v.fromMap, v.fromX, v.fromY, v.fromZ, 150.0f))
             return false;
         bot->GetMotionMaster()->Clear();
         ai->Reset(true);
@@ -842,7 +832,8 @@ namespace
             return false;
         if (bot->GetLevel() < MinLevelFor(s, zone) || !TeamFits(bot, zone))
             return false;
-        return !RealPlayerNear(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), 150.0f);
+        return !PbpRealPlayerNear(bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
+                                  150.0f);
     }
 
     // Where a bot fetched in at an inn turns up: a few steps in front of the
@@ -913,7 +904,7 @@ namespace
         }
         else
         {
-            if (RealPlayerNear(s.map, x, y, z, 150.0f))
+            if (PbpRealPlayerNear(s.map, x, y, z, 150.0f))
                 return false;   // over the zone line from someone after all
             const float ground = base->GetHeight(PHASEMASK_NORMAL, x, y, z + 2.0f, true, 6.0f);
             if (ground > INVALID_HEIGHT && std::fabs(ground - z) < 3.0f)
@@ -1283,6 +1274,14 @@ namespace
                 ++g_stats.lostBusy;
                 Let(bot, ai, v, false, now);
                 return false;
+            }
+            // Playerbots not running it just now, it walks nowhere: put at
+            // its place while nobody would see (PlayerbotsPlusInactive).
+            // There on the next look.
+            if (PbpPutWhereGoing(bot, v.map, v.x, v.y, v.z, 0.0f))
+            {
+                ++g_stats.putThere;
+                return true;
             }
             there = dist < 10.0f;
         }
@@ -3653,10 +3652,10 @@ PbpBrief PbpHangout_Brief(bool full)
         if (!byCity.empty())
             b.lines.push_back("By city, there/room: " + byCity + ".");
         b.lines.push_back(fmt::format("Since start: {} sent to a spot, {} fetched from elsewhere ({} gone back), {} "
-                                      "settled, {} never got there ({} too slow), {} sent on to another spot; spots "
-                                      "found full {} times.",
-                                      h.sent, h.broughtIn, h.sentBack, h.settled, h.gaveUp, h.lostSlow, h.redirected,
-                                      h.foundFull));
+                                      "settled ({} put at their place with nobody about), {} never got there ({} too "
+                                      "slow), {} sent on to another spot; spots found full {} times.",
+                                      h.sent, h.broughtIn, h.sentBack, h.settled, h.putThere, h.gaveUp, h.lostSlow,
+                                      h.redirected, h.foundFull));
     }
     if (on && g_LifeEnable)
         b.lines.push_back(fmt::format("City life: on -- {} steps, {} hops, {} mounts reared ({} done back), {} runs "
