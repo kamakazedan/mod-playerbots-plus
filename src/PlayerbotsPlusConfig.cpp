@@ -3,6 +3,7 @@
 #include "PlayerbotsPlusLedgerText.h"
 #include "PlayerbotsPlusMute.h"
 #include "PlayerbotsPlusText.h"
+#include "PlayerbotsPlusZonesText.h"
 
 #include "Config.h"
 #include "Log.h"
@@ -48,6 +49,13 @@ namespace pbp
     uint32_t    g_HangoutInnArrivalSeconds = 5;
     bool        g_HangoutCityWeights       = true;
     uint32_t    g_HangoutHotShare          = 75;
+    std::vector<PbpHangoutZone> g_HangoutZones;
+    std::unordered_map<std::string, uint32_t> g_HangoutZonePlaces;
+    uint32_t    g_HangoutZoneShiftSeconds  = 30;
+    uint32_t    g_HangoutZoneShiftStep     = 3;
+    uint32_t    g_HangoutZonePull          = 10;
+    uint32_t    g_HangoutZoneMoveSeconds   = 15;
+    uint32_t    g_HangoutZoneMovesAtOnce   = 3;
 
     bool        g_LifeEnable               = true;
     float       g_LifeRange                = 90.0f;
@@ -314,7 +322,14 @@ namespace
         { "OrgrimmarBank",      "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar" },
         { "OrgrimmarCourtyard", "1 1578.0 -4412.0 8.5 30 18 the middle of the Valley of Strength in Orgrimmar" },
         { "OrgrimmarGateway",   "1 1527.0 -4408.0 18.0 22 10 just inside the gates of Orgrimmar" },
-        { "OrgrimmarDrag",      "1 1768.0 -4320.9 6.6 16 8 the Drag in Orgrimmar" },
+        { "OrgrimmarSpirits",   "1 1566.2 -4194.1 42.9 22 10 the crossroads by the Valley of Spirits in Orgrimmar" },
+        { "OrgrimmarWisdom",    "1 1958.0 -4330.0 22.3 20 8 the Valley of Wisdom in Orgrimmar" },
+        { "OrgrimmarWestRoad",  "1 1666.0 -4100.0 35.5 18 8 the road west of the Hall of Legends in Orgrimmar" },
+        { "OrgrimmarCleft",     "1 1768.0 -4320.9 6.6 16 8 the mouth of the Cleft of Shadow in Orgrimmar" },
+        { "OrgrimmarCleftStone",
+          "1 1810.0 -4389.0 -17.5 14 4 the meeting stone deep in the Cleft of Shadow in Orgrimmar" },
+        { "OrgrimmarCleftDepths",
+          "1 1840.0 -4333.0 -15.2 12 3 the warlock trainers deep in the Cleft of Shadow in Orgrimmar" },
         { "OrgrimmarHonor",     "1 2076.4 -4824.2 23.7 18 8 the Valley of Honor in Orgrimmar" },
         { "OrgrimmarGates",     "1 1320.0 -4400.0 27.0 22 14 outside the gates of Orgrimmar" },
         { "OrgrimmarZeppelins", "1 1342.0 -4645.0 53.6 10 5 the zeppelin tower outside Orgrimmar" },
@@ -351,6 +366,31 @@ namespace
         "OrgrimmarValley|OrgrimmarAuctionHall|OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|"
         "ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|"
         "DalaranBank|DalaranRuneweaver|DalaranMerchants";
+
+    // A city's zones (Hangout.Zone.<City>.<Name>): "tier spot spot ...", the
+    // spots sharing what the zone's share of the city's people comes to.
+    // Used with the spots above (the conf has no Hangout.Spot.* keys) when
+    // the conf has no Hangout.Zone.* keys either. Orgrimmar's: most people
+    // in the Valley of Strength, some at the crossroads by the Valley of
+    // Spirits, a few in each of the Valley of Wisdom, the Cleft of Shadow,
+    // the Valley of Honor and the road west of the Hall of Legends.
+    const std::pair<const char*, const char*> kDefaultHangoutZones[] = {
+        { "Orgrimmar.Strength",
+          "high OrgrimmarValley OrgrimmarAuctionHall OrgrimmarBank OrgrimmarCourtyard OrgrimmarGateway" },
+        { "Orgrimmar.Spirits", "medium OrgrimmarSpirits" },
+        { "Orgrimmar.Wisdom", "low OrgrimmarWisdom" },
+        { "Orgrimmar.Cleft", "low OrgrimmarCleft OrgrimmarCleftStone OrgrimmarCleftDepths" },
+        { "Orgrimmar.Honor", "low OrgrimmarHonor" },
+        { "Orgrimmar.WestRoad", "low OrgrimmarWestRoad" },
+    };
+
+    // What a zone of each tier holds of its city's people (Hangout.ZoneTier.<Name>):
+    // "least start most", in percent.
+    const std::pair<const char*, const char*> kDefaultZoneTiers[] = {
+        { "Low", "1 5 10" },
+        { "Medium", "10 15 20" },
+        { "High", "50 65 80" },
+    };
 
     // The city weights playerbots sends its bots to the cities' bankers by,
     // read as it reads them (its keys and defaults), by the city a spot's name
@@ -535,6 +575,7 @@ namespace
             spot.z        = line.z;
             spot.radius   = line.radius;
             spot.capacity = line.capacity;
+            spot.written  = line.capacity;
             g_HangoutSpots.push_back(std::move(spot));
         };
         const std::string prefix = "PlayerbotsPlus.Hangout.Spot.";
@@ -548,35 +589,15 @@ namespace
             LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Hangout.Spot: could not read {} (want "
                       "\"map x y z radius capacity name\").", bad);
 
-        // Most of a city's people at its busiest places, and each city as busy
-        // as playerbots' weights for it say: the written capacities are then
-        // only each spot's part against the others of its kind in its city.
+        // Most of a city's people at its busiest places (a city with zones
+        // goes by those instead: LoadHangoutZones).
         const std::vector<std::string> hot =
             PbpSplit(sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Hangout.HotSpots", kDefaultHotSpots), '|');
         for (PbpHangoutSpot& spot : g_HangoutSpots)
             spot.hot = std::find(hot.begin(), hot.end(), spot.key) != hot.end();
         g_HangoutCityWeights = B("PlayerbotsPlus.Hangout.CityWeights", true);
         g_HangoutHotShare    = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.HotShare", 75));
-        if (g_HangoutCityWeights)
-        {
-            std::vector<PbpSpotShare> shares;
-            for (PbpHangoutSpot const& spot : g_HangoutSpots)
-                shares.push_back({ PbpCityOf(spot.name), spot.capacity, spot.hot });
-            const std::vector<uint32_t> places =
-                PbpShareHangoutPlaces(shares, PlayerbotsCityWeights(),
-                                      std::min<uint32_t>(U("PlayerbotsPlus.Hangout.Places", 0), 5000),
-                                      g_HangoutHotShare);
-            for (size_t i = 0; i < g_HangoutSpots.size(); ++i)
-                g_HangoutSpots[i].capacity = places[i];
-        }
-        // A spot with room for more people than its radius holds grows to fit
-        // them: RoomPerBot square yards each (crowded, the bots find nowhere
-        // to stand). Up to the 60 yards a spot may have.
-        const float room = std::clamp(F("PlayerbotsPlus.Hangout.RoomPerBot", 60.0f), 0.0f, 1000.0f);
-        for (PbpHangoutSpot& spot : g_HangoutSpots)
-            if (room > 0.0f)
-                spot.radius = std::min(60.0f, std::max(spot.radius,
-                                                       std::sqrt(float(spot.capacity) * room / 3.14159265f)));
+        // Shared out among the spots once the zones are read (LoadHangoutZones).
     }
 
     void LoadStuckReviveMarks()
@@ -885,6 +906,261 @@ namespace
     }
 }
 
+namespace
+{
+    // A city's zones (Hangout.Zone.*), then every spot's share of the
+    // places: each city as busy as playerbots' weights for it say
+    // (Hangout.CityWeights), the written capacities only each spot's part
+    // against the others of its kind in its city -- most of its people at
+    // its hot spots (Hangout.HotShare). A city with zones goes by its zones
+    // instead: its spots outside them (where duels are fought, the zeppelin
+    // tower) keep the people written for them, and the rest of its places
+    // go to its zones by their shares (PbpZones, drifting as the server
+    // runs: PlayerbotsPlusHangout). After LoadPetsDuels, which says where
+    // duels are fought: such a spot is never in a zone.
+    void LoadHangoutZones()
+    {
+        using namespace pbp;
+        g_HangoutZoneShiftSeconds = std::clamp<uint32_t>(U("PlayerbotsPlus.Hangout.ZoneShiftSeconds", 30), 5, 3600);
+        g_HangoutZoneShiftStep    = std::min<uint32_t>(U("PlayerbotsPlus.Hangout.ZoneShiftStep", 3), 20);
+        g_HangoutZonePull         = std::min<uint32_t>(U("PlayerbotsPlus.Hangout.ZonePull", 10), 100);
+        g_HangoutZoneMoveSeconds  = std::clamp<uint32_t>(U("PlayerbotsPlus.Hangout.ZoneMoveSeconds", 15), 5, 600);
+        g_HangoutZoneMovesAtOnce  = std::min<uint32_t>(U("PlayerbotsPlus.Hangout.ZoneMovesAtOnce", 3), 20);
+        g_HangoutZones.clear();
+        g_HangoutZonePlaces.clear();
+        for (PbpHangoutSpot& spot : g_HangoutSpots)
+            spot.zone = -1;
+        auto spotAt = [](std::string const& key) -> PbpHangoutSpot*
+        {
+            for (PbpHangoutSpot& spot : g_HangoutSpots)
+                if (spot.key == key)
+                    return &spot;
+            return nullptr;
+        };
+
+        if (B("PlayerbotsPlus.Hangout.Zones", true))
+        {
+            // The tiers: the code's, and any the conf adds or changes.
+            std::map<std::string, PbpZones::Tier> tiers;   // by lower-case name
+            std::string badTiers;
+            auto addTier = [&tiers, &badTiers](std::string const& name, std::string const& value)
+            {
+                PbpZones::Tier tier;
+                if (PbpZones::ParseTier(value, tier))
+                    tiers[Lower(name)] = tier;
+                else
+                    badTiers += (badTiers.empty() ? "" : ", ") + name;
+            };
+            for (auto const& [name, value] : kDefaultZoneTiers)
+                addTier(name, value);
+            const std::string tierPrefix = "PlayerbotsPlus.Hangout.ZoneTier.";
+            for (std::string const& key : sConfigMgr->GetKeysByString(tierPrefix))
+                addTier(key.substr(tierPrefix.size()), sConfigMgr->GetOption<std::string>(key, ""));
+            if (!badTiers.empty())
+                LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Hangout.ZoneTier: could not read {} (want "
+                          "\"least start most\", in percent, each no more than the next).", badTiers);
+
+            // The zones: the conf's; with none there and no spots of its own
+            // either, the code's, for the code's spots. In order of their keys,
+            // the same every start (the conf's come back in no order at all).
+            std::vector<std::pair<std::string, std::string>> lines;
+            const std::string prefix = "PlayerbotsPlus.Hangout.Zone.";
+            for (std::string const& key : sConfigMgr->GetKeysByString(prefix))
+                lines.emplace_back(key.substr(prefix.size()), sConfigMgr->GetOption<std::string>(key, ""));
+            if (lines.empty() && sConfigMgr->GetKeysByString("PlayerbotsPlus.Hangout.Spot.").empty())
+                for (auto const& [key, value] : kDefaultHangoutZones)
+                    lines.emplace_back(key, value);
+            std::sort(lines.begin(), lines.end());
+
+            std::vector<std::string> problems;
+            std::vector<PbpHangoutZone> found;
+            std::unordered_map<std::string, std::string> taken;   // spot -> the zone it is in
+            for (auto const& [key, value] : lines)
+            {
+                PbpZones::ZoneLine line;
+                if (!PbpZones::ParseZoneLine(value, line))
+                {
+                    problems.push_back(key + " could not be read (want \"tier spot spot ...\")");
+                    continue;
+                }
+                auto tier = tiers.find(line.tier);
+                if (tier == tiers.end())
+                {
+                    problems.push_back(key + " has no tier called " + line.tier + " (Hangout.ZoneTier.*)");
+                    continue;
+                }
+                PbpHangoutZone zone;
+                zone.key   = key;
+                zone.name  = key.substr(key.rfind('.') + 1);
+                zone.tier  = line.tier;
+                zone.min   = tier->second.min;
+                zone.start = tier->second.start;
+                zone.max   = tier->second.max;
+                for (std::string const& spotKey : line.spots)
+                {
+                    PbpHangoutSpot const* spot = spotAt(spotKey);
+                    const std::string city = spot ? PbpCityOf(spot->name) : std::string();
+                    if (!spot)
+                        problems.push_back(key + ": there is no hangout spot called " + spotKey);
+                    else if (DuelSpot(spotKey))
+                        problems.push_back(key + ": " + spotKey + " is where duels are fought (Duels.Spots) and keeps "
+                                           "its own people");
+                    else if (taken.contains(spotKey))
+                        problems.push_back(key + ": " + spotKey + " is in " + taken[spotKey] + " already");
+                    else if (!zone.city.empty() && city != zone.city)
+                        problems.push_back(key + ": " + spotKey + " is in " + city + ", not " + zone.city);
+                    else
+                    {
+                        zone.city = city;
+                        zone.spots.push_back(spotKey);
+                        taken[spotKey] = key;
+                    }
+                }
+                if (zone.spots.empty())
+                    problems.push_back(key + " has none of its spots, and is left out");
+                else
+                    found.push_back(std::move(zone));
+            }
+
+            // A city whose zones' shares could never add up to 100 has none.
+            std::map<std::string, std::vector<PbpZones::Tier>> byCity;
+            for (PbpHangoutZone const& zone : found)
+                byCity[zone.city].push_back({ zone.min, zone.start, zone.max });
+            for (auto const& [city, cityTiers] : byCity)
+                if (!PbpZones::CanAddUp(cityTiers))
+                {
+                    uint32_t least = 0, most = 0;
+                    for (PbpZones::Tier const& t : cityTiers)
+                    {
+                        least += t.min;
+                        most += t.max;
+                    }
+                    problems.push_back(city + "'s zones are left out: their shares cannot add up to 100 (the least "
+                                       "of them come to " + std::to_string(least) + ", the most to " +
+                                       std::to_string(most) + ")");
+                }
+            for (PbpHangoutZone& zone : found)
+            {
+                if (!PbpZones::CanAddUp(byCity[zone.city]))
+                    continue;
+                for (std::string const& spotKey : zone.spots)
+                    spotAt(spotKey)->zone = int(g_HangoutZones.size());
+                g_HangoutZones.push_back(std::move(zone));
+            }
+            if (!problems.empty())
+            {
+                std::string all;
+                for (std::string const& problem : problems)
+                    all += (all.empty() ? "" : "; ") + problem;
+                LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Hangout.Zone: {}.", all);
+            }
+        }
+
+        // In a city with zones, nowhere is a hot spot: its zones say where most of its people are.
+        std::unordered_set<std::string> zoned;
+        for (PbpHangoutZone const& zone : g_HangoutZones)
+            zoned.insert(zone.city);
+        for (PbpHangoutSpot& spot : g_HangoutSpots)
+            if (zoned.contains(PbpCityOf(spot.name)))
+                spot.hot = false;
+
+        if (g_HangoutCityWeights)
+        {
+            std::vector<PbpSpotShare> shares;
+            for (PbpHangoutSpot const& spot : g_HangoutSpots)
+                shares.push_back({ PbpCityOf(spot.name), spot.written, spot.hot });
+            const std::vector<uint32_t> places =
+                PbpShareHangoutPlaces(shares, PlayerbotsCityWeights(),
+                                      std::min<uint32_t>(U("PlayerbotsPlus.Hangout.Places", 0), 5000),
+                                      g_HangoutHotShare);
+            for (size_t i = 0; i < g_HangoutSpots.size(); ++i)
+                g_HangoutSpots[i].capacity = places[i];
+        }
+        else
+            for (PbpHangoutSpot& spot : g_HangoutSpots)
+                spot.capacity = spot.written;
+
+        // A zoned city's places: its spots outside the zones as written (all
+        // of them, if that is no more than it has), the rest its zones'; each
+        // zoned spot's share at its zone's start, until the shares drift.
+        for (std::string const& city : zoned)
+        {
+            uint64_t places = 0, outside = 0;
+            std::vector<PbpHangoutSpot*> unzoned;
+            for (PbpHangoutSpot& spot : g_HangoutSpots)
+                if (PbpCityOf(spot.name) == city)
+                {
+                    places += spot.capacity;
+                    if (spot.zone < 0)
+                    {
+                        outside += spot.written;
+                        unzoned.push_back(&spot);
+                    }
+                }
+            if (outside <= places)
+            {
+                for (PbpHangoutSpot* spot : unzoned)
+                    spot->capacity = spot->written;
+                g_HangoutZonePlaces[city] = uint32_t(places - outside);
+            }
+            else
+            {
+                std::vector<uint64_t> weights;
+                for (PbpHangoutSpot* spot : unzoned)
+                    weights.push_back(spot->written);
+                const std::vector<uint32_t> parts = PbpApportion(uint32_t(places), weights);
+                for (size_t i = 0; i < unzoned.size(); ++i)
+                    unzoned[i]->capacity = parts[i];
+                g_HangoutZonePlaces[city] = 0;
+                LOG_WARN("server.loading", "[Playerbots Plus] {}'s spots outside its zones want room for {}, and it "
+                         "has places for {}: none are left for its zones (PlayerbotsPlus.Hangout.Places, or the "
+                         "capacities written for those spots).", city, outside, places);
+            }
+            std::vector<PbpZones::Tier> cityTiers;
+            std::vector<std::vector<uint32_t>> written;
+            std::vector<PbpHangoutZone const*> zones;
+            for (PbpHangoutZone const& zone : g_HangoutZones)
+                if (zone.city == city)
+                {
+                    zones.push_back(&zone);
+                    cityTiers.push_back({ zone.min, zone.start, zone.max });
+                    written.emplace_back();
+                    for (std::string const& spotKey : zone.spots)
+                        written.back().push_back(spotAt(spotKey)->written);
+                }
+            const std::vector<uint32_t> start = PbpZones::StartShares(cityTiers, [](uint32_t) { return 0u; });
+            const std::vector<std::vector<uint32_t>> at =
+                PbpZones::SpotPlaces(g_HangoutZonePlaces[city], start, written);
+            for (size_t z = 0; z < zones.size(); ++z)
+                for (size_t i = 0; i < zones[z]->spots.size(); ++i)
+                    spotAt(zones[z]->spots[i])->capacity = at[z][i];
+        }
+
+        // A spot with room for more people than its radius holds grows to fit
+        // them: RoomPerBot square yards each (crowded, the bots find nowhere
+        // to stand). A zoned spot, the most its zone may hold. Up to the 60
+        // yards a spot may have.
+        std::unordered_map<std::string, uint32_t> most;
+        for (PbpHangoutZone const& zone : g_HangoutZones)
+        {
+            std::vector<uint32_t> written;
+            for (std::string const& spotKey : zone.spots)
+                written.push_back(spotAt(spotKey)->written);
+            const std::vector<uint32_t> at = PbpZones::SpotPlaces(
+                PbpZones::AtMost(g_HangoutZonePlaces[zone.city], zone.max), { 100 }, { written })[0];
+            for (size_t i = 0; i < zone.spots.size(); ++i)
+                most[zone.spots[i]] = at[i];
+        }
+        const float room = std::clamp(F("PlayerbotsPlus.Hangout.RoomPerBot", 60.0f), 0.0f, 1000.0f);
+        for (PbpHangoutSpot& spot : g_HangoutSpots)
+        {
+            const uint32_t people = std::max(spot.capacity, most.contains(spot.key) ? most[spot.key] : 0u);
+            if (room > 0.0f)
+                spot.radius = std::min(60.0f, std::max(spot.radius, std::sqrt(float(people) * room / 3.14159265f)));
+        }
+    }
+}
+
 void PlayerbotsPlus_LoadConfig(bool reload)
 {
     PbpSettings s;   // starts from the defaults in the header
@@ -1028,6 +1304,7 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     LoadCityLife();
     LoadStuckReviveMarks();
     LoadPetsDuels();
+    LoadHangoutZones();
     // The packet hook goes by what is published here alone: with the module
     // off, nothing is muted.
     const std::string mute = sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Mute.Patterns", kDefaultMutePatterns);
@@ -1060,6 +1337,23 @@ void PlayerbotsPlus_LoadConfig(bool reload)
              pbp::g_SpaceEnable ? "on" : "off", pbp::g_InactiveEnable ? "on" : "off", pbp::g_InactiveUnseenYards,
              pbp::g_ReviveEnable ? "on" : "off", pbp::g_MarksEnable ? "on" : "off",
              pbp::g_MarksSapStar ? "on" : "off");
+
+    if (!pbp::g_HangoutZones.empty())
+    {
+        std::map<std::string, std::string> byCity;   // city -> its zones, where they start
+        for (pbp::PbpHangoutZone const& zone : pbp::g_HangoutZones)
+            byCity[zone.city] += (byCity[zone.city].empty() ? "" : ", ") + zone.name + " " +
+                                 std::to_string(zone.start) + "%";
+        std::string cities;
+        for (auto const& [city, zones] : byCity)
+            cities += (cities.empty() ? "" : "; ") + city + " (" +
+                      std::to_string(pbp::g_HangoutZonePlaces[city]) + " places: " + zones + ")";
+        LOG_INFO(where,
+                 "[Playerbots Plus] City hangout zones: {}. Their shares drift every {}s, by up to {} points; up to "
+                 "{} bots a city move between them every {}s.",
+                 cities, pbp::g_HangoutZoneShiftSeconds, pbp::g_HangoutZoneShiftStep, pbp::g_HangoutZoneMovesAtOnce,
+                 pbp::g_HangoutZoneMoveSeconds);
+    }
 
     if (pbp::g_LifeEnable)
     {

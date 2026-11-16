@@ -45,6 +45,11 @@ bool PbpParseSpotLine(std::string const& text, PbpSpotLine& out);
 // "Orgrimmar"). The whole name when none of those is in it.
 std::string PbpCityOf(std::string const& spotName);
 
+// `total` shared out by `weights` in whole parts that add up to it, the
+// largest remainders taking the odd ones (the first of equal ones); all
+// weights 0, or none, nothing for any.
+std::vector<uint32_t> PbpApportion(uint32_t total, std::vector<uint64_t> const& weights);
+
 // A hangout spot, as the places are shared out among them.
 struct PbpSpotShare
 {
@@ -70,19 +75,21 @@ std::vector<uint32_t> PbpShareHangoutPlaces(std::vector<PbpSpotShare> const& spo
 struct PbpSpotRoom
 {
     std::string city;          // PbpCityOf its name
-    uint32_t    room = 0;      // its share of the places (PbpShareHangoutPlaces)
+    uint32_t    room = 0;      // its share of the places (PbpShareHangoutPlaces, or its zone's)
     bool        hot  = false;
     bool        full = false;  // no place left to stand there
     uint32_t    held = 0;      // full: how many it held then
+    std::string zone = {};     // the zone of its city it is in (Hangout.Zone.*), "" for none
 };
 
 // Each spot's room once the places a full spot cannot hold are given to
 // spots that can: a full spot keeps what it held (at most its room), and the
 // rest goes, by their room, to the open spots of its own city of its own
-// kind (hot or not); with none, to its city's others; and a city with no
-// spot open at all gives its rest to every open spot there is. A spot with
-// no room of its own takes none. Whole places, adding up to what they did
-// as long as some spot is open (the largest remainders get the odd ones).
+// kind (in its zone; else hot or not); with none, to its city's others; and
+// a city with no spot open at all gives its rest to every open spot there
+// is. A spot with no room of its own takes none. Whole places, adding up to
+// what they did as long as some spot is open (the largest remainders get
+// the odd ones).
 std::vector<uint32_t> PbpShareFullRoom(std::vector<PbpSpotRoom> const& spots);
 
 // The holidays a companion can belong to, as the conf names them

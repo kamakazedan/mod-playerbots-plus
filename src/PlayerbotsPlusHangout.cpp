@@ -9,6 +9,7 @@
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusText.h"
 #include "PlayerbotsPlusUtil.h"
+#include "PlayerbotsPlusZonesText.h"
 
 #include "Bag.h"
 #include "CellImpl.h"
@@ -253,6 +254,13 @@ namespace
     std::unordered_map<std::string, Full>     g_full;   // by spot key
     std::unordered_map<std::string, uint32_t> g_room;   // each spot's room, as last given out (ShareRoom)
 
+    // A zoned city's people (Hangout.Zone.*) are shared among its zones by
+    // shares that drift (PbpZones): each zone's share now, in percent, and
+    // what that gives each of its spots. Kept across a .reload for the zones
+    // still there.
+    std::unordered_map<std::string, uint32_t> g_zoneShare;   // by zone key
+    std::unordered_map<std::string, uint32_t> g_spotShare;   // by spot key: a zoned spot's places now
+
     // How the places looked at for each spot went, since startup: what
     // .pbp hangouts shows, to tell a spot that is full from one nobody can
     // stand at.
@@ -474,10 +482,98 @@ namespace
                      "to other spots for now.", key, held);
     }
 
+    // ---- zones (Hangout.Zone.*) ------------------------------------------------------
+
+    PbpHangoutZone const* ZoneOfSpot(const PbpHangoutSpot& s)
+    {
+        return s.zone >= 0 && size_t(s.zone) < g_HangoutZones.size() ? &g_HangoutZones[s.zone] : nullptr;
+    }
+
+    // A spot's share of the places now: a zoned one's from its zone's share.
+    uint32_t ShareOf(const PbpHangoutSpot& s)
+    {
+        if (!ZoneOfSpot(s))
+            return s.capacity;
+        auto it = g_spotShare.find(s.key);
+        return it == g_spotShare.end() ? s.capacity : it->second;
+    }
+
+    uint32_t ZoneDice(uint32_t n)
+    {
+        return n ? std::uniform_int_distribution<uint32_t>(0, n - 1)(Rng()) : 0;
+    }
+
+    // Each zoned city, and its zones (indexes in g_HangoutZones), in the order they come.
+    std::vector<std::pair<std::string, std::vector<size_t>>> ZonedCities()
+    {
+        std::vector<std::pair<std::string, std::vector<size_t>>> cities;
+        for (size_t z = 0; z < g_HangoutZones.size(); ++z)
+        {
+            auto it = std::find_if(cities.begin(), cities.end(),
+                                   [&](auto const& c) { return c.first == g_HangoutZones[z].city; });
+            if (it == cities.end())
+                it = cities.insert(cities.end(), { g_HangoutZones[z].city, {} });
+            it->second.push_back(z);
+        }
+        return cities;
+    }
+
+    // The zones' shares now, and their spots' places: as they were for the
+    // zones still there (made to add up again, should their limits have
+    // changed); a city with a zone new to it starts all of its zones again.
+    // `shift`: then they drift once (PbpZones::Drift).
+    void ShareZones(bool shift)
+    {
+        std::unordered_map<std::string, uint32_t> shares, places;
+        for (auto const& [city, zones] : ZonedCities())
+        {
+            std::vector<PbpZones::Tier> tiers;
+            std::vector<uint32_t> now;
+            std::vector<std::vector<uint32_t>> written;
+            bool known = true;
+            for (size_t z : zones)
+            {
+                PbpHangoutZone const& zone = g_HangoutZones[z];
+                tiers.push_back({ zone.min, zone.start, zone.max });
+                auto it = g_zoneShare.find(zone.key);
+                known = known && it != g_zoneShare.end();
+                now.push_back(it != g_zoneShare.end() ? it->second : zone.start);
+                written.emplace_back();
+                for (std::string const& key : zone.spots)
+                {
+                    PbpHangoutSpot const* spot = SpotByKey(key);
+                    written.back().push_back(spot ? spot->written : 0);
+                }
+            }
+            if (!known)
+                now = PbpZones::StartShares(tiers, ZoneDice);
+            else
+                PbpZones::AddUpTo100(now, tiers, ZoneDice);
+            if (shift)
+            {
+                now = PbpZones::Drift(now, tiers, g_HangoutZoneShiftStep, g_HangoutZonePull, ZoneDice);
+                ++g_stats.zoneShifts;
+            }
+            auto cityPlaces = g_HangoutZonePlaces.find(city);
+            const std::vector<std::vector<uint32_t>> at =
+                PbpZones::SpotPlaces(cityPlaces == g_HangoutZonePlaces.end() ? 0 : cityPlaces->second, now, written);
+            for (size_t i = 0; i < zones.size(); ++i)
+            {
+                PbpHangoutZone const& zone = g_HangoutZones[zones[i]];
+                shares[zone.key] = now[i];
+                for (size_t k = 0; k < zone.spots.size(); ++k)
+                    places[zone.spots[k]] = at[i][k];
+            }
+        }
+        g_zoneShare.swap(shares);
+        g_spotShare.swap(places);
+    }
+
     // Every spot's room now: its share of the places, or -- found full --
     // what it held then, the rest of its room given to spots that can take
-    // people, its own city's first (PbpShareFullRoom). A spot found full
-    // opens again once fewer are there, or Hangout.FullMinutes on.
+    // people, its own city's first, of its own zone before that
+    // (PbpShareFullRoom). A spot found full opens again once fewer are
+    // there, or Hangout.FullMinutes on.
     void ShareRoom(std::unordered_map<std::string, uint32_t>& there, const Clock::time_point now)
     {
         for (auto it = g_full.begin(); it != g_full.end();)
@@ -486,12 +582,14 @@ namespace
                               now - it->second.since >= std::chrono::minutes(g_HangoutFullMinutes);
             it = open ? g_full.erase(it) : std::next(it);
         }
+        ShareZones(false);
         std::vector<PbpSpotRoom> rooms;
         for (const PbpHangoutSpot& s : g_HangoutSpots)
         {
             auto full = g_full.find(s.key);
-            rooms.push_back({ PbpCityOf(s.name.empty() ? s.key : s.name), s.capacity, s.hot, full != g_full.end(),
-                              full != g_full.end() ? full->second.held : 0 });
+            PbpHangoutZone const* zone = ZoneOfSpot(s);
+            rooms.push_back({ PbpCityOf(s.name.empty() ? s.key : s.name), ShareOf(s), s.hot, full != g_full.end(),
+                              full != g_full.end() ? full->second.held : 0, zone ? zone->key : std::string() });
         }
         const std::vector<uint32_t> room = PbpShareFullRoom(rooms);
         g_room.clear();
@@ -502,7 +600,7 @@ namespace
     uint32_t RoomAt(const PbpHangoutSpot& s)
     {
         auto it = g_room.find(s.key);
-        return it == g_room.end() ? s.capacity : it->second;
+        return it == g_room.end() ? ShareOf(s) : it->second;
     }
 
     // A place within the spot: on the ground near the middle's height, in
@@ -1612,6 +1710,150 @@ namespace
         }
         ai->rpgInfo.startT = getMSTime();   // playerbots' rest is 30 seconds; it is still resting
         return true;
+    }
+
+    // ---- moving between zones (Hangout.Zone.*) ------------------------------------------
+    //
+    // As a zoned city's shares drift, a zone ends up with more people than
+    // its room and another with fewer: a few of those over walk across to
+    // where people are short, the way a crowd drifts about a city. Newcomers
+    // go where there is room as ever (Recruit, BringIn).
+
+    // A bot has been at its spot this long before it moves on to another
+    // zone, and has at least this long of its time left: one that has just
+    // come does not turn round, nor one about to leave go somewhere first.
+    constexpr auto kZoneMoveAfter = std::chrono::minutes(2);
+    constexpr auto kZoneMoveLeft  = std::chrono::minutes(2);
+
+    // Free to get up and go: settled, at its keyboard, on its feet, its
+    // mount or the ground (not on a bench), about nothing else, nobody
+    // talking with it or about to (targeted by a real player), there a
+    // while and staying a while yet.
+    bool Movable(Player* bot, const Visit& v, const std::unordered_set<uint64_t>& targeted,
+                 const Clock::time_point now)
+    {
+        return bot && bot->IsInWorld() && v.phase == Phase::Settled && v.act == Act::None && !v.forDuel &&
+               !v.afkSet && !v.away && v.posture != Posture::Bench && now >= v.busyUntil &&
+               now - v.started >= kZoneMoveAfter && v.until > now + kZoneMoveLeft &&
+               !targeted.contains(bot->GetGUID().GetRawValue()) && bot->IsAlive() && !bot->IsInCombat() &&
+               !bot->isMoving() && !bot->isAFK() && !bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) && !Wanted(bot);
+    }
+
+    // Off to `to`, in another zone of its city: up off the ground, walked
+    // there by its own AI the way it came, and settled there for the rest of
+    // its time, as it would anywhere (its posture rolled again there). False:
+    // nowhere to stand there just now, and it stays where it is.
+    bool MoveTo(Player* bot, PlayerbotAI* ai, Visit& v, const PbpHangoutSpot& to, const Clock::time_point now)
+    {
+        const Visit from = v;
+        if (!Send(bot, ai, to, now, &from))
+            return false;
+        Visit& moved = g_visits[bot->GetGUID().GetRawValue()];
+        moved.until           = from.until;   // the rest of its time, not a fresh stay
+        moved.cameBack        = from.cameBack;
+        moved.temperament     = from.temperament;
+        moved.temperamentName = from.temperamentName;
+        moved.temperamentSet  = from.temperamentSet;
+        if (bot->GetUInt32Value(UNIT_NPC_EMOTESTATE))
+            bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
+        ai->SetNextCheckDelay(0);   // its own AI walks it, as it walked here
+        ++g_stats.zoneMoves;
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} wanders over from {} to {}.", bot->GetName(),
+                     from.spotName, to.name);
+        return true;
+    }
+
+    // Every Hangout.ZoneMoveSeconds: in each zoned city someone is in to see
+    // it, up to Hangout.ZoneMovesAtOnce bots from zones over their room to
+    // zones under it (PbpZones::PlanMoves) -- from the spot most over its own
+    // room, the one there longest; to the spot with the most room to spare.
+    void MoveBetweenZones(const Clock::time_point now)
+    {
+        if (g_HangoutZones.empty() || g_watched.empty() || !g_HangoutZoneMovesAtOnce)
+            return;
+        std::unordered_map<std::string, uint32_t> there;   // spot -> bots there or on the way
+        for (const auto& [guid, v] : g_visits)
+            ++there[v.spotKey];
+        ShareRoom(there, now);
+
+        // Whoever a real player has targeted may be about to be talked to.
+        std::unordered_set<uint64_t> targeted;
+        for (auto const& [guid, p] : ObjectAccessor::GetPlayers())
+            if (p && p->IsInWorld() && PbpIsRealPlayer(p) && p->GetTarget())
+                targeted.insert(p->GetTarget().GetRawValue());
+
+        for (auto const& [city, zones] : ZonedCities())
+        {
+            bool seen = false;
+            std::unordered_map<std::string, size_t> zoneAt;   // spot -> its zone, in `zones`
+            std::vector<PbpZones::Count> counts(zones.size());
+            for (size_t i = 0; i < zones.size(); ++i)
+                for (std::string const& key : g_HangoutZones[zones[i]].spots)
+                    if (PbpHangoutSpot const* s = SpotByKey(key))
+                    {
+                        zoneAt[key] = i;
+                        counts[i].room += RoomAt(*s);
+                        counts[i].there += there[key];
+                        if (const uint32_t zone = ZoneOf(*s); zone && g_watched.contains(WatchKey(s->map, zone)))
+                            seen = true;
+                    }
+            if (!seen)
+                continue;   // nobody in the city to see them go
+
+            std::vector<std::vector<std::pair<uint64_t, Player*>>> free(zones.size());
+            for (const auto& [guid, v] : g_visits)
+            {
+                auto at = zoneAt.find(v.spotKey);
+                if (at == zoneAt.end() || v.phase != Phase::Settled)
+                    continue;
+                Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
+                if (Movable(bot, v, targeted, now))
+                    free[at->second].emplace_back(guid, bot);
+            }
+            for (size_t i = 0; i < zones.size(); ++i)
+                counts[i].movable = static_cast<uint32_t>(free[i].size());
+
+            for (auto const& [from, to] : PbpZones::PlanMoves(counts, g_HangoutZoneMovesAtOnce))
+            {
+                if (free[from].empty())
+                    continue;
+                // Who: from the spot most over its room, then the one there longest.
+                auto over = [&there](const std::string& key)
+                {
+                    PbpHangoutSpot const* s = SpotByKey(key);
+                    return int64_t(there[key]) - int64_t(s ? RoomAt(*s) : 0);
+                };
+                auto who = std::min_element(free[from].begin(), free[from].end(), [&](auto const& a, auto const& b)
+                {
+                    Visit const& va = g_visits[a.first];
+                    Visit const& vb = g_visits[b.first];
+                    const int64_t oa = over(va.spotKey), ob = over(vb.spotKey);
+                    return oa != ob ? oa > ob : va.started < vb.started;
+                });
+                const uint64_t guid = who->first;
+                Player* bot = who->second;
+                free[from].erase(who);
+                // Where: the spot of that zone with the most room to spare, open.
+                std::vector<std::pair<int64_t, PbpHangoutSpot const*>> spots;
+                for (std::string const& key : g_HangoutZones[zones[to]].spots)
+                    if (PbpHangoutSpot const* s = SpotByKey(key); s && !g_full.contains(key) && RoomAt(*s) > there[key])
+                        spots.emplace_back(int64_t(RoomAt(*s)) - int64_t(there[key]), s);
+                std::stable_sort(spots.begin(), spots.end(), [](auto const& a, auto const& b) { return a.first > b.first; });
+                PlayerbotAI* ai = AiOf(bot);
+                auto visit = g_visits.find(guid);
+                if (!ai || visit == g_visits.end())
+                    continue;
+                const std::string left = visit->second.spotKey;
+                for (auto const& [spare, s] : spots)
+                    if (MoveTo(bot, ai, visit->second, *s, now))
+                    {
+                        --there[left];
+                        ++there[s->key];
+                        break;
+                    }
+            }
+        }
     }
 
     // ---- city life (PlayerbotsPlus.CityLife.*) ----------------------------------------
@@ -3296,6 +3538,23 @@ void PbpHangout_Update(uint32_t /*diff*/)
         Life(now);
     }
 
+    // The zones' shares drift, and bots move between zones (Hangout.Zone.*).
+    static Clock::time_point nextShift{}, nextMove{};
+    if (!g_HangoutZones.empty())
+    {
+        if (now >= nextShift)
+        {
+            const bool first = nextShift == Clock::time_point{};
+            nextShift = now + std::chrono::seconds(g_HangoutZoneShiftSeconds);
+            ShareZones(!first);   // where they start, first; a drift after
+        }
+        if (now >= nextMove)
+        {
+            nextMove = now + std::chrono::seconds(g_HangoutZoneMoveSeconds);
+            MoveBetweenZones(now);
+        }
+    }
+
     static Clock::time_point nextRecruit{};
     if (now < nextRecruit)
         return;
@@ -3541,7 +3800,7 @@ std::vector<PbpHangoutCity> PbpHangout_Cities()
         }
         PbpHangoutCity& c = cities[at->second];
         c.room += RoomAt(s);
-        c.share += s.capacity;
+        c.share += ShareOf(s);
         c.full += g_full.contains(s.key) ? 1 : 0;
         bySpot[s.key] = at->second;
     }
@@ -3575,11 +3834,13 @@ std::vector<std::string> PbpHangout_SpotReport()
     for (const PbpHangoutSpot& s : g_HangoutSpots)
     {
         const auto [settled, onTheWay] = at[s.key];
+        PbpHangoutZone const* zone = ZoneOfSpot(s);
         std::string line = fmt::format("{} ({}{}): {} there, {} on the way, room {}", s.key,
-                                       PbpCityOf(s.name.empty() ? s.key : s.name), s.hot ? ", hot" : "", settled,
-                                       onTheWay, RoomAt(s));
-        if (RoomAt(s) != s.capacity)
-            line += fmt::format(" (its share {})", s.capacity);
+                                       PbpCityOf(s.name.empty() ? s.key : s.name),
+                                       zone ? ", zone " + zone->name : s.hot ? ", hot" : "", settled, onTheWay,
+                                       RoomAt(s));
+        if (RoomAt(s) != ShareOf(s))
+            line += fmt::format(" (its share {})", ShareOf(s));
         if (auto full = g_full.find(s.key); full != g_full.end())
             line += fmt::format(", full with {} for {} min", full->second.held,
                                 std::chrono::duration_cast<std::chrono::minutes>(now - full->second.since).count());
@@ -3625,6 +3886,46 @@ namespace
             out += (i == 0 ? "" : i + 1 == parts.size() ? " and " : ", ") + parts[i];
         return out;
     }
+
+    // A line for each zoned city: each zone's share now, and how many are
+    // there or on their way against its room, the biggest first; then how
+    // they have gone.
+    std::vector<std::string> ZoneLines()
+    {
+        std::vector<std::string> out;
+        std::unordered_map<std::string, uint32_t> there;
+        for (const auto& [guid, v] : g_visits)
+            ++there[v.spotKey];
+        auto shareOf = [](PbpHangoutZone const& zone)
+        {
+            auto it = g_zoneShare.find(zone.key);
+            return it == g_zoneShare.end() ? zone.start : it->second;
+        };
+        for (auto const& [city, zones] : ZonedCities())
+        {
+            std::vector<size_t> order = zones;
+            std::stable_sort(order.begin(), order.end(), [&shareOf](size_t a, size_t b)
+                             { return shareOf(g_HangoutZones[a]) > shareOf(g_HangoutZones[b]); });
+            std::string parts;
+            for (size_t z : order)
+            {
+                PbpHangoutZone const& zone = g_HangoutZones[z];
+                uint32_t room = 0, n = 0;
+                for (std::string const& key : zone.spots)
+                    if (PbpHangoutSpot const* spot = SpotByKey(key))
+                    {
+                        room += RoomAt(*spot);
+                        n += there[key];
+                    }
+                parts += fmt::format("{}{} {}% {}/{}", parts.empty() ? "" : ", ", zone.name, shareOf(zone), n, room);
+            }
+            out.push_back(fmt::format("{}'s zones (share, there/room): {}.", city, parts));
+        }
+        if (!out.empty())
+            out.push_back(fmt::format("Zones since start: their shares drifted {} times, and {} bots moved from a zone "
+                                      "over its room to one under it.", g_stats.zoneShifts, g_stats.zoneMoves));
+        return out;
+    }
 }
 
 PbpBrief PbpHangout_Brief(bool full)
@@ -3651,6 +3952,8 @@ PbpBrief PbpHangout_Brief(bool full)
     {
         if (!byCity.empty())
             b.lines.push_back("By city, there/room: " + byCity + ".");
+        for (std::string& line : ZoneLines())
+            b.lines.push_back(std::move(line));
         b.lines.push_back(fmt::format("Since start: {} sent to a spot, {} fetched from elsewhere ({} gone back), {} "
                                       "settled ({} put at their place with nobody about), {} never got there ({} too "
                                       "slow), {} sent on to another spot; spots found full {} times.",

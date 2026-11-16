@@ -104,11 +104,14 @@ Commons, the Valley of Strength, outside the bank in Dalaran. Playerbots never
 sends a bot anywhere in particular, so idle bots in a city just wander from
 NPC to NPC. With hangouts, they gather where players do.
 
-- **Where:** 34 spots in the capitals, Shattrath and Dalaran come set up:
+- **Where:** 39 spots in the capitals, Shattrath and Dalaran come set up:
   - Orgrimmar: in the Valley of Strength in front of the inn and the auction
     house, inside the auction house in front of the auctioneers, outside the
-    bank, the open middle of it and just inside the gates, then the Drag, the
-    Valley of Honor, outside the gates and the zeppelin tower.
+    bank, the open middle of it and just inside the gates, then the
+    crossroads by the Valley of Spirits, the Valley of Wisdom before Grommash
+    Hold, the road west of the Hall of Legends, the Cleft of Shadow (at its
+    mouth, by the meeting stone deep inside, and among the warlock trainers),
+    the Valley of Honor, outside the gates and the zeppelin tower.
   - Stormwind: the Trade District, outside the auction house and inside it in
     front of the auctioneers, the bank, round the fountain in front of the
     bank's steps, the Valley of Heroes, Cathedral Square, the Mage Quarter,
@@ -130,11 +133,26 @@ NPC to NPC. With hangouts, they gather where players do.
   Thunder Bluff, the banks and auction houses. A spot with more people than
   its radius holds grows to fit them (`Hangout.RoomPerBot`).
   `Hangout.Places` is how many in all.
+- **Zones (Orgrimmar for now):** a city can be split into zones, each with a
+  share of its people by its tier -- low 1 to 10 percent (starting at 5),
+  medium 10 to 20 (15), high 50 to 80 (65) -- always adding up to 100.
+  Orgrimmar's are the Valley of Strength (high), the crossroads by the
+  Valley of Spirits (medium), and the Valley of Wisdom, the Cleft of Shadow,
+  the Valley of Honor and the road west of the Hall of Legends (low). Every
+  30 seconds the shares drift a little, at random within their limits, and
+  every 15 seconds up to 3 bots get up from a zone with more people than its
+  share and walk over to one with fewer, so the crowd is seen to move about
+  the city. The spots outside its walls (the gates where duels are fought,
+  the zeppelin tower) keep their own people, and a city in zones has no hot
+  spots. `.pbp hangouts` shows each zone's share and who is there
+  (`Hangout.Zone.*`, `Hangout.ZoneTier.*`, `Hangout.ZoneShiftSeconds`,
+  `Hangout.ZoneMoveSeconds`, `Hangout.ZoneMovesAtOnce`).
 - **When a spot is full:** a bot sent or fetched to a spot where there's
   nowhere left to stand walks on to another spot in the city with room, and
   the full spot takes nobody more for a while (`Hangout.FullMinutes`, or
   until someone leaves it). Its unused places go to its city's other spots of
-  the same kind first (hot or quiet), then its other spots, and once the
+  the same kind first (in its zone, else hot or quiet), then its other spots,
+  and once the
   whole city is full, to other cities' spots. `.pbp hangouts` shows each
   city with its room as it stands now, and the full report (`.pbp report`)
   lists every spot: who's there, its room, and why places looked at for it

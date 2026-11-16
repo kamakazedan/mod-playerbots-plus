@@ -1010,7 +1010,8 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        how far from it a place may be (grown to fit its people: see
 #        RoomPerBot); capacity how many bots at most -- with CityWeights on,
 #        its part of its city's places against the city's other spots of its
-#        kind (hot or not); name what bots call it ("the Trade District in
+#        kind (hot or not); in a zone (see Zone.<City>.<Name>), its part of
+#        its zone's; name what bots call it ("the Trade District in
 #        Stormwind"), its last words the city. Add as many as you like, one
 #        key each; capacity 0 turns one off. With no Spot keys at all, these
 #        are the defaults:
@@ -1018,8 +1019,14 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #          auction house, inside the auction house before its counter, the
 #          bank, the open middle of it and just inside the gates (the middle
 #          and the gates' z are a little above the ground, so a place may be
-#          found up the slopes too) -- the Drag, the Valley of Honor, and
-#          outside the city the gates and the zeppelin tower.
+#          found up the slopes too) -- the crossroads by the Valley of
+#          Spirits (its signposts and mailbox), the Valley of Wisdom before
+#          Grommash Hold (by the Armor of Mannoroth), the road west of the
+#          Hall of Legends (where the war effort's collectors stand), the
+#          Cleft of Shadow -- at its mouth by the rogue trainers, by the
+#          meeting stone deep inside, and among the warlock trainers (clear
+#          of their fires) -- the Valley of Honor, and outside the city the
+#          gates and the zeppelin tower.
 #          Stormwind: the Trade District, outside the auction house and
 #          inside it before its counter, the bank (inside, among its benches:
 #          a small room, so a small part), round the fountain and down to
@@ -1065,7 +1072,12 @@ PlayerbotsPlus.Hangout.Spot.OrgrimmarAuctionHall = "1 1678.0 -4450.6 19.3 12 8 t
 PlayerbotsPlus.Hangout.Spot.OrgrimmarBank = "1 1615.6 -4391.6 10.3 14 8 outside the bank in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarCourtyard = "1 1578.0 -4412.0 8.5 30 18 the middle of the Valley of Strength in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarGateway = "1 1527.0 -4408.0 18.0 22 10 just inside the gates of Orgrimmar"
-PlayerbotsPlus.Hangout.Spot.OrgrimmarDrag = "1 1768.0 -4320.9 6.6 16 8 the Drag in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarSpirits = "1 1566.2 -4194.1 42.9 22 10 the crossroads by the Valley of Spirits in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarWisdom = "1 1958.0 -4330.0 22.3 20 8 the Valley of Wisdom in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarWestRoad = "1 1666.0 -4100.0 35.5 18 8 the road west of the Hall of Legends in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarCleft = "1 1768.0 -4320.9 6.6 16 8 the mouth of the Cleft of Shadow in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarCleftStone = "1 1810.0 -4389.0 -17.5 14 4 the meeting stone deep in the Cleft of Shadow in Orgrimmar"
+PlayerbotsPlus.Hangout.Spot.OrgrimmarCleftDepths = "1 1840.0 -4333.0 -15.2 12 3 the warlock trainers deep in the Cleft of Shadow in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarHonor = "1 2076.4 -4824.2 23.7 18 8 the Valley of Honor in Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarGates = "1 1320.0 -4400.0 27.0 22 14 outside the gates of Orgrimmar"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarZeppelins = "1 1342.0 -4645.0 53.6 10 5 the zeppelin tower outside Orgrimmar"
@@ -1099,15 +1111,87 @@ PlayerbotsPlus.Hangout.Spot.DalaranMerchants = "571 5654.9 682.2 652.0 14 10 out
 #        Each spot gets its part of that by its capacity. Places 0: as many
 #        as the spots' capacities add up to. Off: each spot has room for its
 #        capacity. Either way .pbp status says how many are at the hot spots.
+#        A city in zones (see Zone.<City>.<Name>) has no hot spots: its zones
+#        say where its people are.
 #        Default: 1, 0, 75, (below)
 PlayerbotsPlus.Hangout.CityWeights = 1
 PlayerbotsPlus.Hangout.Places = 0
 PlayerbotsPlus.Hangout.HotShare = 75
 PlayerbotsPlus.Hangout.HotSpots = "StormwindTrade|StormwindAuction|StormwindAuctionHall|StormwindBank|StormwindFountain|IronforgeCommons|OrgrimmarValley|OrgrimmarAuctionHall|OrgrimmarBank|OrgrimmarCourtyard|OrgrimmarGateway|UndercityTrade|ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|DalaranBank|DalaranRuneweaver|DalaranMerchants"
 
+#    PlayerbotsPlus.Hangout.Zones
+#    PlayerbotsPlus.Hangout.ZoneTier.<Name>
+#    PlayerbotsPlus.Hangout.Zone.<City>.<Name>
+#        A city in zones: parts of it that each hold a share of its people --
+#        a few, some or most of them, by the zone's tier -- that drifts as
+#        the server runs, so people are seen to move about the city, one
+#        corner filling up while another empties. A tier is "least start
+#        most", in percent of the city's people. A zone is "tier spot spot
+#        ...": its tier and its spots, all in one city, which share the
+#        zone's part of its places by their capacities. The city's places
+#        (see CityWeights), less those of its spots in no zone -- where duels
+#        are fought (Duels.Spots, never in a zone) and the zeppelin tower
+#        keep as many people as written -- go to its zones by their shares,
+#        which start where their tiers say and always add up to 100: the
+#        tiers of a city's zones have to be able to (the least of them no
+#        more than 100, the most no less), or the city has none. Zones 0: no
+#        zones anywhere. With no Zone keys, and no Spot keys of your own
+#        either, these are the defaults; with spots of your own, write your
+#        zones too.
+#          Orgrimmar: the Valley of Strength, high (its five spots); the
+#          crossroads by the Valley of Spirits, medium; the Valley of Wisdom,
+#          the Cleft of Shadow (most of its people at its mouth), the Valley
+#          of Honor and the road west of the Hall of Legends, low.
+#        Default: 1, Low "1 5 10", Medium "10 15 20", High "50 65 80", (below)
+PlayerbotsPlus.Hangout.Zones = 1
+PlayerbotsPlus.Hangout.ZoneTier.Low = "1 5 10"
+PlayerbotsPlus.Hangout.ZoneTier.Medium = "10 15 20"
+PlayerbotsPlus.Hangout.ZoneTier.High = "50 65 80"
+PlayerbotsPlus.Hangout.Zone.Orgrimmar.Strength = "high OrgrimmarValley OrgrimmarAuctionHall OrgrimmarBank OrgrimmarCourtyard OrgrimmarGateway"
+PlayerbotsPlus.Hangout.Zone.Orgrimmar.Spirits = "medium OrgrimmarSpirits"
+PlayerbotsPlus.Hangout.Zone.Orgrimmar.Wisdom = "low OrgrimmarWisdom"
+PlayerbotsPlus.Hangout.Zone.Orgrimmar.Cleft = "low OrgrimmarCleft OrgrimmarCleftStone OrgrimmarCleftDepths"
+PlayerbotsPlus.Hangout.Zone.Orgrimmar.Honor = "low OrgrimmarHonor"
+PlayerbotsPlus.Hangout.Zone.Orgrimmar.WestRoad = "low OrgrimmarWestRoad"
+
+#    PlayerbotsPlus.Hangout.ZoneShiftSeconds
+#    PlayerbotsPlus.Hangout.ZoneShiftStep
+#    PlayerbotsPlus.Hangout.ZonePull
+#        How the zones' shares drift. Every ZoneShiftSeconds (5 to 3600) each
+#        goes ZonePull percent of the way back to where it started (0 to
+#        100), then up or down at random by up to ZoneShiftStep points (0 to
+#        20), within its tier's limits; whatever that comes to over or under
+#        100 is taken from, or given to, the zones a point at a time, the
+#        likelier the more room a zone has for it -- mostly the big one. With
+#        these, Orgrimmar's Valley of Strength stays mostly between 58 and 72
+#        percent, a low zone goes anywhere from 1 to 10, and about four or
+#        five people's worth changes zones every shift.
+#        Default: 30, 3, 10
+PlayerbotsPlus.Hangout.ZoneShiftSeconds = 30
+PlayerbotsPlus.Hangout.ZoneShiftStep = 3
+PlayerbotsPlus.Hangout.ZonePull = 10
+
+#    PlayerbotsPlus.Hangout.ZoneMoveSeconds
+#    PlayerbotsPlus.Hangout.ZoneMovesAtOnce
+#        Every ZoneMoveSeconds (5 to 600), in a city in zones someone is in,
+#        up to ZoneMovesAtOnce (0 to 20) of the bots in zones with more
+#        people than their share get up and walk to zones with fewer: from
+#        the spot most over its room, the one there longest, to the spot with
+#        the most room to spare, where it settles for the rest of its time.
+#        Only one free to go: there two minutes or more with two or more
+#        left, not AFK nor on a bench, about nothing else, nobody talking
+#        with it or targeting it. 0: nobody moves, and newcomers alone fill
+#        the zones short of people (as they always go where there is room).
+#        .pbp hangouts shows each zone's share, and how many are there
+#        against its room.
+#        Default: 15, 3
+PlayerbotsPlus.Hangout.ZoneMoveSeconds = 15
+PlayerbotsPlus.Hangout.ZoneMovesAtOnce = 3
+
 #    PlayerbotsPlus.Hangout.RoomPerBot
 #        Square yards each person at a spot needs: a spot with room for more
-#        people than its radius holds grows to fit them (up to 60 yards).
+#        people than its radius holds grows to fit them (up to 60 yards); a
+#        spot in a zone, the most its zone may hold.
 #        Crowded, bots find nowhere to stand there. 0: radii as written.
 #        Default: 60
 PlayerbotsPlus.Hangout.RoomPerBot = 60
@@ -1115,14 +1199,15 @@ PlayerbotsPlus.Hangout.RoomPerBot = 60
 #    PlayerbotsPlus.Hangout.FullMinutes
 #        A spot where a bot sent or fetched there finds nowhere to stand is
 #        full: it takes nobody more, and the rest of its room goes to spots
-#        that can take people -- its city's other spots of its kind (hot or
-#        not) first, then its city's others, and when the whole city is full,
-#        the other cities' spots, by their room. A bot fetched to a full spot
-#        walks on to another spot in the city with room, if there is one. The
-#        spot opens again as soon as fewer are there, or after this many
-#        minutes. .pbp hangouts shows each spot: who is there, its room, and
-#        why the places looked at for it were turned down -- for a spot
-#        nobody can be put at (its middle in a wall, a fountain, a crowd).
+#        that can take people -- its city's other spots of its kind (in its
+#        zone; else hot or not) first, then its city's others, and when the
+#        whole city is full, the other cities' spots, by their room. A bot
+#        fetched to a full spot walks on to another spot in the city with
+#        room, if there is one. The spot opens again as soon as fewer are
+#        there, or after this many minutes. .pbp hangouts shows each spot:
+#        who is there, its room, and why the places looked at for it were
+#        turned down -- for a spot nobody can be put at (its middle in a
+#        wall, a fountain, a crowd).
 #        1 to 120.
 #        Default: 10
 PlayerbotsPlus.Hangout.FullMinutes = 10

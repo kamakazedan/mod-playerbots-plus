@@ -92,10 +92,34 @@ grows (`Hangout.RoomPerBot`): crowded, `PickPlace` finds nowhere to stand.
 
 A spot where `PickPlace` finds nowhere is full (`FoundFull`): it keeps the
 room it holds, and `ShareRoom` gives the rest out (`PbpShareFullRoom`, pure
-and tested) -- its city's spots of its kind, its city's others, then every
-open spot -- until fewer are there or `Hangout.FullMinutes` pass. Use
-`RoomAt(spot)`, never `spot.capacity`, for how many a spot takes now.
-`PickPlace` counts why it turns places down per spot (`.pbp hangouts`).
+and tested) -- its city's spots of its kind (its zone's, in a zoned city),
+its city's others, then every open spot -- until fewer are there or
+`Hangout.FullMinutes` pass. Use `RoomAt(spot)`, never `spot.capacity`, for
+how many a spot takes now. `PickPlace` counts why it turns places down per
+spot (`.pbp hangouts`).
+
+## A city in zones
+
+A city with zones (`Hangout.Zone.<City>.<Name>`: a tier and its spots;
+Orgrimmar first, the user's call, then Stormwind and the rest) shares its
+people out by zone, not by hot spot: its spots outside every zone (the
+gates duels are fought at, which are never in one -- those bots are kept
+for the duels -- and the zeppelin tower) keep their written capacity, the
+rest of its places (`g_HangoutZonePlaces`) go to its zones by a share each,
+and a zoned spot's written capacity is only its part of its zone
+(`PbpHangoutSpot::written`). The shares are whole percent, always adding up
+to 100 within each tier's limits; they drift every `ZoneShiftSeconds`
+(`PbpZones::Drift`: a pull back to the start, a random step, then
+`AddUpTo100`) and every `ZoneMoveSeconds` up to `ZoneMovesAtOnce` bots a
+city move from zones over their room to zones under it (`PlanMoves`), only
+in a city a real player is in. The sums are `PlayerbotsPlusZonesText`
+(pure, tested, with the conf it ships). A move is `MoveTo`: `Send` to the
+new spot with the rest of its visit (`until`) kept, the way an errand's
+return is; only a bot `Movable` says is free (settled a while, a while
+left, not AFK, on a bench, busy or targeted). The zones are read after the
+duels (`LoadHangoutZones`, after `LoadPetsDuels`), which say where duels
+are; the shares live in the hangouts (`ShareZones`, `ShareOf`), never in
+the spots' `capacity`.
 
 ## City life lives in the hangouts
 
@@ -402,12 +426,13 @@ the cheap first look. Never the falling flag: a bot can be left with it.
 `PlayerbotsPlusMarketPrice.{h,cpp}`, `PlayerbotsPlusText.{h,cpp}`,
 `PlayerbotsPlusLedgerText.{h,cpp}`, `PlayerbotsPlusDungeonsText.{h,cpp}`,
 `PlayerbotsPlusGroupQuestsText.{h,cpp}`, `PlayerbotsPlusCityLifeText.{h,cpp}`,
-`PlayerbotsPlusDropChance.{h,cpp}`, `PlayerbotsPlusGroundGrid.{h,cpp}` and
-`PlayerbotsPlusLootedRules.{h,cpp}` have no game types in them, so they can be
-tested without a server. Keep it that way: `tests/build.sh`. The text test
-also checks the conf against the code:
+`PlayerbotsPlusDropChance.{h,cpp}`, `PlayerbotsPlusGroundGrid.{h,cpp}`,
+`PlayerbotsPlusLootedRules.{h,cpp}` and `PlayerbotsPlusZonesText.{h,cpp}` have
+no game types in them, so they can be tested without a server. Keep it that
+way: `tests/build.sh`. The text test also checks the conf against the code:
 every key the code reads is in the conf, and the default mute list, hangout
-spots, companion lists and pet names are the same in both.
+spots, companion lists and pet names are the same in both; the zones test,
+the default zones and tiers, and that each city's zones can add up.
 
 ## What it tells you: a few lines in game, the rest in a file
 

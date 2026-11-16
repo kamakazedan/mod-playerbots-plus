@@ -281,18 +281,20 @@ int main(int argc, char** argv)
             else
                 std::printf("   not the code's default: %s\n", text.c_str());
         }
-        True("conf spots", spots == 34 && good == 34);
-        True("conf spots are the code's", same == 34);
+        True("conf spots", spots == 39 && good == 39);
+        True("conf spots are the code's", same == 39);
         const size_t list = config.find("kDefaultHangoutSpots[]");
         const size_t end  = config.find("};", list);
         int defaults = 0;
         for (size_t at = config.find("\n        { \"", list); at < end; at = config.find("\n        { \"", at + 1))
             ++defaults;
-        True("the code has no other spots: " + std::to_string(defaults), list != std::string::npos && defaults == 34);
-        // Where people meet, there is room for them: Stormwind as much as
-        // Orgrimmar, Dalaran (only from level 68) a good part of that.
+        True("the code has no other spots: " + std::to_string(defaults), list != std::string::npos && defaults == 39);
+        // Where people meet, there is room for them: Stormwind and
+        // Orgrimmar alike, Dalaran (only from level 68) a good part of that.
+        // (Orgrimmar's spots are in zones: what is written for them is each
+        // one's part of its zone, and its zones share what the city has.)
         True("room in Orgrimmar: " + std::to_string(room["Orgrimmar"]), room["Orgrimmar"] >= 80);
-        True("room in Stormwind: " + std::to_string(room["Stormwind"]), room["Stormwind"] >= room["Orgrimmar"]);
+        True("room in Stormwind: " + std::to_string(room["Stormwind"]), room["Stormwind"] >= 80);
         True("room in Dalaran: " + std::to_string(room["Dalaran"]), room["Dalaran"] >= 60);
     }
 
@@ -385,6 +387,21 @@ int main(int argc, char** argv)
         EqS("no room takes none", list(PbpShareFullRoom({ { "Exodar", 8, true, true, 2 }, { "Ironforge", 0, true, false, 0 },
                                                           { "Dalaran", 10, false, false, 0 } })),
             "2,0,16");
+        // In zones: the Cleft's mouth full at 2 of 6 gives its 4 to the
+        // Cleft's other spot, not the Valley of Strength's; the whole Cleft
+        // full, to the city's other zones by their room.
+        EqS("full in a zone: its zone first",
+            list(PbpShareFullRoom({ { "Orgrimmar", 6, false, true, 2, "Orgrimmar.Cleft" },
+                                    { "Orgrimmar", 3, false, false, 0, "Orgrimmar.Cleft" },
+                                    { "Orgrimmar", 60, false, false, 0, "Orgrimmar.Strength" },
+                                    { "Orgrimmar", 14, false, false, 0 } })),
+            "2,7,60,14");
+        EqS("a whole zone full: the city's others",
+            list(PbpShareFullRoom({ { "Orgrimmar", 6, false, true, 2, "Orgrimmar.Cleft" },
+                                    { "Orgrimmar", 3, false, true, 3, "Orgrimmar.Cleft" },
+                                    { "Orgrimmar", 30, false, false, 0, "Orgrimmar.Strength" },
+                                    { "Orgrimmar", 10, false, false, 0 } })),
+            "2,3,33,11");
     }
 
     // ---- the city a spot is in ----------------------------------------------------------

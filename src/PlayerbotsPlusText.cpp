@@ -128,50 +128,52 @@ bool PbpParseSpotLine(std::string const& text, PbpSpotLine& out)
     return true;
 }
 
-namespace
+std::vector<uint32_t> PbpApportion(uint32_t total, std::vector<uint64_t> const& weights)
 {
-    // `total` shared out by `weights` in whole parts that add up to it; all
-    // weights 0, nothing for any.
-    std::vector<uint32_t> Apportion(uint32_t total, std::vector<uint64_t> const& weights)
-    {
-        std::vector<uint32_t> out(weights.size(), 0);
-        uint64_t sum = 0;
-        for (uint64_t w : weights)
-            sum += w;
-        if (!sum || !total)
-            return out;
-        std::vector<std::pair<uint64_t, size_t>> rest;   // remainder, which
-        uint64_t given = 0;
-        for (size_t i = 0; i < weights.size(); ++i)
-        {
-            const uint64_t share = uint64_t(total) * weights[i];
-            out[i] = uint32_t(share / sum);
-            given += out[i];
-            rest.emplace_back(share % sum, i);
-        }
-        std::stable_sort(rest.begin(), rest.end(), [](auto const& a, auto const& b) { return a.first > b.first; });
-        for (size_t k = 0; given < total && k < rest.size(); ++k)
-            if (weights[rest[k].second])
-            {
-                ++out[rest[k].second];
-                ++given;
-            }
+    std::vector<uint32_t> out(weights.size(), 0);
+    uint64_t sum = 0;
+    for (uint64_t w : weights)
+        sum += w;
+    if (!sum || !total)
         return out;
+    std::vector<std::pair<uint64_t, size_t>> rest;   // remainder, which
+    uint64_t given = 0;
+    for (size_t i = 0; i < weights.size(); ++i)
+    {
+        const uint64_t share = uint64_t(total) * weights[i];
+        out[i] = uint32_t(share / sum);
+        given += out[i];
+        rest.emplace_back(share % sum, i);
     }
+    std::stable_sort(rest.begin(), rest.end(), [](auto const& a, auto const& b) { return a.first > b.first; });
+    for (size_t k = 0; given < total && k < rest.size(); ++k)
+        if (weights[rest[k].second])
+        {
+            ++out[rest[k].second];
+            ++given;
+        }
+    return out;
 }
 
 std::vector<uint32_t> PbpShareFullRoom(std::vector<PbpSpotRoom> const& spots)
 {
     std::vector<uint32_t> out;
-    std::map<std::pair<std::string, bool>, uint64_t> spare;   // by city and kind: room its full spots give up
-    std::vector<std::string> cities;                           // in the order they first come
+    // By city and kind (its zone, else hot or not): room its full spots give
+    // up, the kinds of each city in the order they first come.
+    using Kind = std::pair<bool, std::string>;
+    std::map<std::pair<std::string, Kind>, uint64_t> spare;
+    std::vector<std::pair<std::string, std::vector<Kind>>> cities;
     for (PbpSpotRoom const& s : spots)
     {
-        if (std::find(cities.begin(), cities.end(), s.city) == cities.end())
-            cities.push_back(s.city);
+        auto city = std::find_if(cities.begin(), cities.end(), [&s](auto const& c) { return c.first == s.city; });
+        if (city == cities.end())
+            city = cities.insert(cities.end(), { s.city, {} });
+        const Kind kind{ s.hot, s.zone };
+        if (std::find(city->second.begin(), city->second.end(), kind) == city->second.end())
+            city->second.push_back(kind);
         const uint32_t kept = s.full ? std::min(s.room, s.held) : s.room;
         out.push_back(kept);
-        spare[{ s.city, s.hot }] += s.room - kept;
+        spare[{ s.city, kind }] += s.room - kept;
     }
 
     auto giveTo = [&](uint64_t places, auto const& takes)
@@ -186,17 +188,19 @@ std::vector<uint32_t> PbpShareFullRoom(std::vector<PbpSpotRoom> const& spots)
             }
         if (who.empty())
             return false;
-        const std::vector<uint32_t> parts = Apportion(uint32_t(std::min<uint64_t>(places, UINT32_MAX)), weights);
+        const std::vector<uint32_t> parts = PbpApportion(uint32_t(std::min<uint64_t>(places, UINT32_MAX)), weights);
         for (size_t k = 0; k < who.size(); ++k)
             out[who[k]] += parts[k];
         return true;
     };
     uint64_t homeless = 0;   // a city's spare with nowhere open in it
-    for (std::string const& city : cities)
-        for (bool hot : { true, false })
+    for (auto const& [city, kinds] : cities)
+        for (Kind const& kind : kinds)
         {
-            const uint64_t rest = spare[{ city, hot }];
-            if (rest && !giveTo(rest, [&city, hot](PbpSpotRoom const& s) { return s.city == city && s.hot == hot; }) &&
+            const uint64_t rest = spare[{ city, kind }];
+            if (rest &&
+                !giveTo(rest, [&city, &kind](PbpSpotRoom const& s)
+                        { return s.city == city && s.hot == kind.first && s.zone == kind.second; }) &&
                 !giveTo(rest, [&city](PbpSpotRoom const& s) { return s.city == city; }))
                 homeless += rest;
         }
@@ -230,7 +234,7 @@ std::vector<uint32_t> PbpShareHangoutPlaces(std::vector<PbpSpotShare> const& spo
     for (std::string const& city : cities)
         cityWeights.push_back(weights.at(city));
     const std::vector<uint32_t> cityPlaces =
-        Apportion(places ? places : uint32_t(std::min<uint64_t>(written, UINT32_MAX)), cityWeights);
+        PbpApportion(places ? places : uint32_t(std::min<uint64_t>(written, UINT32_MAX)), cityWeights);
 
     auto shareAmong = [&](std::vector<size_t> const& group, uint32_t n)
     {
@@ -243,7 +247,7 @@ std::vector<uint32_t> PbpShareHangoutPlaces(std::vector<PbpSpotShare> const& spo
         }
         if (!any)
             std::fill(w.begin(), w.end(), 1);
-        const std::vector<uint32_t> parts = Apportion(n, w);
+        const std::vector<uint32_t> parts = PbpApportion(n, w);
         for (size_t k = 0; k < group.size(); ++k)
             out[group[k]] = parts[k];
     };

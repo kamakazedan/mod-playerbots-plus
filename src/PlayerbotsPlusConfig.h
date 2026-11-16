@@ -158,8 +158,24 @@ namespace pbp
         float       y        = 0.0f;
         float       z        = 0.0f;
         float       radius   = 15.0f;
-        uint32_t    capacity = 0;
+        uint32_t    capacity = 0;       // its share of the places (a zoned spot's, at its zone's start)
+        uint32_t    written  = 0;       // its capacity as written: in a zone, its part of the zone's places
         bool        hot      = false;   // one of its city's busiest places (Hangout.HotSpots)
+        int         zone     = -1;      // its zone in g_HangoutZones (Hangout.Zone.*), -1 for none
+    };
+    // A part of a city where some of its people hang out
+    // (Hangout.Zone.<City>.<Name>): its spots share that part of the city's
+    // places, a share that drifts within its tier's limits (PbpZones).
+    struct PbpHangoutZone
+    {
+        std::string key;        // "Orgrimmar.Strength"
+        std::string name;       // "Strength"
+        std::string city;       // its spots' (PbpCityOf)
+        std::string tier;       // "high" (Hangout.ZoneTier.*)
+        uint32_t    min   = 0;  // ...the least of the city's people it holds, in percent
+        uint32_t    start = 0;  // ...where it starts
+        uint32_t    max   = 0;  // ...the most
+        std::vector<std::string> spots;   // keys of its spots
     };
     extern bool        g_HangoutEnable;
     extern std::vector<PbpHangoutSpot> g_HangoutSpots;
@@ -186,6 +202,13 @@ namespace pbp
     extern uint32_t    g_HangoutInnArrivalSeconds;   // one arrival at a city's inns per this, while someone is there
     extern bool        g_HangoutCityWeights;   // places shared out by playerbots' city weights
     extern uint32_t    g_HangoutHotShare;      // ...that share of a city's at its hot spots (percent)
+    extern std::vector<PbpHangoutZone> g_HangoutZones;   // every zoned city's, by city
+    extern std::unordered_map<std::string, uint32_t> g_HangoutZonePlaces;   // by city: the places its zones share
+    extern uint32_t    g_HangoutZoneShiftSeconds;   // the zones' shares drift this often
+    extern uint32_t    g_HangoutZoneShiftStep;      // ...by up to this many points either way
+    extern uint32_t    g_HangoutZonePull;           // ...after going this far back to their start (percent)
+    extern uint32_t    g_HangoutZoneMoveSeconds;    // bots move from a zone over its room to one under it this often
+    extern uint32_t    g_HangoutZoneMovesAtOnce;    // ...this many at most each time, in a city
 
     // City life (PlayerbotsPlusHangout): what the crowd at the hangouts does
     // while it is there, near a real player

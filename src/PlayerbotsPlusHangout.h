@@ -199,6 +199,8 @@ struct PbpHangoutStats
     uint64_t duels     = 0;   // duels fought at the gates without leaving the crowd
     uint64_t foundFull = 0;   // times a spot was found full (its room went elsewhere for a while)
     uint64_t redirected = 0;  // fetched, no room at the spot: on to another spot in the city
+    uint64_t zoneShifts = 0;  // times a zoned city's shares drifted (Hangout.Zone.*)
+    uint64_t zoneMoves  = 0;  // ...bots that moved from a zone over its room to one under it
     // City life (CityLife.*)
     uint64_t steps     = 0;   // stepped to another place at their spot
     uint64_t turns     = 0;   // looked round (someone near, someone speaking)
