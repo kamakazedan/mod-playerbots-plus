@@ -78,6 +78,15 @@ facts a prompt needs (names, not pointers), and let a listener voice it. Add a
 new event type to `PlayerbotsPlus.h` and bump `PLAYERBOTS_PLUS_API_VERSION`
 when a listener needs to know it is there.
 
+The one exception is the hivemind (`PlayerbotsPlusHivemind`, `.pbp
+hivemindsay|yell|general|emote`): a GM's own line, word for word, said by
+every bot, the user's call. It is the GM's, not the bots' talk, so it goes
+straight out (`PlayerbotAI::Say`/`Yell`, the zone's General, the text emote
+the way a client asks for it), a batch a world tick (`Hivemind.BotsPerTick`:
+thousands of bots in one tick hold it up), and a dance or a posture it starts
+ends when the bot moves or `Hivemind.StateSeconds` pass -- a bot has no
+client to end it.
+
 ## City hangouts are shared out by playerbots' weights
 
 With `Hangout.CityWeights` on, a spot's written capacity is only its part

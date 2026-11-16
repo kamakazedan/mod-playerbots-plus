@@ -14,7 +14,8 @@
 #   has the bots talk about all of it in their own words; without it, they
 #   just do it.
 #
-#   GM commands:
+#   GM commands (a GM account, security level 2, or the worldserver
+#   console; .pbp reload an administrator's, 3):
 #       .pbp status          all of it in a few lines: is each part working,
 #                            and what looks wrong
 #       .pbp hangouts        the hangouts and city life in brief
@@ -26,6 +27,11 @@
 #                            party, the economy -- written to a file now
 #                            (PlayerbotsPlus.Report.*)
 #       .pbp visit [name]    that bot (or the one selected) trades now
+#       .pbp hivemindsay <text>, hivemindyell <text>,
+#       .pbp hivemindgeneral <text>, hivemindemote <emote>
+#                            every bot on the server says it, yells it, puts
+#                            it in its zone's General, or does the emote
+#                            (see THE HIVEMIND)
 #       .pbp reload          re-read this file (.reload config does too)
 #
 #   Its own log file: the server sets up its logs before it reads module
@@ -2267,3 +2273,51 @@ PlayerbotsPlus.Mute.Enable = 1
 #    PlayerbotsPlus.Mute.Patterns
 #        Default: "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;Equipping |c*;Opened item: *;I don't know this dungeon, lead the way!"
 PlayerbotsPlus.Mute.Patterns = "AI was reset to defaults;Using |c*;Drinking |c*;Eating |c*;Feasting |c*;Equipping |c*;Opened item: *;I don't know this dungeon, lead the way!"
+
+###############################################################################
+#
+#   THE HIVEMIND
+#
+#   A GM's toy: every bot on the server says, yells or puts in General the
+#   same thing at once, word for word, or does the same emote.
+#       .pbp hivemindsay hello world        /say
+#       .pbp hivemindyell hello world       /yell
+#       .pbp hivemindgeneral hello world    its zone's General channel
+#       .pbp hivemindemote laugh            /laugh -- any emote the game has,
+#                                           by its name (dance, cheer, wave,
+#                                           bow, roar, sit...; lol, hi, ty
+#                                           and the like too)
+#   GM accounts (security level 2) only, as every .pbp command, and the
+#   worldserver console. The bots go a batch every world tick, those nearest
+#   a player first, so the ones about you do it at once and the rest of the
+#   world within a second or two; whoever gave the command is told how many
+#   did. A dead bot has no /say, /yell or emote, and one in a dungeon or a
+#   battleground no General: those are left out. /say and /yell are in the
+#   bot's side's language (Common, Orcish), as its own lines are; General
+#   is understood by its whole side. These lines are the GM's, not the
+#   bots' own: mod-ollama-chat neither voices nor answers them.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Hivemind.Enable
+#        The hivemind commands. Off, they say so and do nothing.
+#        Default: 1
+PlayerbotsPlus.Hivemind.Enable = 1
+
+#    PlayerbotsPlus.Hivemind.BotsPerTick
+#        Bots that have their turn each world tick (0 to 5000). 0: every bot
+#        in the one tick -- with thousands online, that tick is held up for
+#        everyone while they all speak, and a General with hundreds of bots
+#        in it is hundreds of lines to each of them.
+#        Default: 250
+PlayerbotsPlus.Hivemind.BotsPerTick = 250
+
+#    PlayerbotsPlus.Hivemind.StateSeconds
+#        A dance, or sitting, kneeling or lying down (/dance, /sit, /kneel,
+#        /sleep): the bot does it until it moves -- as a player's game client
+#        would stop it -- or this many seconds pass (0 to 600; 0: only the
+#        words, "Kael dances."). One on a mount, in a fight, on the move or
+#        in the water only says it; one already dancing or sitting is left
+#        as it is.
+#        Default: 20
+PlayerbotsPlus.Hivemind.StateSeconds = 20

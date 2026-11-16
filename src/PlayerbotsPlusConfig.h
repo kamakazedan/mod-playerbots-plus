@@ -210,6 +210,11 @@ namespace pbp
     extern uint32_t    g_HangoutZoneMoveSeconds;    // bots move from a zone over its room to one under it this often
     extern uint32_t    g_HangoutZoneMovesAtOnce;    // ...this many at most each time, in a city
 
+    // The hivemind (PlayerbotsPlusHivemind): a GM's line said by every bot
+    extern bool        g_HivemindEnable;
+    extern uint32_t    g_HivemindBotsPerTick;    // bots a world tick (0: all at once)
+    extern uint32_t    g_HivemindStateSeconds;   // a dance or a sit lasts at most this long (0: only the words)
+
     // City life (PlayerbotsPlusHangout): what the crowd at the hangouts does
     // while it is there, near a real player
     extern bool        g_LifeEnable;

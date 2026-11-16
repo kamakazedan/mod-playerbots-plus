@@ -6,6 +6,7 @@
 #include "PlayerbotsPlusGround.h"
 #include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusHangout.h"
+#include "PlayerbotsPlusHivemind.h"
 #include "PlayerbotsPlusIndoors.h"
 #include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusLooted.h"
@@ -180,6 +181,11 @@ namespace
         out.push_back(fmt::format("Getting back up: {} - {} released, {} ran back in, {} stopped waiting for a rez. "
                                   "Muted bot lines: {}.",
                                   OnOff(g_ReviveEnable), r.released, r.returned, r.gaveUp, PbpMute_GetDropped()));
+        PbpHivemindStats const hm = PbpHivemind_GetStats();
+        out.push_back(fmt::format("Hivemind: {} - {} commands given; {} lines said, yelled, put in General or emoted "
+                                  "by a bot each ({} could not: dead, in no General, gone), {} bots still to go.",
+                                  OnOff(g_Pbp.enable && g_HivemindEnable), hm.commands, hm.lines, hm.missed,
+                                  hm.waiting));
         PbpMarksStats const m = PbpMarks_GetStats();
         std::string const lastFail = m.lastFail ? fmt::format(", last cast result {}", m.lastFail) : "";
         out.push_back(fmt::format("Raid marks: {} - {} crowd-control marks given out, the skull moved {} to the cross "

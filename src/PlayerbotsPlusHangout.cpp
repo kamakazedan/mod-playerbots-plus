@@ -1839,7 +1839,8 @@ namespace
                 for (std::string const& key : g_HangoutZones[zones[to]].spots)
                     if (PbpHangoutSpot const* s = SpotByKey(key); s && !g_full.contains(key) && RoomAt(*s) > there[key])
                         spots.emplace_back(int64_t(RoomAt(*s)) - int64_t(there[key]), s);
-                std::stable_sort(spots.begin(), spots.end(), [](auto const& a, auto const& b) { return a.first > b.first; });
+                std::stable_sort(spots.begin(), spots.end(),
+                                 [](auto const& a, auto const& b) { return a.first > b.first; });
                 PlayerbotAI* ai = AiOf(bot);
                 auto visit = g_visits.find(guid);
                 if (!ai || visit == g_visits.end())

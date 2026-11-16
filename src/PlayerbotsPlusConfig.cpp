@@ -57,6 +57,10 @@ namespace pbp
     uint32_t    g_HangoutZoneMoveSeconds   = 15;
     uint32_t    g_HangoutZoneMovesAtOnce   = 3;
 
+    bool        g_HivemindEnable           = true;
+    uint32_t    g_HivemindBotsPerTick      = 250;
+    uint32_t    g_HivemindStateSeconds     = 20;
+
     bool        g_LifeEnable               = true;
     float       g_LifeRange                = 90.0f;
     uint32_t    g_LifeParkedShare          = 15;
@@ -957,8 +961,8 @@ namespace
             for (std::string const& key : sConfigMgr->GetKeysByString(tierPrefix))
                 addTier(key.substr(tierPrefix.size()), sConfigMgr->GetOption<std::string>(key, ""));
             if (!badTiers.empty())
-                LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Hangout.ZoneTier: could not read {} (want "
-                          "\"least start most\", in percent, each no more than the next).", badTiers);
+                LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Hangout.ZoneTier: could not read {} "
+                          "(want \"least start most\", in percent, each no more than the next).", badTiers);
 
             // The zones: the conf's; with none there and no spots of its own
             // either, the code's, for the code's spots. In order of their keys,
@@ -1305,6 +1309,9 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     LoadStuckReviveMarks();
     LoadPetsDuels();
     LoadHangoutZones();
+    pbp::g_HivemindEnable       = B("PlayerbotsPlus.Hivemind.Enable", true);
+    pbp::g_HivemindBotsPerTick  = std::min<uint32_t>(U("PlayerbotsPlus.Hivemind.BotsPerTick", 250), 5000);
+    pbp::g_HivemindStateSeconds = std::min<uint32_t>(U("PlayerbotsPlus.Hivemind.StateSeconds", 20), 600);
     // The packet hook goes by what is published here alone: with the module
     // off, nothing is muted.
     const std::string mute = sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Mute.Patterns", kDefaultMutePatterns);

@@ -6,6 +6,7 @@
 #include "PlayerbotsPlusGround.h"
 #include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusHangout.h"
+#include "PlayerbotsPlusHivemind.h"
 #include "PlayerbotsPlusIndoors.h"
 #include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusLooted.h"
@@ -29,6 +30,9 @@
 #include "ScriptMgr.h"
 #include "WorldPacket.h"
 #include "WorldSession.h"
+
+#include <cctype>
+#include <string>
 
 using namespace Acore::ChatCommands;
 
@@ -82,6 +86,9 @@ namespace
             PbpDungeons_Update(diff);
             // Group quests: switched off, their parties let their members go.
             PbpGroupQuests_Update(diff);
+            // The hivemind: switched off, what waits is dropped, and a dance
+            // or a sit it started still ends.
+            PbpHivemind_Update(diff);
             PbpStuck_Update(diff);
             PbpIndoors_Update(diff);
             PbpFire_Update(diff);
@@ -182,6 +189,10 @@ namespace
                 { "visit",  HandleVisit,  SEC_GAMEMASTER,    Console::No  },
                 { "fires",  HandleFires,  SEC_GAMEMASTER,    Console::No  },
                 { "hangouts", HandleHangouts, SEC_GAMEMASTER, Console::Yes },
+                { "hivemindsay",     HandleHivemindSay,     SEC_GAMEMASTER, Console::Yes },
+                { "hivemindyell",    HandleHivemindYell,    SEC_GAMEMASTER, Console::Yes },
+                { "hivemindgeneral", HandleHivemindGeneral, SEC_GAMEMASTER, Console::Yes },
+                { "hivemindemote",   HandleHivemindEmote,   SEC_GAMEMASTER, Console::Yes },
                 { "reload", HandleReload, SEC_ADMINISTRATOR, Console::Yes },
             };
             static ChatCommandTable commandTable =
@@ -301,6 +312,92 @@ namespace
         {
             Brief(handler, PbpHangout_Brief(true), "Each spot, and how the places looked at for it went");
             return true;
+        }
+
+        // The hivemind: every bot on the server says, yells, puts in its
+        // zone's General or emotes what a GM gives it (PlayerbotsPlusHivemind).
+        static bool Hivemind(ChatHandler* handler, PbpHivemindKind kind, std::string text, uint32_t emote,
+                             std::string const& did)
+        {
+            WorldSession* session = handler->GetSession();
+            Player* gm = session ? session->GetPlayer() : nullptr;
+            std::string why;
+            const uint32_t bots = PbpHivemind_Start(kind, text, emote, gm ? gm->GetGUID() : ObjectGuid::Empty, why);
+            if (!bots)
+            {
+                handler->SendErrorMessage("Hivemind: not now -- " + why + ".", false);
+                return false;
+            }
+            handler->SendSysMessage(fmt::format("Hivemind: {} bots {}, those nearest a player first.", bots, did));
+            return true;
+        }
+
+        // The line to say: the rest of the command, trimmed. Empty, or longer
+        // than chat takes (255), is said why.
+        static bool Line(ChatHandler* handler, Tail text, char const* example, std::string& line)
+        {
+            line = std::string(text);
+            line.erase(0, line.find_first_not_of(" \t"));
+            line.erase(line.find_last_not_of(" \t") + 1);
+            if (line.empty())
+            {
+                handler->SendErrorMessage(fmt::format("What should they say? {}", example), false);
+                return false;
+            }
+            if (line.size() > 255)
+            {
+                handler->SendErrorMessage(fmt::format("That is {} characters; chat takes 255 at most.", line.size()),
+                                          false);
+                return false;
+            }
+            return true;
+        }
+
+        // .pbp hivemindsay <text>: every bot says it (/say).
+        static bool HandleHivemindSay(ChatHandler* handler, Tail text)
+        {
+            std::string line;
+            return Line(handler, text, ".pbp hivemindsay hello world", line) &&
+                   Hivemind(handler, PbpHivemindKind::Say, line, 0, fmt::format("say \"{}\"", line));
+        }
+
+        // .pbp hivemindyell <text>: every bot yells it.
+        static bool HandleHivemindYell(ChatHandler* handler, Tail text)
+        {
+            std::string line;
+            return Line(handler, text, ".pbp hivemindyell hello world", line) &&
+                   Hivemind(handler, PbpHivemindKind::Yell, line, 0, fmt::format("yell \"{}\"", line));
+        }
+
+        // .pbp hivemindgeneral <text>: every bot puts it in its zone's General.
+        static bool HandleHivemindGeneral(ChatHandler* handler, Tail text)
+        {
+            std::string line;
+            return Line(handler, text, ".pbp hivemindgeneral hello world", line) &&
+                   Hivemind(handler, PbpHivemindKind::General, line, 0,
+                            fmt::format("put \"{}\" in their zone's General", line));
+        }
+
+        // .pbp hivemindemote <emote>: every bot does it (/laugh, /dance...).
+        static bool HandleHivemindEmote(ChatHandler* handler, Tail text)
+        {
+            std::string name = std::string(text);
+            name.erase(0, name.find_first_not_of(" \t/"));
+            name = name.substr(0, name.find_first_of(" \t"));
+            const uint32_t emote = name.empty() ? 0 : PbpHivemind_EmoteId(name);
+            if (!emote)
+            {
+                handler->SendErrorMessage(
+                    fmt::format("{} Some there are: {}.",
+                                name.empty() ? std::string("Which emote? .pbp hivemindemote laugh.")
+                                             : "There is no emote called " + name + ".",
+                                PbpHivemind_SomeEmotes()),
+                    false);
+                return false;
+            }
+            for (char& c : name)
+                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+            return Hivemind(handler, PbpHivemindKind::Emote, name, emote, "do /" + name);
         }
 
         // .pbp fires: the fires about you, how near anyone may stand, and

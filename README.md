@@ -522,6 +522,30 @@ right now", can be muted too. You can add any line you like.
 
 Settings: `PlayerbotsPlus.Mute.*`.
 
+## The hivemind
+
+A GM's toy: every bot on the server says the same thing at once.
+
+```
+.pbp hivemindsay hello world        every bot says it (/say)
+.pbp hivemindyell hello world       every bot yells it
+.pbp hivemindgeneral hello world    every bot puts it in its zone's General
+.pbp hivemindemote laugh            every bot does /laugh
+```
+
+Any emote the game has works, by its name (dance, cheer, wave, bow, roar,
+sit, kneel...), and so do the short ones players type (lol, hi, ty). The bots
+go a batch every world tick, those nearest a player first, so the ones around
+you do it at once and the rest of the world within a second or two, and you
+are told how many did. A dead bot has no /say, /yell or emote, and one in a
+dungeon or a battleground has no General, so those are left out. A dance or a
+sit lasts until the bot moves, or 20 seconds (a bot has no game client to stop
+it, and would dance on as it walked off). The lines are yours, not the bots'
+own: mod-ollama-chat neither voices nor answers them. Like every `.pbp`
+command, these need a GM account (or the worldserver console).
+
+Settings: `PlayerbotsPlus.Hivemind.*`.
+
 ## The economy ledger
 
 Before anything about the bots' economy changes (professions that craft, gear
@@ -803,6 +827,9 @@ module at startup if the updater is off.
 
 ## Commands (GM)
 
+Every `.pbp` command needs a GM account (security level 2) or the worldserver
+console; `.pbp reload` an administrator's (3).
+
 | Command | What it does |
 |---|---|
 | `.pbp status` | All of it in a few lines: a line for each part (hangouts, city life, the auction house, bot dungeons, group quests, the fixes) and anything that looks wrong |
@@ -814,6 +841,10 @@ module at startup if the updater is off.
 | `.pbp economy [days]` | The random bots' economy over the last days (7 unless you say), in brief |
 | `.pbp report` | Everything, written to a file now: every counter, every spot, queue, run and party, the economy |
 | `.pbp visit [name]` | That bot, or the one selected, trades now, wherever it is, and says what it did |
+| `.pbp hivemindsay <text>` | Every bot on the server says it (/say) |
+| `.pbp hivemindyell <text>` | Every bot yells it |
+| `.pbp hivemindgeneral <text>` | Every bot puts it in its zone's General channel |
+| `.pbp hivemindemote <emote>` | Every bot does the emote: laugh, dance, cheer, wave, bow, any the game has |
 | `.pbp reload` | Re-reads the config. `.reload config` does too |
 
 The full report also goes to `PlayerbotsPlusReport.log` in the server's logs
