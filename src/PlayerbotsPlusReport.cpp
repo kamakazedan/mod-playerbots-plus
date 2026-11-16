@@ -142,13 +142,13 @@ namespace
                                   "flew in {} ({} landed; {} too long, {} wanted before take-off, {} never took off, {} "
                                   "came down elsewhere), flew out {}; fishing {} ({} casts, {} places to fish from); "
                                   "off to practise on a training dummy {} ({} got to one, {} gave up landing no blow; "
-                                  "{} dummies known).",
+                                  "{} dummies known); sat down on a free seat near them {}.",
                                   OnOff(g_LifeEnable), h.steps, h.turns, h.hops, h.rears, h.rearedBack, h.wanders,
                                   h.showOffs, h.calmedDown, h.gawks,
                                   h.gawkers, h.dances, h.danced, h.gathered, h.errands, h.errandsDone, h.services,
                                   h.flewIn, h.landed, h.flyLate, h.flyWanted, h.flyNever, h.flyElsewhere, h.flewOut,
                                   h.fished, h.casts, h.fishPlaces, h.practises, h.practised, h.practiseNoBlows,
-                                  h.dummies));
+                                  h.dummies, h.seated));
 
         PbpStuckStats const k = PbpStuck_GetStats();
         out.push_back(fmt::format("Stuck on a mount: {} - {} mounts noted, {} bots stuck ({} kept off what they were "

@@ -104,7 +104,7 @@ Commons, the Valley of Strength, outside the bank in Dalaran. Playerbots never
 sends a bot anywhere in particular, so idle bots in a city just wander from
 NPC to NPC. With hangouts, they gather where players do.
 
-- **Where:** 50 spots in the capitals, Shattrath and Dalaran come set up:
+- **Where:** 52 spots in the capitals, Shattrath and Dalaran come set up:
   - Orgrimmar: in the Valley of Strength in front of the inn and the auction
     house, inside the auction house in front of the auctioneers, outside the
     bank, the open middle of it and just inside the gates, then the
@@ -116,8 +116,9 @@ NPC to NPC. With hangouts, they gather where players do.
     front of the auctioneers, the bank, round the fountain in front of the
     bank's steps, the Valley of Heroes, Cathedral Square and inside the
     Cathedral of Light, the Park, the Mage Quarter, the Dwarven District by
-    its forges, Old Town (its street, outside the Pig and Whistle and inside
-    it, outside the Champions' Hall, and SI:7's training dummies), the Keep
+    its forges, Old Town (its street, the Pig and Whistle and the Champions'
+    Hall outside and in -- inside the hall only from level 30 -- and SI:7's
+    training dummies and its table upstairs), the Keep
     (the throne room, the War Room and the Royal Library), the harbor (the
     quay and the piers for the boats to Northrend and Auberdine) and outside
     the gates.

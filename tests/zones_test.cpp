@@ -87,8 +87,9 @@ namespace
         return out;
     }
 
-    // The entries of a `{ "key", "value" }` list in the code, a value on one
-    // line (the key may be on the line before).
+    // The entries of a `{ "key", "value" }` list in the code (the key may be
+    // on the line before; a long value is string literals one after another,
+    // as the compiler joins them).
     std::map<std::string, std::string> CodeList(std::string const& source, std::string const& name)
     {
         std::map<std::string, std::string> out;
@@ -101,8 +102,16 @@ namespace
         while ((at = body.find("{ \"", at)) != std::string::npos)
         {
             const size_t k1 = at + 3, k2 = body.find('"', k1);
-            const size_t v1 = body.find('"', k2 + 1) + 1, v2 = body.find('"', v1);
-            out[body.substr(k1, k2 - k1)] = body.substr(v1, v2 - v1);
+            size_t v1 = body.find('"', k2 + 1) + 1, v2 = body.find('"', v1);
+            std::string value = body.substr(v1, v2 - v1);
+            for (size_t next = body.find_first_not_of(" \n", v2 + 1); next != std::string::npos && body[next] == '"';
+                 next = body.find_first_not_of(" \n", v2 + 1))
+            {
+                v1 = next + 1;
+                v2 = body.find('"', v1);
+                value += body.substr(v1, v2 - v1);
+            }
+            out[body.substr(k1, k2 - k1)] = value;
             at = v2;
         }
         return out;

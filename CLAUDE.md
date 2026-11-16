@@ -99,6 +99,17 @@ city is the end of the spot's name (`PbpCityOf`); the sharing is pure and
 tested (`PbpShareHangoutPlaces`). A spot whose capacity outgrows its radius
 grows (`Hangout.RoomPerBot`): crowded, `PickPlace` finds nowhere to stand.
 
+Where a bot is put to stand is checked before it goes (`PickPlace`,
+`PlaceNear`, `StandBy`): room round it (`ClearRound`: nothing within
+`kClearance` at a knee's or a shoulder's height -- a bot sat half inside a
+ledge at SI:7), and inside a building only on the floor of the middle's room
+(`kIndoorFloor`: one stood on the Pig and Whistle's table). Inside, any chair
+is a seat as a bench is everywhere (`Hangout.IndoorChairs`, `FindBench`). A
+spot may be for bots of a level or more (`Hangout.SpotMinLevels`,
+`PbpHangoutSpot::minLevel`): every way a bot is given a spot checks it --
+fetched (`MinLevelFor`), recruited, sent on from a full one, moved between
+zones, settling after an errand -- and a new way must too.
+
 A spot where `PickPlace` finds nowhere is full (`FoundFull`): it keeps the
 room it holds, and `ShareRoom` gives the rest out (`PbpShareFullRoom`, pure
 and tested) -- its city's spots of its kind (its zone's, in a zoned city),

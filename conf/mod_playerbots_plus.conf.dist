@@ -1009,6 +1009,28 @@ PlayerbotsPlus.Hangout.BenchRange = 25
 PlayerbotsPlus.Hangout.BenchWords = "bench"
 PlayerbotsPlus.Hangout.HeightTolerance = 6
 
+#    PlayerbotsPlus.Hangout.IndoorChairs
+#        Inside a building (a spot whose middle is indoors: a tavern, the
+#        Keep's rooms, SI:7's upstairs), any chair is a seat as a bench is
+#        everywhere: as many of those arriving sit at a table as
+#        BenchChance (their temperament's bench) has sit on a bench -- a
+#        chair within BenchRange of where they arrive, at the spot's height
+#        and in sight of its middle, so not the floor below. Outside, only
+#        benches (BenchWords). Either way, one standing about near a free
+#        seat (within 12 yards) now and then goes and sits on it: a third of
+#        its bench chance each time it shifts about.
+#        Default: 1
+PlayerbotsPlus.Hangout.IndoorChairs = 1
+
+#    PlayerbotsPlus.Hangout.SpotMinLevels
+#        Spots only bots of a level or more hang out at: "Key:level", |
+#        separated. Nobody under it is sent there, fetched for it, moved
+#        there from another zone, or settles there after an errand; its room
+#        waits for one who is.
+#        Default: "StormwindChampionsHallInside:30" (inside the Champions'
+#        Hall, those who have done some fighting)
+PlayerbotsPlus.Hangout.SpotMinLevels = "StormwindChampionsHallInside:30"
+
 #    PlayerbotsPlus.Hangout.Spot.<Name>
 #        Where people hang out: "map x y z radius capacity name". x y z is
 #        the middle (a place a player can stand: these are taken from a
@@ -1042,14 +1064,17 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #          by the moonwell and the druid trainers), the Mage Quarter, the
 #          Dwarven District by its forges, Old Town -- the street, outside
 #          the Pig and Whistle and inside it among its tables, outside the
-#          Champions' Hall, and SI:7's yard by its training dummies -- the
+#          Champions' Hall and inside it (from level 30: see SpotMinLevels),
+#          SI:7's yard among its training dummies and its table upstairs -- the
 #          Keep's throne room, War Room (its battlemasters) and Royal
 #          Library, the harbor (the quay, and the piers for the boats to
 #          Northrend and to Auberdine) and outside the gates. Those inside a
 #          building have their middles among the people who stand in it
 #          (the tavernkeeper's tables, the librarians, the battlemasters, the
 #          trainers): placed from the game's own spawns, not walked, so
-#          .pbp hangouts after a restart is the check that bots find room.
+#          .pbp hangouts after a restart is the check that bots find room --
+#          but for SI:7's two and inside the Champions' Hall, which are where
+#          a player stood.
 #          The two auction houses' middles are where a player stands before
 #          the auctioneers (60.8, 70.7 and 54.9, 63.7 on the city maps), at
 #          the height of an NPC that stands on that floor.
@@ -1066,8 +1091,12 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        included). A spot's middle is somewhere open, never inside a statue
 #        or a fountain: every place is checked to be in sight of it, through
 #        anything but a gameobject's small model (a mailbox -- most middles
-#        are one -- a crate or a holiday decoration). A spot nobody can be
-#        put at says so in the log, once; .pbp hangouts shows why.
+#        are one -- a crate or a holiday decoration). Nobody stands with a
+#        wall, a ledge, a pillar, a table or a mailbox within a yard or so of
+#        them on any side, at a knee's or a shoulder's height, so nobody is
+#        half inside the stone; and inside a building, only on the floor of
+#        the middle's room -- never on a table or a chair. A spot nobody can
+#        be put at says so in the log, once; .pbp hangouts shows why.
 #        Maps: 0 Eastern Kingdoms, 1 Kalimdor, 530 Outland and the Blood
 #        Elf and Draenei lands, 571 Northrend.
 PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 30 the Trade District in Stormwind"
@@ -1081,11 +1110,13 @@ PlayerbotsPlus.Hangout.Spot.StormwindCathedralInside = "0 -8530.0 843.0 106.5 10
 PlayerbotsPlus.Hangout.Spot.StormwindPark = "0 -8752.0 1083.0 90.8 16 5 the Park in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindMageQuarter = "0 -9010.0 850.0 106.0 18 5 the Mage Quarter in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindDwarven = "0 -8428.0 610.0 95.2 10 5 by the forges in the Dwarven District in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindOldTown = "0 -8675.0 445.0 99.5 16 5 Old Town in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindPigAndWhistle = "0 -8637.5 427.7 102.1 14 4 outside the Pig and Whistle in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindTavern = "0 -8610.5 389.0 102.9 10 5 inside the Pig and Whistle tavern in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindChampionsHall = "0 -8744.6 407.3 98.2 14 4 outside the Champions' Hall in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindSI7 = "0 -8762.0 360.0 101.1 10 5 by the training dummies at SI:7 in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindOldTown = "0 -8675.0 445.0 99.5 16 4 Old Town in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindPigAndWhistle = "0 -8637.5 427.7 102.1 14 3 outside the Pig and Whistle in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindTavern = "0 -8610.5 389.0 102.9 10 4 inside the Pig and Whistle tavern in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindChampionsHall = "0 -8744.6 407.3 98.2 14 3 outside the Champions' Hall in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindChampionsHallInside = "0 -8772.2 413.5 103.9 10 3 inside the Champions' Hall in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindSI7 = "0 -8789.6 352.6 101.1 10 4 by the training dummies at SI:7 in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindSI7Upstairs = "0 -8794.2 323.0 109.5 10 2 upstairs in SI:7 in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindThrone = "0 -8450.5 345.0 121.3 10 2 the throne room of the Keep in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindWarRoom = "0 -8398.0 279.0 121.0 10 2 the War Room in the Keep in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindLibrary = "0 -8350.0 400.0 122.4 10 1 the Royal Library in the Keep in Stormwind"
@@ -1173,8 +1204,9 @@ PlayerbotsPlus.Hangout.HotSpots = "StormwindTrade|StormwindAuction|StormwindAuct
 #          the Cleft of Shadow (most of its people at its mouth), the Valley
 #          of Honor and the road west of the Hall of Legends, low.
 #          Stormwind: the Trade District, high (its five spots); Old Town,
-#          medium (its street, the Pig and Whistle outside and in, the
-#          Champions' Hall and SI:7's training dummies); the Dwarven
+#          medium (its street, the Pig and Whistle and the Champions' Hall
+#          outside and in, SI:7's training dummies and its table upstairs);
+#          the Dwarven
 #          District's forges, the Cathedral (its square and inside), the
 #          Park, the Mage Quarter, the Valley of Heroes, the harbor (both
 #          piers and the quay) and the Keep (throne room, War Room and Royal
@@ -1196,7 +1228,7 @@ PlayerbotsPlus.Hangout.Zone.Orgrimmar.Cleft = "low OrgrimmarCleft OrgrimmarCleft
 PlayerbotsPlus.Hangout.Zone.Orgrimmar.Honor = "low OrgrimmarHonor"
 PlayerbotsPlus.Hangout.Zone.Orgrimmar.WestRoad = "low OrgrimmarWestRoad"
 PlayerbotsPlus.Hangout.Zone.Stormwind.Trade = "high StormwindTrade StormwindAuction StormwindAuctionHall StormwindBank StormwindFountain"
-PlayerbotsPlus.Hangout.Zone.Stormwind.OldTown = "medium StormwindOldTown StormwindPigAndWhistle StormwindTavern StormwindChampionsHall StormwindSI7"
+PlayerbotsPlus.Hangout.Zone.Stormwind.OldTown = "medium StormwindOldTown StormwindPigAndWhistle StormwindTavern StormwindChampionsHall StormwindChampionsHallInside StormwindSI7 StormwindSI7Upstairs"
 PlayerbotsPlus.Hangout.Zone.Stormwind.Dwarven = "low StormwindDwarven"
 PlayerbotsPlus.Hangout.Zone.Stormwind.Cathedral = "low StormwindCathedral StormwindCathedralInside"
 PlayerbotsPlus.Hangout.Zone.Stormwind.Park = "low StormwindPark"
@@ -1295,7 +1327,8 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 #       RestlessMaxSeconds), and the rest shuffle about every
 #       ShuffleMinSeconds to ShuffleMaxSeconds. Each time, it may go on an
 #       errand (ErrandChance), fishing (FishChance) or to practise on a
-#       training dummy (PractiseChance), or hop about
+#       training dummy (PractiseChance), sit down on a free seat near it
+#       (Hangout.IndoorChairs), or hop about
 #       (JumpChance; on a mount, rear: RearChance), or run about
 #       (WanderChance), or else take a step or two within its spot
 #       (StepMin to StepMax yards, walking WalkChance of the time). Nobody

@@ -41,6 +41,7 @@ namespace pbp
     float       g_HangoutBenchRange       = 25.0f;
     float       g_HangoutHeightTolerance  = 6.0f;
     std::vector<std::string> g_HangoutBenchWords;
+    bool        g_HangoutIndoorChairs     = true;
     bool        g_HangoutBringIn          = true;
     uint32_t    g_HangoutBringInFill      = 75;
     uint32_t    g_HangoutBringInPerMinute = 15;
@@ -326,13 +327,16 @@ namespace
         { "StormwindPark",      "0 -8752.0 1083.0 90.8 16 5 the Park in Stormwind" },
         { "StormwindMageQuarter", "0 -9010.0 850.0 106.0 18 5 the Mage Quarter in Stormwind" },
         { "StormwindDwarven",   "0 -8428.0 610.0 95.2 10 5 by the forges in the Dwarven District in Stormwind" },
-        { "StormwindOldTown",   "0 -8675.0 445.0 99.5 16 5 Old Town in Stormwind" },
+        { "StormwindOldTown",   "0 -8675.0 445.0 99.5 16 4 Old Town in Stormwind" },
         { "StormwindPigAndWhistle",
-          "0 -8637.5 427.7 102.1 14 4 outside the Pig and Whistle in Stormwind" },
-        { "StormwindTavern",    "0 -8610.5 389.0 102.9 10 5 inside the Pig and Whistle tavern in Stormwind" },
+          "0 -8637.5 427.7 102.1 14 3 outside the Pig and Whistle in Stormwind" },
+        { "StormwindTavern",    "0 -8610.5 389.0 102.9 10 4 inside the Pig and Whistle tavern in Stormwind" },
         { "StormwindChampionsHall",
-          "0 -8744.6 407.3 98.2 14 4 outside the Champions' Hall in Stormwind" },
-        { "StormwindSI7",       "0 -8762.0 360.0 101.1 10 5 by the training dummies at SI:7 in Stormwind" },
+          "0 -8744.6 407.3 98.2 14 3 outside the Champions' Hall in Stormwind" },
+        { "StormwindChampionsHallInside",
+          "0 -8772.2 413.5 103.9 10 3 inside the Champions' Hall in Stormwind" },
+        { "StormwindSI7",       "0 -8789.6 352.6 101.1 10 4 by the training dummies at SI:7 in Stormwind" },
+        { "StormwindSI7Upstairs", "0 -8794.2 323.0 109.5 10 2 upstairs in SI:7 in Stormwind" },
         { "StormwindThrone",    "0 -8450.5 345.0 121.3 10 2 the throne room of the Keep in Stormwind" },
         { "StormwindWarRoom",   "0 -8398.0 279.0 121.0 10 2 the War Room in the Keep in Stormwind" },
         { "StormwindLibrary",   "0 -8350.0 400.0 122.4 10 1 the Royal Library in the Keep in Stormwind" },
@@ -391,6 +395,10 @@ namespace
         "ThunderBluffMiddle|ThunderBluffBank|DarnassusBank|ExodarHall|SilvermoonExchange|ShattrathTerrace|"
         "DalaranBank|DalaranRuneweaver|DalaranMerchants";
 
+    // Spots only bots of a level or more hang out at (Hangout.SpotMinLevels):
+    // inside the Champions' Hall, those who have done some fighting.
+    char const* const kDefaultSpotMinLevels = "StormwindChampionsHallInside:30";
+
     // A city's zones (Hangout.Zone.<City>.<Name>): "tier spot spot ...", the
     // spots sharing what the zone's share of the city's people comes to.
     // Used with the spots above (the conf has no Hangout.Spot.* keys) when
@@ -399,7 +407,8 @@ namespace
     // Spirits, a few in each of the Valley of Wisdom, the Cleft of Shadow,
     // the Valley of Honor and the road west of the Hall of Legends.
     // Stormwind's: most in the Trade District, some about Old Town (the Pig
-    // and Whistle, the Champions' Hall, SI:7's training dummies), a few in
+    // and Whistle, the Champions' Hall, SI:7's training dummies and its table
+    // upstairs), a few in
     // each of the Dwarven District's forges, Cathedral Square and the
     // Cathedral, the Park, the Mage Quarter, the Valley of Heroes, the
     // harbor's piers and the Keep.
@@ -414,7 +423,8 @@ namespace
         { "Stormwind.Trade",
           "high StormwindTrade StormwindAuction StormwindAuctionHall StormwindBank StormwindFountain" },
         { "Stormwind.OldTown",
-          "medium StormwindOldTown StormwindPigAndWhistle StormwindTavern StormwindChampionsHall StormwindSI7" },
+          "medium StormwindOldTown StormwindPigAndWhistle StormwindTavern StormwindChampionsHall "
+          "StormwindChampionsHallInside StormwindSI7 StormwindSI7Upstairs" },
         { "Stormwind.Dwarven", "low StormwindDwarven" },
         { "Stormwind.Cathedral", "low StormwindCathedral StormwindCathedralInside" },
         { "Stormwind.Park", "low StormwindPark" },
@@ -600,6 +610,7 @@ namespace
                 c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
             g_HangoutBenchWords.push_back(std::move(word));
         }
+        g_HangoutIndoorChairs = B("PlayerbotsPlus.Hangout.IndoorChairs", true);
         g_HangoutBringIn          = B("PlayerbotsPlus.Hangout.BringIn", true);
         g_HangoutBringInFill      = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.BringInFill", 75));
         g_HangoutBringInPerMinute = std::min<uint32_t>(120, U("PlayerbotsPlus.Hangout.BringInPerMinute", 15));
@@ -646,6 +657,29 @@ namespace
             PbpSplit(sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Hangout.HotSpots", kDefaultHotSpots), '|');
         for (PbpHangoutSpot& spot : g_HangoutSpots)
             spot.hot = std::find(hot.begin(), hot.end(), spot.key) != hot.end();
+        // Spots only bots of a level or more hang out at: "Key:level|Key:level".
+        std::string badLevels;
+        for (std::string const& entry : PbpSplit(sConfigMgr->GetOption<std::string>(
+                 "PlayerbotsPlus.Hangout.SpotMinLevels", kDefaultSpotMinLevels), '|'))
+        {
+            const size_t colon = entry.find(':');
+            const std::string key = entry.substr(0, colon);
+            uint32_t level = 0;
+            bool found = false;
+            if (colon != std::string::npos)
+                level = uint32_t(std::clamp(std::atoi(entry.c_str() + colon + 1), 0, 80));
+            for (PbpHangoutSpot& spot : g_HangoutSpots)
+                if (spot.key == key && colon != std::string::npos)
+                {
+                    spot.minLevel = level;
+                    found = true;
+                }
+            if (!found && !entry.empty())
+                badLevels += (badLevels.empty() ? "" : ", ") + entry;
+        }
+        if (!badLevels.empty())
+            LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Hangout.SpotMinLevels: no spot for {} "
+                      "(want \"Key:level\", | separated).", badLevels);
         g_HangoutCityWeights = B("PlayerbotsPlus.Hangout.CityWeights", true);
         g_HangoutHotShare    = std::min<uint32_t>(100, U("PlayerbotsPlus.Hangout.HotShare", 75));
         // Shared out among the spots once the zones are read (LoadHangoutZones).

@@ -162,6 +162,7 @@ namespace pbp
         uint32_t    written  = 0;       // its capacity as written: in a zone, its part of the zone's places
         bool        hot      = false;   // one of its city's busiest places (Hangout.HotSpots)
         int         zone     = -1;      // its zone in g_HangoutZones (Hangout.Zone.*), -1 for none
+        uint32_t    minLevel = 0;       // only bots of this level or more hang out here (Hangout.SpotMinLevels)
     };
     // A part of a city where some of its people hang out
     // (Hangout.Zone.<City>.<Name>): its spots share that part of the city's
@@ -194,6 +195,7 @@ namespace pbp
     extern float       g_HangoutBenchRange;
     extern float       g_HangoutHeightTolerance;
     extern std::vector<std::string> g_HangoutBenchWords;   // lowercase
+    extern bool        g_HangoutIndoorChairs;    // inside a building, any chair is a seat too
     extern bool        g_HangoutBringIn;
     extern uint32_t    g_HangoutBringInFill;
     extern uint32_t    g_HangoutBringInPerMinute;

@@ -76,6 +76,7 @@ namespace
     // The bot's own AI waits this long; renewed every tick, so a slow tick is no gap.
     constexpr uint32_t kHoldMs     = 5000;
     constexpr float    kMaxClimb   = 30.0f;      // a bot this far above or below a spot is on another level
+    constexpr float    kIndoorFloor = 0.6f;      // inside, a place this near the middle's floor height: not a table
     constexpr auto     kMountGrace = std::chrono::seconds(10);
 
     // What "in sight of a spot's middle" looks through: walls and buildings,
@@ -275,11 +276,15 @@ namespace
         uint64_t found = 0;    // a place taken up
         uint64_t ground = 0;   // no ground there, or not at the middle's height
         uint64_t water = 0, sight = 0, taken = 0, roof = 0, fire = 0, crowded = 0, path = 0;
+        uint64_t wall = 0;     // up against a wall, a ledge, a pillar, furniture
         uint64_t noRoom = 0;   // a bot fetched there found nowhere at all
         uint64_t full = 0;     // times found full
         bool     said = false; // "nobody can stand here" logged
 
-        uint64_t Looked() const { return found + ground + water + sight + taken + roof + fire + crowded + path; }
+        uint64_t Looked() const
+        {
+            return found + ground + water + sight + taken + roof + fire + crowded + path + wall;
+        }
     };
     std::unordered_map<std::string, Looks> g_looks;   // by spot key
     // A city someone is in takes its next arrival from then.
@@ -361,7 +366,7 @@ namespace
     uint32_t MinLevelFor(const PbpHangoutSpot& s, uint32_t zone)
     {
         constexpr uint32_t kSilvermoonCity = 3487, kTheExodar = 3557;
-        uint32_t level = g_HangoutBringInMinLevel;
+        uint32_t level = std::max(g_HangoutBringInMinLevel, s.minLevel);
         if (s.map == 571)
             level = std::max<uint32_t>(level, 68);
         else if (s.map == 530 && zone != kSilvermoonCity && zone != kTheExodar)
@@ -609,6 +614,24 @@ namespace
         return it == g_room.end() ? ShareOf(s) : it->second;
     }
 
+    // Room round a place: nothing in the way within kClearance yards on any
+    // side, at a knee's height or a shoulder's -- a wall, a ledge, a pillar, a
+    // stall, a table, a mailbox -- so whoever stands or sits there is not half
+    // inside the stone. (A model the game gave nothing solid is no wall.)
+    constexpr float kClearance = 1.2f;
+    bool ClearRound(Map* map, uint32_t phaseMask, float x, float y, float z)
+    {
+        for (const float h : { 0.4f, 1.4f })
+            for (int i = 0; i < 8; ++i)
+            {
+                const float a = float(i) * (kTwoPi / 8.0f);
+                if (!map->isInLineOfSight(x, y, z + h, x + kClearance * std::cos(a), y + kClearance * std::sin(a), z + h,
+                                          phaseMask, LINEOFSIGHT_ALL_CHECKS, VMAP::ModelIgnoreFlags::Nothing))
+                    return false;
+            }
+        return true;
+    }
+
     // A place within the spot: on the ground near the middle's height, in
     // sight of the middle (so not behind a wall; a mailbox is no wall:
     // kSightChecks), outdoors if the middle is
@@ -636,7 +659,11 @@ namespace
             const float x = s.x + dist * std::cos(angle);
             const float y = s.y + dist * std::sin(angle);
             const float z = map->GetHeight(phaseMask, x, y, s.z + 3.0f, true, g_HangoutHeightTolerance + 6.0f);
-            if (z <= INVALID_HEIGHT || std::fabs(z - s.z) > g_HangoutHeightTolerance)
+            // Inside, on the floor of the middle's room: a table's top, a
+            // chair's seat or the stairs are no place to stand about (one
+            // stood on the Pig and Whistle's table).
+            if (z <= INVALID_HEIGHT || std::fabs(z - s.z) > g_HangoutHeightTolerance ||
+                (!middle.outdoors && std::fabs(z - groundZ) > kIndoorFloor))
             {
                 ++look.ground;
                 continue;
@@ -677,6 +704,11 @@ namespace
             if (PbpSpace_Crowded(map, bot, x, y, z, 2.5f, bot))
             {
                 ++look.crowded;
+                continue;
+            }
+            if (!ClearRound(map, phaseMask, x, y, z))
+            {
+                ++look.wall;
                 continue;
             }
 
@@ -726,7 +758,9 @@ namespace
     }
 
     // A free bench near the bot, in sight of the spot's middle: fewer of this
-    // module's bots on it than it has seats.
+    // module's bots on it than it has seats. Inside a building (the spot's
+    // middle indoors: a tavern, a hall), any chair is a seat too
+    // (Hangout.IndoorChairs).
     GameObject* FindBench(Player* bot, const Visit& v)
     {
         if (g_HangoutBenchRange <= 0.0f)
@@ -737,10 +771,20 @@ namespace
         Acore::GameObjectListSearcher<Acore::GameObjectInRangeCheck> searcher(bot, objects, check);
         Cell::VisitObjects(bot, searcher, g_HangoutBenchRange);
 
+        bool chairs = false;
+        if (g_HangoutIndoorChairs)
+        {
+            PositionFullTerrainStatus middle;
+            bot->GetMap()->GetFullTerrainStatusForPosition(bot->GetPhaseMask(), v.cx, v.cy, v.cz,
+                                                           bot->GetCollisionHeight(), middle);
+            chairs = !middle.outdoors;
+        }
         std::vector<GameObject*> free;
         for (GameObject* go : objects)
         {
-            if (!IsBench(go) || std::fabs(go->GetPositionZ() - v.cz) > g_HangoutHeightTolerance)
+            const bool seat = IsBench(go) || (chairs && go && go->isSpawned() &&
+                                              go->GetGoType() == GAMEOBJECT_TYPE_CHAIR);
+            if (!seat || std::fabs(go->GetPositionZ() - v.cz) > g_HangoutHeightTolerance)
                 continue;
             if (!bot->GetMap()->isInLineOfSight(v.cx, v.cy, v.cz + 2.0f, go->GetPositionX(), go->GetPositionY(),
                                                 go->GetPositionZ() + 1.5f, bot->GetPhaseMask(), kSightChecks,
@@ -1118,7 +1162,8 @@ namespace
             for (const PbpHangoutSpot& o : g_HangoutSpots)
             {
                 if (o.key == s.key || o.map != s.map || ZoneOf(o) != zone || DuelSpot(o.key) ||
-                    std::fabs(o.z - bot->GetPositionZ()) > kMaxClimb || bot->GetExactDist2d(o.x, o.y) > g_HangoutRecruitRange)
+                    std::fabs(o.z - bot->GetPositionZ()) > kMaxClimb || bot->GetExactDist2d(o.x, o.y) > g_HangoutRecruitRange ||
+                    bot->GetLevel() < o.minLevel)
                     continue;
                 const uint32_t room = RoomAt(o), at = AtSpot(o.key);
                 if (room > at)
@@ -1309,7 +1354,7 @@ namespace
             for (const auto& [s, zone] : open)
             {
                 if (s->map != bot->GetMapId() || (zone != bot->GetZoneId() && !DuelSpot(s->key)) ||
-                    std::fabs(bot->GetPositionZ() - s->z) > kMaxClimb)
+                    std::fabs(bot->GetPositionZ() - s->z) > kMaxClimb || bot->GetLevel() < s->minLevel)
                     continue;
                 const float d = bot->GetExactDist2d(s->x, s->y);
                 if (d < bestDist)
@@ -1882,8 +1927,11 @@ namespace
                 // Where: the spot of that zone with the most room to spare, open.
                 std::vector<std::pair<int64_t, PbpHangoutSpot const*>> spots;
                 for (std::string const& key : g_HangoutZones[zones[to]].spots)
-                    if (PbpHangoutSpot const* s = SpotByKey(key); s && !g_full.contains(key) && RoomAt(*s) > there[key])
+                {
+                    PbpHangoutSpot const* s = SpotByKey(key);
+                    if (s && !g_full.contains(key) && RoomAt(*s) > there[key] && bot->GetLevel() >= s->minLevel)
                         spots.emplace_back(int64_t(RoomAt(*s)) - int64_t(there[key]), s);
+                }
                 std::stable_sort(spots.begin(), spots.end(),
                                  [](auto const& a, auto const& b) { return a.first > b.first; });
                 PlayerbotAI* ai = AiOf(bot);
@@ -1984,7 +2032,8 @@ namespace
                                       VMAP::ModelIgnoreFlags::Nothing))
                 continue;
             if (TakenByOther(v.map, x, y, 2.0f, self) || PbpSpace_Crowded(map, bot, x, y, z, 2.0f, bot) ||
-                PbpFire_Burns(bot, x, y, z, 1.0f + (v.posture == Posture::Mounted ? PbpFire_MountRoom() : 0.0f)))
+                PbpFire_Burns(bot, x, y, z, 1.0f + (v.posture == Posture::Mounted ? PbpFire_MountRoom() : 0.0f)) ||
+                !ClearRound(map, phase, x, y, z))
                 continue;
             if (v.posture == Posture::Mounted)
             {
@@ -2411,7 +2460,7 @@ namespace
                                        ? SpotNear(v.map, bot->GetZoneId(), bot->GetPositionX(), bot->GetPositionY(),
                                                   bot->GetPositionZ())
                                        : SpotByKey(v.spotKey);
-        if (!to || (to->key != v.spotKey && RoomAt(*to) <= AtSpot(to->key)))
+        if (!to || (to->key != v.spotKey && (RoomAt(*to) <= AtSpot(to->key) || bot->GetLevel() < to->minLevel)))
             to = SpotByKey(v.spotKey);
         const Visit from = v;
         const uint64_t key = bot->GetGUID().GetRawValue();
@@ -2562,7 +2611,8 @@ namespace
                        std::hypot(entry.second.ex - x, entry.second.ey - y) < 2.0f;
             });
             if (another || TakenByOther(bot->GetMapId(), x, y, 2.0f, self) ||
-                PbpSpace_Crowded(map, bot, x, y, z, 1.6f, bot) || PbpFire_Burns(bot, x, y, z, 1.0f))
+                PbpSpace_Crowded(map, bot, x, y, z, 1.6f, bot) || PbpFire_Burns(bot, x, y, z, 1.0f) ||
+                !ClearRound(map, phase, x, y, z))
                 continue;
             outX = x;
             outY = y;
@@ -2957,6 +3007,26 @@ namespace
         return true;
     }
 
+    // Up from where it stands to a free seat within a dozen yards, to sit
+    // there for the rest of its time (Settle sits it down, as one arriving
+    // at a bench). False: none free near it.
+    bool TakeASeat(Player* bot, Visit& v, const Clock::time_point now)
+    {
+        GameObject* seat = FindBench(bot, v);
+        if (!seat || bot->GetExactDist2d(seat) > 12.0f)
+            return false;
+        v.posture       = Posture::Bench;
+        v.bench         = seat->GetGUID();
+        v.bx            = seat->GetPositionX();
+        v.by            = seat->GetPositionY();
+        v.bz            = seat->GetPositionZ();
+        v.phase         = Phase::Approach;
+        v.approachStart = now;
+        bot->GetMotionMaster()->MovePoint(kPointId, v.bx, v.by, v.bz);
+        ++g_stats.seated;
+        return true;
+    }
+
     // Settled again (Settle): what it is about decides how it stands.
     void LifeSettle(Player* bot, PlayerbotAI* /*ai*/, Visit& v, const Clock::time_point now)
     {
@@ -3299,6 +3369,11 @@ namespace
             return;
         if (roll > g_LifeErrandChance && roll <= g_LifeErrandChance + g_LifeFishChance &&
             StartFishing(bot, ai, v, s, now))
+            return;
+        // Standing about near a free seat -- a bench; inside, a chair too --
+        // now and then it goes and sits down on it, the likelier the more its
+        // temperament likes a bench.
+        if (v.posture == Posture::Stand && Roll(v.temperament.bench / 3) && TakeASeat(bot, v, now))
             return;
         // Over to practise on a training dummy: likelier with one near. Not
         // one that heals: there is nothing on a dummy to heal.
@@ -4141,7 +4216,7 @@ PbpHangoutMove PbpHangout_MoveTo(Player* bot, float x, float y, float z)
     if (v.phase == Phase::Duelling)
         return PbpHangoutMove::NotHere;
     if (v.phase == Phase::Arriving || v.phase == Phase::Travel || v.phase == Phase::Flying ||
-        v.phase == Phase::Errand)
+        v.phase == Phase::Errand || v.phase == Phase::Practising)
         return PbpHangoutMove::OnItsWay;
     PlayerbotAI* ai = AiOf(bot);
     if (!ai)
@@ -4248,9 +4323,9 @@ std::vector<std::string> PbpHangout_SpotReport()
         line += fmt::format("; found full {} times, no room for a bot fetched there {} times. Places looked at {}: {} "
                             "taken up; turned down {} not at its height, {} in water, {} out of sight of its middle, "
                             "{} someone's already, {} under a roof, {} by a fire, {} with someone standing there, {} "
-                            "no way there from its middle.",
+                            "up against a wall, {} no way there from its middle.",
                             l.full, l.noRoom, looked, l.found, l.ground, l.water, l.sight, l.taken, l.roof, l.fire,
-                            l.crowded, l.path);
+                            l.crowded, l.wall, l.path);
         out.push_back(line);
     }
     return out;
@@ -4266,6 +4341,7 @@ namespace
             { l.sight, "out of sight of its middle" },   { l.taken, "someone's place already" },
             { l.roof, "under a roof" },                  { l.fire, "by a fire" },
             { l.crowded, "someone standing there" },     { l.path, "no way there from its middle" },
+            { l.wall, "up against a wall" },
         };
         const auto* most = std::max_element(std::begin(why), std::end(why),
                                             [](const auto& a, const auto& b) { return a.first < b.first; });

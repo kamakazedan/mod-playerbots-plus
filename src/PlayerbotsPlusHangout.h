@@ -227,6 +227,7 @@ struct PbpHangoutStats
     uint64_t flewOut   = 0;   // left by flight path
     uint64_t fished    = 0;   // went fishing at the water's edge
     uint64_t casts     = 0;   // ...lines cast
+    uint64_t seated    = 0;   // stood about, then sat down on a free seat near it (a bench; inside, a chair)
     uint64_t practises = 0;   // off to practise on a training dummy
     uint64_t practised = 0;   // ...got there and set about it
     uint64_t practiseNoBlows = 0;  // ...gave up, its goes ending with no blow landed
