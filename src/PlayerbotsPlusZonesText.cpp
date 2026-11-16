@@ -134,29 +134,24 @@ namespace PbpZones
         return uint32_t((uint64_t(places) * std::min<uint32_t>(percent, 100) + 99) / 100);
     }
 
-    std::vector<std::pair<size_t, size_t>> PlanMoves(std::vector<Count> zones, uint32_t cap)
+    std::vector<std::pair<size_t, size_t>> PlanMoves(std::vector<Count> zones, uint32_t cap, Dice const& dice)
     {
         std::vector<std::pair<size_t, size_t>> moves;
         while (moves.size() < cap)
         {
-            size_t from = zones.size(), to = zones.size();
-            uint32_t over = 0, under = 0;
+            std::vector<size_t> over, under;
             for (size_t i = 0; i < zones.size(); ++i)
             {
                 Count const& z = zones[i];
-                if (z.there > z.room && z.movable && z.there - z.room > over)
-                {
-                    over = z.there - z.room;
-                    from = i;
-                }
-                if (z.room > z.there && z.room - z.there > under)
-                {
-                    under = z.room - z.there;
-                    to = i;
-                }
+                if (z.there > z.room && z.movable)
+                    over.push_back(i);
+                else if (z.room > z.there)
+                    under.push_back(i);
             }
-            if (from == zones.size() || to == zones.size())
+            if (over.empty() || under.empty())
                 break;
+            const size_t from = over[dice(uint32_t(over.size())) % over.size()];
+            const size_t to   = under[dice(uint32_t(under.size())) % under.size()];
             moves.emplace_back(from, to);
             --zones[from].there;
             --zones[from].movable;

@@ -105,6 +105,12 @@ namespace pbp
     uint32_t    g_LifeFishMinMinutes       = 3;
     uint32_t    g_LifeFishMaxMinutes       = 10;
     uint32_t    g_LifeFishPlaces           = 4;
+    bool        g_LifePractise             = true;
+    uint32_t    g_LifePractiseChance       = 3;
+    uint32_t    g_LifePractiseNearChance   = 25;
+    float       g_LifePractiseRange        = 500.0f;
+    uint32_t    g_LifePractiseMinSeconds   = 45;
+    uint32_t    g_LifePractiseMaxSeconds   = 150;
     uint32_t    g_LifeWanderChance         = 15;
     float       g_LifeWanderRange          = 25.0f;
     uint32_t    g_LifeShowOffMinutes       = 15;
@@ -308,17 +314,31 @@ namespace
     // Where people stand about in each capital: "map x y z radius capacity
     // name". Used when the conf has no PlayerbotsPlus.Hangout.Spot.* keys.
     const std::pair<const char*, const char*> kDefaultHangoutSpots[] = {
-        { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 16 the Trade District in Stormwind" },
-        { "StormwindAuction",   "0 -8815.2 652.9 94.9 14 12 outside the auction house in Stormwind" },
-        { "StormwindAuctionHall", "0 -8814.8 666.5 95.5 10 4 the auction house in Stormwind" },
-        { "StormwindBank",      "0 -8914.0 621.5 99.6 14 5 the bank in Stormwind" },
-        { "StormwindFountain",  "0 -8869.0 643.0 96.4 18 12 by the fountain in the Trade District in Stormwind" },
-        { "StormwindValley",    "0 -8955.0 525.0 96.4 20 10 the Valley of Heroes in Stormwind" },
-        { "StormwindCathedral", "0 -8635.0 800.0 97.0 24 14 Cathedral Square in Stormwind" },
-        { "StormwindMageQuarter", "0 -9010.0 850.0 106.0 18 8 the Mage Quarter in Stormwind" },
-        { "StormwindDwarven",   "0 -8425.0 595.0 94.8 18 6 the Dwarven District in Stormwind" },
-        { "StormwindOldTown",   "0 -8675.0 445.0 99.5 16 6 Old Town in Stormwind" },
-        { "StormwindHarbor",    "0 -8565.5 1195.5 5.4 20 8 the harbor in Stormwind" },
+        { "StormwindTrade",     "0 -8833.4 628.6 94.0 22 30 the Trade District in Stormwind" },
+        { "StormwindAuction",   "0 -8815.2 652.9 94.9 14 21 outside the auction house in Stormwind" },
+        { "StormwindAuctionHall", "0 -8814.8 666.5 95.5 10 10 the auction house in Stormwind" },
+        { "StormwindBank",      "0 -8914.0 621.5 99.6 14 12 the bank in Stormwind" },
+        { "StormwindFountain",  "0 -8869.0 643.0 96.4 18 26 by the fountain in the Trade District in Stormwind" },
+        { "StormwindValley",    "0 -8955.0 525.0 96.4 20 5 the Valley of Heroes in Stormwind" },
+        { "StormwindCathedral", "0 -8635.0 800.0 97.0 24 2 Cathedral Square in Stormwind" },
+        { "StormwindCathedralInside",
+          "0 -8530.0 843.0 106.5 10 3 inside the Cathedral of Light in Stormwind" },
+        { "StormwindPark",      "0 -8752.0 1083.0 90.8 16 5 the Park in Stormwind" },
+        { "StormwindMageQuarter", "0 -9010.0 850.0 106.0 18 5 the Mage Quarter in Stormwind" },
+        { "StormwindDwarven",   "0 -8428.0 610.0 95.2 10 5 by the forges in the Dwarven District in Stormwind" },
+        { "StormwindOldTown",   "0 -8675.0 445.0 99.5 16 5 Old Town in Stormwind" },
+        { "StormwindPigAndWhistle",
+          "0 -8637.5 427.7 102.1 14 4 outside the Pig and Whistle in Stormwind" },
+        { "StormwindTavern",    "0 -8610.5 389.0 102.9 10 5 inside the Pig and Whistle tavern in Stormwind" },
+        { "StormwindChampionsHall",
+          "0 -8744.6 407.3 98.2 14 4 outside the Champions' Hall in Stormwind" },
+        { "StormwindSI7",       "0 -8762.0 360.0 101.1 10 5 by the training dummies at SI:7 in Stormwind" },
+        { "StormwindThrone",    "0 -8450.5 345.0 121.3 10 2 the throne room of the Keep in Stormwind" },
+        { "StormwindWarRoom",   "0 -8398.0 279.0 121.0 10 2 the War Room in the Keep in Stormwind" },
+        { "StormwindLibrary",   "0 -8350.0 400.0 122.4 10 1 the Royal Library in the Keep in Stormwind" },
+        { "StormwindHarbor",    "0 -8565.5 1195.5 5.4 20 1 the harbor in Stormwind" },
+        { "StormwindNorthPier", "0 -8290.0 1340.0 5.3 12 2 the pier for the boat to Northrend in Stormwind" },
+        { "StormwindSouthPier", "0 -8628.0 1295.0 5.3 12 2 the pier for the boat to Auberdine in Stormwind" },
         { "StormwindGates",     "0 -9100.0 380.0 93.8 22 14 outside the gates of Stormwind" },
         { "IronforgeCommons",   "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge" },
         { "OrgrimmarValley",    "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar" },
@@ -378,6 +398,11 @@ namespace
     // in the Valley of Strength, some at the crossroads by the Valley of
     // Spirits, a few in each of the Valley of Wisdom, the Cleft of Shadow,
     // the Valley of Honor and the road west of the Hall of Legends.
+    // Stormwind's: most in the Trade District, some about Old Town (the Pig
+    // and Whistle, the Champions' Hall, SI:7's training dummies), a few in
+    // each of the Dwarven District's forges, Cathedral Square and the
+    // Cathedral, the Park, the Mage Quarter, the Valley of Heroes, the
+    // harbor's piers and the Keep.
     const std::pair<const char*, const char*> kDefaultHangoutZones[] = {
         { "Orgrimmar.Strength",
           "high OrgrimmarValley OrgrimmarAuctionHall OrgrimmarBank OrgrimmarCourtyard OrgrimmarGateway" },
@@ -386,14 +411,30 @@ namespace
         { "Orgrimmar.Cleft", "low OrgrimmarCleft OrgrimmarCleftStone OrgrimmarCleftDepths" },
         { "Orgrimmar.Honor", "low OrgrimmarHonor" },
         { "Orgrimmar.WestRoad", "low OrgrimmarWestRoad" },
+        { "Stormwind.Trade",
+          "high StormwindTrade StormwindAuction StormwindAuctionHall StormwindBank StormwindFountain" },
+        { "Stormwind.OldTown",
+          "medium StormwindOldTown StormwindPigAndWhistle StormwindTavern StormwindChampionsHall StormwindSI7" },
+        { "Stormwind.Dwarven", "low StormwindDwarven" },
+        { "Stormwind.Cathedral", "low StormwindCathedral StormwindCathedralInside" },
+        { "Stormwind.Park", "low StormwindPark" },
+        { "Stormwind.MageQuarter", "low StormwindMageQuarter" },
+        { "Stormwind.Valley", "low StormwindValley" },
+        { "Stormwind.Harbor", "low StormwindNorthPier StormwindSouthPier StormwindHarbor" },
+        { "Stormwind.Keep", "low StormwindThrone StormwindWarRoom StormwindLibrary" },
     };
 
-    // What a zone of each tier holds of its city's people (Hangout.ZoneTier.<Name>):
-    // "least start most", in percent.
+    // What a zone of each tier holds of its city's people
+    // (Hangout.ZoneTier.<Name>): "least start most", in percent. A city may
+    // have its own numbers for a tier (Hangout.ZoneTier.<City>.<Name>), so
+    // its zones' starts add up to 100: Stormwind, with seven low zones,
+    // starts them at 3 and its high one at 64.
     const std::pair<const char*, const char*> kDefaultZoneTiers[] = {
         { "Low", "1 5 10" },
         { "Medium", "10 15 20" },
         { "High", "50 65 80" },
+        { "Stormwind.High", "50 64 80" },
+        { "Stormwind.Low", "1 3 6" },
     };
 
     // The city weights playerbots sends its bots to the cities' bankers by,
@@ -473,6 +514,12 @@ namespace
         range("PlayerbotsPlus.CityLife.FishMinMinutes", "PlayerbotsPlus.CityLife.FishMaxMinutes", 3, 10, 1, 60,
               g_LifeFishMinMinutes, g_LifeFishMaxMinutes);
         g_LifeFishPlaces     = std::min<uint32_t>(20, U("PlayerbotsPlus.CityLife.FishPlaces", 4));
+        g_LifePractise       = B("PlayerbotsPlus.CityLife.Practise", true);
+        g_LifePractiseChance = pct("PlayerbotsPlus.CityLife.PractiseChance", 3);
+        g_LifePractiseNearChance = pct("PlayerbotsPlus.CityLife.PractiseNearChance", 25);
+        g_LifePractiseRange  = std::clamp(F("PlayerbotsPlus.CityLife.PractiseRange", 500.0f), 20.0f, 1000.0f);
+        range("PlayerbotsPlus.CityLife.PractiseMinSeconds", "PlayerbotsPlus.CityLife.PractiseMaxSeconds", 45, 150, 10,
+              900, g_LifePractiseMinSeconds, g_LifePractiseMaxSeconds);
         g_LifeWanderChance   = pct("PlayerbotsPlus.CityLife.WanderChance", 15);
         g_LifeWanderRange    = std::clamp(F("PlayerbotsPlus.CityLife.WanderRange", 25.0f), 8.0f, 60.0f);
         g_LifeShowOffMinutes = std::clamp<uint32_t>(U("PlayerbotsPlus.CityLife.ShowOffMinutes", 15), 1, 1440);
@@ -987,7 +1034,10 @@ namespace
                     problems.push_back(key + " could not be read (want \"tier spot spot ...\")");
                     continue;
                 }
-                auto tier = tiers.find(line.tier);
+                // The city's own numbers for the tier (Hangout.ZoneTier.<City>.<Tier>), else everyone's.
+                auto tier = tiers.find(Lower(key.substr(0, key.find('.'))) + "." + line.tier);
+                if (tier == tiers.end())
+                    tier = tiers.find(line.tier);
                 if (tier == tiers.end())
                 {
                     problems.push_back(key + " has no tier called " + line.tier + " (Hangout.ZoneTier.*)");
@@ -1373,12 +1423,14 @@ void PlayerbotsPlus_LoadConfig(bool reload)
         LOG_INFO(where,
                  "[Playerbots Plus] City life on, within {:.0f} yd of a real player: {}% parked, {}% restless, the "
                  "rest fidget every {}-{} s; hops {}%, mounts rearing {}% (done back {}%), runs about {}%, errands "
-                 "{}%, fishing {}%; rare mounts looked at {}, dance parties {}; flights in {}%, out {}%. "
-                 "Temperaments: {} (without a chat module: {}); showing off about every {} min.",
+                 "{}%, fishing {}%, practising on a training dummy {}% ({}% by one); rare mounts looked at {}, dance "
+                 "parties {}; flights in {}%, out {}%. Temperaments: {} (without a chat module: {}); showing off "
+                 "about every {} min.",
                  pbp::g_LifeRange, pbp::g_LifeParkedShare, pbp::g_LifeRestlessShare, pbp::g_LifeShuffleMinSeconds,
                  pbp::g_LifeShuffleMaxSeconds, pbp::g_LifeJumpChance, pbp::g_LifeRearChance,
                  pbp::g_LifeRearBackChance, pbp::g_LifeWanderChance, pbp::g_LifeErrandChance,
-                 pbp::g_LifeFish ? pbp::g_LifeFishChance : 0u, pbp::g_LifeGawk ? "on" : "off",
+                 pbp::g_LifeFish ? pbp::g_LifeFishChance : 0u, pbp::g_LifePractise ? pbp::g_LifePractiseChance : 0u,
+                 pbp::g_LifePractise ? pbp::g_LifePractiseNearChance : 0u, pbp::g_LifeGawk ? "on" : "off",
                  pbp::g_LifeDance ? "on" : "off", pbp::g_LifeFlyInChance, pbp::g_LifeFlyOutChance,
                  kinds.empty() ? "none" : kinds, shares.empty() ? "everyone the default" : shares + ", the rest the default",
                  pbp::g_LifeShowOffMinutes);

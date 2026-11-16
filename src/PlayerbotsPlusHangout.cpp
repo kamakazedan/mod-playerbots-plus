@@ -109,7 +109,8 @@ namespace
         Settled,
         Duelling,   // at the gates: in a duel, or getting its breath back after one, its own AI running
         Flying,     // fetched: flying in to the city by its flight path (CityLife.FlyInChance), its own AI flying it
-        Errand      // off to a banker, an auctioneer or a mailbox in the city, and then on (CityLife.Errand*)
+        Errand,     // off to a banker, an auctioneer or a mailbox in the city, and then on (CityLife.Errand*)
+        Practising  // off to a training dummy of the city, its own AI fighting it, and back (CityLife.Practise*)
     };
 
     // What city life (CityLife.*) has it doing besides standing about.
@@ -145,6 +146,7 @@ namespace
         float             bx = 0.0f, by = 0.0f, bz = 0.0f;
         uint8_t           seat = 0;           // the stand state sitting left it in (a chair's is its own)
         Clock::time_point started{};
+        uint32_t          travelSecs = 0;     // Travel: given up after this long (0: Hangout.TravelSeconds)
         Clock::time_point approachStart{};
         Clock::time_point settledAt{};
         Clock::time_point until{};
@@ -177,12 +179,16 @@ namespace
         bool              danceSaid   = false;   // ...and it was told it joined (CityDance)
         bool              away        = false;   // off its own place for the act: back to hx, hy, hz after
         float             hx = 0.0f, hy = 0.0f, hz = 0.0f;
-        uint8_t           errandStep  = 0;       // Errand: 0 on its way, 1 at it
+        uint8_t           errandStep  = 0;       // Errand, Practising: 0 on its way, 1 at it
         float             ex = 0.0f, ey = 0.0f, ez = 0.0f;   // ...where it stands
         float             efx = 0.0f, efy = 0.0f;             // ...what it faces
         Clock::time_point errandSince{};
         Clock::time_point errandUntil{};
         bool              errandFaced = false;
+        ObjectGuid        dummy;                 // Practising: the training dummy it is at
+        uint8_t           dummyTries  = 0;       // ...set on it again, its last go having ended with no blow landed
+        Clock::time_point dummyAt{};             // ...set on it then
+        Clock::time_point nextDummyTry{};
         float             fishO       = 0.0f;    // Fishing: facing the water
         ObjectGuid        oldMain, oldOff;       // ...its weapons, back in its hands after
         bool              poleOn      = false;
@@ -804,17 +810,26 @@ namespace
         return bot->InBattlegroundQueue() || sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_NONE;
     }
 
-    // Something wants the bot's own AI right now: an invite to answer (a
-    // group, a guild, an arena team), a trade, a duel, a queue, a fight, a
+    // Something but a fight wants the bot's own AI right now: an invite to
+    // answer (a group, a guild, an arena team), a trade, a duel, a queue, a
     // party it is getting together for a group quest, a walk to take or hand
-    // in a dungeon quest (fetched from one, the walk was lost). A held AI
-    // would see none of it.
+    // in a dungeon quest (fetched from one, the walk was lost). One
+    // practising on a training dummy is in a fight, and let go for any of
+    // these.
+    bool WantedBesidesFight(Player* bot)
+    {
+        return !bot->IsAlive() || bot->GetGroup() || bot->GetGroupInvite() || bot->GetTradeData() || bot->duel ||
+               bot->GetGuildIdInvited() || bot->GetArenaTeamIdInvited() || Queued(bot) || PbpGroupQuests_Busy(bot) ||
+               PbpDungeonQuests_Walking(bot);
+    }
+
+    // ...or a fight. A held AI would see none of it.
     bool Wanted(Player* bot)
     {
-        return !bot->IsAlive() || bot->IsInCombat() || bot->GetGroup() || bot->GetGroupInvite() ||
-               bot->GetTradeData() || bot->duel || bot->GetGuildIdInvited() || bot->GetArenaTeamIdInvited() ||
-               Queued(bot) || PbpGroupQuests_Busy(bot) || PbpDungeonQuests_Walking(bot);
+        return bot->IsInCombat() || WantedBesidesFight(bot);
     }
+
+    void StopPractise(Player* bot, Visit& v);
 
     // Done with it: whatever this changed goes back, and its AI runs again
     // now. `moveOn`: its time there is up, so it goes and does something else.
@@ -822,10 +837,14 @@ namespace
     {
         if (!bot)
             return;
-        // Not left dancing, or holding a fishing pole.
+        // Not left dancing, holding a fishing pole, or hitting a training
+        // dummy for good: its own AI would keep at a dummy as long as it is
+        // in the fight, and the fight lasts as long as it hits it.
         if (v.act == Act::Dancing && bot->GetUInt32Value(UNIT_NPC_EMOTESTATE) == EMOTE_STATE_DANCE)
             bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
         PutAwayPole(bot, v);
+        if (v.dummy)
+            StopPractise(bot, v);
         v.act = Act::None;
         if (v.afkSet && bot->isAFK())
             bot->ToggleAFK();
@@ -1349,7 +1368,7 @@ namespace
     bool Travel(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
     {
         const bool free = StillFree(bot, v);
-        if (!free || now - v.started > std::chrono::seconds(g_HangoutTravelSeconds))
+        if (!free || now - v.started > std::chrono::seconds(v.travelSecs ? v.travelSecs : g_HangoutTravelSeconds))
         {
             ++g_stats.gaveUp;
             ++(free ? g_stats.lostSlow : g_stats.lostElsewhere);
@@ -1716,8 +1735,21 @@ namespace
     //
     // As a zoned city's shares drift, a zone ends up with more people than
     // its room and another with fewer: a few of those over walk across to
-    // where people are short, the way a crowd drifts about a city. Newcomers
-    // go where there is room as ever (Recruit, BringIn).
+    // where people are short, the way a crowd drifts about a city -- from
+    // any zone over to any zone short, picked at random, so now and then
+    // someone crosses the whole city. Newcomers go where there is room as
+    // ever (Recruit, BringIn).
+
+    bool OwnsMount(Player* bot, PlayerbotAI* ai);
+
+    // How long one sent across the city has to get there: Hangout.TravelSeconds,
+    // or longer for a long way, on foot (one with a mount rides it, playerbots
+    // putting a random bot on its mount out in the open).
+    uint32_t TravelAllowance(Player* bot, const PbpHangoutSpot& to)
+    {
+        const float yards = bot->GetMapId() == to.map ? bot->GetExactDist2d(to.x, to.y) : 0.0f;
+        return std::max<uint32_t>(g_HangoutTravelSeconds, uint32_t(yards / 4.0f) + 30);
+    }
 
     // A bot has been at its spot this long before it moves on to another
     // zone, and has at least this long of its time left: one that has just
@@ -1750,6 +1782,7 @@ namespace
             return false;
         Visit& moved = g_visits[bot->GetGUID().GetRawValue()];
         moved.until           = from.until;   // the rest of its time, not a fresh stay
+        moved.travelSecs      = TravelAllowance(bot, to);
         moved.cameBack        = from.cameBack;
         moved.temperament     = from.temperament;
         moved.temperamentName = from.temperamentName;
@@ -1766,8 +1799,10 @@ namespace
 
     // Every Hangout.ZoneMoveSeconds: in each zoned city someone is in to see
     // it, up to Hangout.ZoneMovesAtOnce bots from zones over their room to
-    // zones under it (PbpZones::PlanMoves) -- from the spot most over its own
-    // room, the one there longest; to the spot with the most room to spare.
+    // zones under it, both picked at random (PbpZones::PlanMoves) -- one
+    // with a mount first, to ride across the city; then from the spot most
+    // over its own room, the one there longest; to the spot with the most
+    // room to spare.
     void MoveBetweenZones(const Clock::time_point now)
     {
         if (g_HangoutZones.empty() || g_watched.empty() || !g_HangoutZoneMovesAtOnce)
@@ -1801,7 +1836,13 @@ namespace
             if (!seen)
                 continue;   // nobody in the city to see them go
 
-            std::vector<std::vector<std::pair<uint64_t, Player*>>> free(zones.size());
+            struct Free
+            {
+                uint64_t guid  = 0;
+                Player*  bot   = nullptr;
+                bool     rides = false;   // has a mount: across the city in no time
+            };
+            std::vector<std::vector<Free>> free(zones.size());
             for (const auto& [guid, v] : g_visits)
             {
                 auto at = zoneAt.find(v.spotKey);
@@ -1809,30 +1850,34 @@ namespace
                     continue;
                 Player* bot = ObjectAccessor::FindConnectedPlayer(ObjectGuid(guid));
                 if (Movable(bot, v, targeted, now))
-                    free[at->second].emplace_back(guid, bot);
+                    free[at->second].push_back({ guid, bot, OwnsMount(bot, AiOf(bot)) });
             }
             for (size_t i = 0; i < zones.size(); ++i)
                 counts[i].movable = static_cast<uint32_t>(free[i].size());
 
-            for (auto const& [from, to] : PbpZones::PlanMoves(counts, g_HangoutZoneMovesAtOnce))
+            for (auto const& [from, to] : PbpZones::PlanMoves(counts, g_HangoutZoneMovesAtOnce, ZoneDice))
             {
                 if (free[from].empty())
                     continue;
-                // Who: from the spot most over its room, then the one there longest.
+                // Who: one with a mount first, then from the spot most over
+                // its room, then the one there longest.
                 auto over = [&there](const std::string& key)
                 {
                     PbpHangoutSpot const* s = SpotByKey(key);
                     return int64_t(there[key]) - int64_t(s ? RoomAt(*s) : 0);
                 };
-                auto who = std::min_element(free[from].begin(), free[from].end(), [&](auto const& a, auto const& b)
+                auto who = std::min_element(free[from].begin(), free[from].end(), [&](Free const& a, Free const& b)
                 {
-                    Visit const& va = g_visits[a.first];
-                    Visit const& vb = g_visits[b.first];
+                    if (a.rides != b.rides)
+                        return a.rides;
+                    Visit const& va = g_visits[a.guid];
+                    Visit const& vb = g_visits[b.guid];
                     const int64_t oa = over(va.spotKey), ob = over(vb.spotKey);
                     return oa != ob ? oa > ob : va.started < vb.started;
                 });
-                const uint64_t guid = who->first;
-                Player* bot = who->second;
+                const uint64_t guid  = who->guid;
+                Player* bot          = who->bot;
+                const bool     rides = who->rides;
                 free[from].erase(who);
                 // Where: the spot of that zone with the most room to spare, open.
                 std::vector<std::pair<int64_t, PbpHangoutSpot const*>> spots;
@@ -1851,6 +1896,8 @@ namespace
                     {
                         --there[left];
                         ++there[s->key];
+                        if (rides)
+                            ++g_stats.zoneMovesRiding;
                         break;
                     }
             }
@@ -2378,6 +2425,313 @@ namespace
         ++g_stats.movedOn;
         Let(bot, ai, v, true, now);
         return false;
+    }
+
+    // ---- training dummies (CityLife.Practise*) ------------------------------------------
+    //
+    // A city's training dummies -- the game's own, whose script is
+    // npc_training_dummy: they take no harm, and let go of anyone who has not
+    // hit them for five seconds -- found from the spawns once per zone. Now
+    // and then one hanging out walks over to one and practises on it: its own
+    // AI fights it the way it fights anything, with what it has, and after a
+    // while it stops and walks back to its spot.
+
+    constexpr float kPractiseNear = 80.0f;   // a dummy this near: CityLife.PractiseNearChance
+
+    struct Dummy
+    {
+        ObjectGuid::LowType spawnId = 0;
+        float               x = 0.0f, y = 0.0f, z = 0.0f;
+        uint8_t             level = 0;
+    };
+    std::unordered_map<uint32_t, std::vector<Dummy>> g_dummies;   // by zone, once looked
+
+    const std::vector<Dummy>& DummiesIn(uint32_t mapId, uint32_t zone)
+    {
+        auto it = g_dummies.find(zone);
+        if (it != g_dummies.end())
+            return it->second;
+        std::vector<Dummy>& found = g_dummies[zone];
+        Map* base = sMapMgr->FindBaseMap(mapId);
+        if (!base)
+            return found;
+        std::vector<PbpHangoutSpot const*> spots;   // the city's: a dummy far from all of them is not in it
+        for (const PbpHangoutSpot& s : g_HangoutSpots)
+            if (s.map == mapId && ZoneOf(s) == zone && !DuelSpot(s.key))
+                spots.push_back(&s);
+        if (spots.empty())
+            return found;
+        for (auto const& [spawnId, data] : sObjectMgr->GetAllCreatureData())
+        {
+            if (data.mapid != mapId || !(data.phaseMask & PHASEMASK_NORMAL))
+                continue;
+            CreatureTemplate const* info = sObjectMgr->GetCreatureTemplate(data.id);
+            if (!info || sObjectMgr->GetScriptName(info->ScriptID) != "npc_training_dummy")
+                continue;
+            if (std::none_of(spots.begin(), spots.end(), [&data](PbpHangoutSpot const* s)
+                             { return std::hypot(s->x - data.posX, s->y - data.posY) < 600.0f; }) ||
+                base->GetZoneId(PHASEMASK_NORMAL, data.posX, data.posY, data.posZ) != zone)
+                continue;
+            found.push_back({ spawnId, data.posX, data.posY, data.posZ, info->minlevel });
+        }
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} training dummies to practise on in zone {}.",
+                     found.size(), zone);
+        return found;
+    }
+
+    // The dummy of a spawn, up, in the bot's map.
+    Creature* DummyOf(Player* bot, ObjectGuid::LowType spawnId)
+    {
+        auto range = bot->GetMap()->GetCreatureBySpawnIdStore().equal_range(spawnId);
+        for (auto it = range.first; it != range.second; ++it)
+            if (Creature* c = it->second; c && c->IsInWorld() && c->IsAlive())
+                return c;
+        return nullptr;
+    }
+
+    // One of ours is at it, or on its way to it.
+    bool DummyTaken(ObjectGuid const& guid)
+    {
+        for (const auto& [g, v] : g_visits)
+            if (v.dummy == guid)
+                return true;
+        return false;
+    }
+
+    // A dummy of its city for the bot: within CityLife.PractiseRange and on
+    // its level of the city, up, with nobody at it (nobody hitting it, none of
+    // ours on the way to it); of those, any of the ones nearest its own
+    // level. `nearest`: how far the nearest of them all is. nullptr: none.
+    Creature* PickDummy(Player* bot, float& nearest)
+    {
+        std::vector<Creature*> best;
+        uint32_t bestGap = UINT32_MAX;
+        bool any = false;
+        nearest = 0.0f;
+        for (const Dummy& d : DummiesIn(bot->GetMapId(), bot->GetZoneId()))
+        {
+            const float yards = bot->GetExactDist2d(d.x, d.y);
+            if (yards > g_LifePractiseRange || std::fabs(d.z - bot->GetPositionZ()) > kMaxClimb)
+                continue;
+            Creature* c = DummyOf(bot, d.spawnId);
+            if (!c || c->IsInCombat() || DummyTaken(c->GetGUID()) || !bot->IsValidAttackTarget(c))
+                continue;
+            nearest = any ? std::min(nearest, yards) : yards;
+            any = true;
+            const uint32_t gap = uint32_t(std::abs(int32_t(d.level) - int32_t(bot->GetLevel())));
+            if (gap > bestGap)
+                continue;
+            if (gap < bestGap)
+            {
+                bestGap = gap;
+                best.clear();
+            }
+            best.push_back(c);
+        }
+        if (best.empty())
+            return nullptr;
+        return best[std::uniform_int_distribution<size_t>(0, best.size() - 1)(Rng())];
+    }
+
+    // Where to stand to practise on it: before it, at arm's length for one
+    // that fights up close, a spell's way off for one that casts or shoots;
+    // on its floor, out of the water and any fire, in its sight, nobody's
+    // place and nobody there.
+    bool StandBy(Player* bot, Creature* dummy, float minDist, float maxDist, float& outX, float& outY, float& outZ)
+    {
+        Map* map = bot->GetMap();
+        const uint32_t phase = bot->GetPhaseMask();
+        const uint64_t self  = bot->GetGUID().GetRawValue();
+        const float dx = dummy->GetPositionX(), dy = dummy->GetPositionY(), dz = dummy->GetPositionZ();
+        for (int tries = 0; tries < 12; ++tries)
+        {
+            const float a = dummy->GetOrientation() + Frand(-1.2f, 1.2f);
+            const float d = Frand(minDist, maxDist) + dummy->GetCombatReach();
+            const float x = dx + d * std::cos(a);
+            const float y = dy + d * std::sin(a);
+            const float z = map->GetHeight(phase, x, y, dz + 2.0f, true, 4.0f);
+            if (z <= INVALID_HEIGHT || std::fabs(z - dz) > 1.5f || map->IsInWater(phase, x, y, z, 2.0f))
+                continue;
+            if (!map->isInLineOfSight(dx, dy, dz + 1.5f, x, y, z + 1.5f, phase, kSightChecks,
+                                      VMAP::ModelIgnoreFlags::Nothing))
+                continue;
+            const bool another = std::any_of(g_visits.begin(), g_visits.end(), [&](auto const& entry)
+            {
+                return entry.first != self && entry.second.phase == Phase::Practising &&
+                       std::hypot(entry.second.ex - x, entry.second.ey - y) < 2.0f;
+            });
+            if (another || TakenByOther(bot->GetMapId(), x, y, 2.0f, self) ||
+                PbpSpace_Crowded(map, bot, x, y, z, 1.6f, bot) || PbpFire_Burns(bot, x, y, z, 1.0f))
+                continue;
+            outX = x;
+            outY = y;
+            outZ = z;
+            return true;
+        }
+        return false;
+    }
+
+    // Off to practise on `dummy` now: its own AI walks it there (playerbots'
+    // "go camp"), as on an errand.
+    bool StartPractise(Player* bot, PlayerbotAI* ai, Visit& v, Creature* dummy, const Clock::time_point now)
+    {
+        const bool ranged = PlayerbotAI::IsRanged(bot);
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        if (!StandBy(bot, dummy, ranged ? 12.0f : 1.5f, ranged ? 20.0f : 3.0f, x, y, z))
+            return false;
+        if (v.afkSet && bot->isAFK())
+            bot->ToggleAFK();
+        v.afkSet = false;
+        if (bot->IsSitState())
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
+        if (bot->GetUInt32Value(UNIT_NPC_EMOTESTATE))
+            bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
+        v.holding     = false;
+        v.phase       = Phase::Practising;
+        v.errandStep  = 0;
+        v.ex          = x;
+        v.ey          = y;
+        v.ez          = z;
+        v.efx         = dummy->GetPositionX();
+        v.efy         = dummy->GetPositionY();
+        v.errandSince = now;
+        v.dummy       = dummy->GetGUID();
+        v.dummyTries  = 0;
+        ai->SetNextCheckDelay(0);
+        ai->rpgInfo.ChangeToGoCamp(WorldPosition(bot->GetMapId(), x, y, z));
+        ++g_stats.practises;
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} goes over from {} to practise on {}.",
+                     bot->GetName(), v.spotName, dummy->GetName());
+        return true;
+    }
+
+    // Done with the dummy: its fight with it stopped, its pet's too -- and
+    // nothing else: something else that went for it is its own AI's to
+    // fight.
+    void StopPractise(Player* bot, Visit& v)
+    {
+        Unit* victim = bot->GetVictim();
+        bool other = victim && victim->GetGUID() != v.dummy;
+        for (Unit* attacker : bot->getAttackers())
+            other = other || (attacker && attacker->GetGUID() != v.dummy);
+        if (!other && (bot->IsInCombat() || victim))
+            bot->CombatStopWithPets(true);
+        if (bot->GetTarget() == v.dummy)
+            bot->SetSelection(ObjectGuid::Empty);
+        v.dummy.Clear();
+    }
+
+    // Back to its spot after practising, for the rest of its time there
+    // (its time up: off about its business). False: done with hanging out
+    // here.
+    bool PractiseBack(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        StopPractise(bot, v);
+        if (v.until != Clock::time_point{} && now >= v.until)
+        {
+            ++g_stats.movedOn;
+            Let(bot, ai, v, true, now);
+            if (v.broughtIn)
+                SendBack(bot, ai, v);
+            return false;
+        }
+        PbpHangoutSpot const* to = SpotByKey(v.spotKey);
+        const Visit from = v;
+        ai->SetNextCheckDelay(0);   // its own AI walks it, as it walked over
+        if (to && Send(bot, ai, *to, now, &from))
+        {
+            Visit& back = g_visits[bot->GetGUID().GetRawValue()];
+            back.until           = from.until;   // the rest of its time, not a fresh stay
+            back.travelSecs      = TravelAllowance(bot, *to);
+            back.cameBack        = from.cameBack;
+            back.temperament     = from.temperament;
+            back.temperamentName = from.temperamentName;
+            back.temperamentSet  = from.temperamentSet;
+            return true;
+        }
+        ++g_stats.movedOn;
+        Let(bot, ai, v, true, now);
+        return false;
+    }
+
+    // Practising on a training dummy. False: done with hanging out here.
+    bool Practise(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        // Something else going for it, or it for something else: that fight
+        // is its own AI's (StopPractise leaves it be).
+        bool otherFight = bot->GetVictim() && bot->GetVictim()->GetGUID() != v.dummy;
+        for (Unit* attacker : bot->getAttackers())
+            otherFight = otherFight || (attacker && attacker->GetGUID() != v.dummy);
+        if (otherFight || WantedBesidesFight(bot) || bot->GetMapId() != v.map || bot->IsInFlight() ||
+            bot->GetVehicle() || (v.errandStep == 0 && now - v.errandSince > std::chrono::seconds(150)))
+        {
+            ++g_stats.cutShort;
+            Let(bot, ai, v, false, now);
+            return false;
+        }
+        Creature* dummy = ObjectAccessor::GetCreature(*bot, v.dummy);
+        if (v.errandStep == 0)
+        {
+            // As on an errand: there once "go camp" is within ten yards (or
+            // has turned into wandering between NPCs near it).
+            const float dist = bot->GetExactDist2d(v.ex, v.ey);
+            const auto& data = ai->rpgInfo.data;
+            const auto* camp = std::get_if<NewRpgInfo::GoCamp>(&data);
+            const bool ours = camp && std::fabs(camp->pos.GetPositionX() - v.ex) < 0.5f &&
+                              std::fabs(camp->pos.GetPositionY() - v.ey) < 0.5f;
+            const bool arrived = (ours && dist < 10.0f) ||
+                                 (std::holds_alternative<NewRpgInfo::WanderNpc>(data) && dist < 14.0f);
+            if (!ours && !arrived)
+            {
+                ++g_stats.cutShort;   // playerbots gave it something else to do
+                Let(bot, ai, v, false, now);
+                return false;
+            }
+            if (!arrived)
+                return true;
+            // Someone else at its dummy first (or the dummy gone): back to its spot.
+            if (!dummy || !dummy->IsAlive() || dummy->IsInCombat())
+                return PractiseBack(bot, ai, v, now);
+            ai->rpgInfo.ChangeToRest();   // between goes, it stays where it is
+            bot->GetMotionMaster()->Clear();
+            bot->SetFacingToObject(dummy);
+            bot->SetSelection(dummy->GetGUID());
+            dummy->EngageWithTarget(bot);   // on its threat list: its own AI fights it
+            ai->SetNextCheckDelay(0);
+            v.errandStep   = 1;
+            v.errandUntil  = now + Secs(g_LifePractiseMinSeconds, g_LifePractiseMaxSeconds);
+            v.dummyAt      = now;
+            v.dummyTries   = 0;
+            v.nextDummyTry = now + std::chrono::seconds(7);
+            ++g_stats.practised;
+            return true;
+        }
+        ai->rpgInfo.startT = getMSTime();   // playerbots' rest is 30 seconds; it is still resting
+        if (!dummy || !dummy->IsAlive() || bot->GetExactDist2d(dummy) > 45.0f || now >= v.errandUntil)
+            return PractiseBack(bot, ai, v, now);
+        if (bot->IsInCombat())
+        {
+            if (now - v.dummyAt > std::chrono::seconds(10))
+                v.dummyTries = 0;   // at it a while: landing blows
+            return true;
+        }
+        // Out of the fight: the dummy lets go of whoever has not hit it for
+        // five seconds (casting, drinking, a slow start). Set on it again,
+        // twice running at most; then it gives up.
+        if (now < v.nextDummyTry)
+            return true;
+        if (++v.dummyTries > 2 || dummy->IsInCombat())
+        {
+            ++g_stats.practiseNoBlows;
+            return PractiseBack(bot, ai, v, now);
+        }
+        bot->SetFacingToObject(dummy);
+        dummy->EngageWithTarget(bot);
+        v.dummyAt      = now;
+        v.nextDummyTry = now + std::chrono::seconds(7);
+        return true;
     }
 
     // ---- flights ------------------------------------------------------------------------
@@ -2946,6 +3300,18 @@ namespace
         if (roll > g_LifeErrandChance && roll <= g_LifeErrandChance + g_LifeFishChance &&
             StartFishing(bot, ai, v, s, now))
             return;
+        // Over to practise on a training dummy: likelier with one near. Not
+        // one that heals: there is nothing on a dummy to heal.
+        const uint32_t before = g_LifeErrandChance + g_LifeFishChance;
+        if (g_LifePractise && roll > before &&
+            roll <= before + std::max(g_LifePractiseChance, g_LifePractiseNearChance) && !PlayerbotAI::IsHeal(bot))
+        {
+            float nearest = 0.0f;
+            if (Creature* dummy = PickDummy(bot, nearest))
+                if (roll <= before + (nearest <= kPractiseNear ? g_LifePractiseNearChance : g_LifePractiseChance) &&
+                    StartPractise(bot, ai, v, dummy, now))
+                    return;
+        }
         // A hop or three on foot; on a mount, a rear or three; else a run
         // about, or a step -- as its temperament has it.
         const bool mounted = bot->IsMounted();
@@ -2976,20 +3342,42 @@ namespace
     std::unordered_map<uint64_t, uint32_t>             g_lastMount;      // player -> the mount it was on at the last look
     std::unordered_map<uint64_t, Clock::time_point>    g_gawkedAt;       // rider -> looked at then
 
+    // Every spell that mounts you, once: a flat table, every spell every
+    // player online knows being looked up in it.
+    void BuildMountSpells()
+    {
+        if (!g_mountSpells.empty())
+            return;
+        g_mountSpells.assign(sSpellMgr->GetSpellInfoStoreSize(), false);
+        for (uint32_t id = 0; id < g_mountSpells.size(); ++id)
+            if (SpellInfo const* info = sSpellMgr->GetSpellInfo(id); info && info->HasAura(SPELL_AURA_MOUNTED))
+                g_mountSpells[id] = true;
+    }
+
+    // Has a mount it would ride somewhere: of the level for one, with
+    // playerbots' "mount" strategy (which puts a random bot out in the open
+    // on its best one), and a mount known -- or on it now.
+    bool OwnsMount(Player* bot, PlayerbotAI* ai)
+    {
+        if (!bot || !ai || bot->GetLevel() < sPlayerbotAIConfig.UseGroundMountAtMinLevel ||
+            !ai->HasStrategy("mount", BOT_STATE_NON_COMBAT))
+            return false;
+        if (bot->IsMounted())
+            return true;
+        BuildMountSpells();
+        for (auto const& [spell, known] : bot->GetSpellMap())
+            if (spell < g_mountSpells.size() && g_mountSpells[spell] && known && known->State != PLAYERSPELL_REMOVED)
+                return true;
+        return false;
+    }
+
     // Who has which mount, of everyone online: what makes one rare here.
     void Census(const Clock::time_point now)
     {
         if (now < g_nextCensus)
             return;
         g_nextCensus = now + std::chrono::minutes(10);
-        if (g_mountSpells.empty())
-        {
-            // A flat table: every spell every player online knows is looked up in it.
-            g_mountSpells.assign(sSpellMgr->GetSpellInfoStoreSize(), false);
-            for (uint32_t id = 0; id < g_mountSpells.size(); ++id)
-                if (SpellInfo const* info = sSpellMgr->GetSpellInfo(id); info && info->HasAura(SPELL_AURA_MOUNTED))
-                    g_mountSpells[id] = true;
-        }
+        BuildMountSpells();
         g_mountOwners.clear();
         for (auto const& [guid, p] : ObjectAccessor::GetPlayers())
         {
@@ -3520,6 +3908,8 @@ void PbpHangout_Update(uint32_t /*diff*/)
             keep = Fly(bot, ai, v, *spot, now);
         else if (v.phase == Phase::Errand)
             keep = Errand(bot, ai, v, now);
+        else if (v.phase == Phase::Practising)
+            keep = Practise(bot, ai, v, now);
         else
         {
             keep = Hold(bot, ai, v, now);
@@ -3630,6 +4020,8 @@ PbpHangoutStats PbpHangout_GetStats()
         s.fishPlaces += static_cast<uint32_t>(places.size());
     for (const auto& [zone, services] : g_services)
         s.services += static_cast<uint32_t>(services.size());
+    for (const auto& [zone, dummies] : g_dummies)
+        s.dummies += static_cast<uint32_t>(dummies.size());
     for (const auto& [key, known] : g_spotInns)
         if (known.known && !known.inns.empty())
             ++s.withInn;
@@ -3924,7 +4316,8 @@ namespace
         }
         if (!out.empty())
             out.push_back(fmt::format("Zones since start: their shares drifted {} times, and {} bots moved from a zone "
-                                      "over its room to one under it.", g_stats.zoneShifts, g_stats.zoneMoves));
+                                      "over its room to one under it ({} with a mount to ride).", g_stats.zoneShifts,
+                                      g_stats.zoneMoves, g_stats.zoneMovesRiding));
         return out;
     }
 }
@@ -3964,9 +4357,10 @@ PbpBrief PbpHangout_Brief(bool full)
     if (on && g_LifeEnable)
         b.lines.push_back(fmt::format("City life: on -- {} steps, {} hops, {} mounts reared ({} done back), {} runs "
                                       "about, {} show-offs ({} told to stop), {} rare mounts looked at, {} dance "
-                                      "parties, {} errands, {} flew in, {} flew out, {} went fishing.",
+                                      "parties, {} errands, {} flew in, {} flew out, {} went fishing, {} practised on "
+                                      "a training dummy.",
                                       h.steps, h.hops, h.rears, h.rearedBack, h.wanders, h.showOffs, h.calmedDown,
-                                      h.gawks, h.dances, h.errands, h.flewIn, h.flewOut, h.fished));
+                                      h.gawks, h.dances, h.errands, h.flewIn, h.flewOut, h.fished, h.practised));
     else
         b.lines.push_back("City life: off.");
     if (!on)

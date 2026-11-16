@@ -6,17 +6,19 @@
 // PlayerbotsPlus.Hangout.Zone.*), with no game types in them, so they can be
 // tested without a server (tests/zones_test.cpp).
 //
-// A zoned city's people are shared out among its zones (three to six of
+// A zoned city's people are shared out among its zones (three to ten of
 // them) by a share each, in whole percent, always adding up to 100, each
 // within its tier's limits (Hangout.ZoneTier.*: low 1-10, medium 10-20,
-// high 50-80). Every Hangout.ZoneShiftSeconds the shares drift: each goes
-// Hangout.ZonePull percent of the way back to where it started, then up or
-// down a random step of up to Hangout.ZoneShiftStep points, within its
-// limits; and whatever that comes to over or under 100 is taken from or
-// given to the zones a point at a time, more likely the more room a zone
-// has for it. A zone's places are its share of the city's, and each of its
-// spots has its part of those by its written capacity. Then bots move from
-// a zone with more there than its room to one with less (PlanMoves).
+// high 50-80; a city may have its own numbers for a tier). Every
+// Hangout.ZoneShiftSeconds the shares drift: each goes Hangout.ZonePull
+// percent of the way back to where it started, then up or down a random
+// step of up to Hangout.ZoneShiftStep points, within its limits; and
+// whatever that comes to over or under 100 is taken from or given to the
+// zones a point at a time, more likely the more room a zone has for it. A
+// zone's places are its share of the city's, and each of its spots has its
+// part of those by its written capacity. Then bots move from a zone with
+// more there than its room to one with less, both picked at random
+// (PlanMoves).
 // --------------------------------------------------------------------------
 
 #include <cstdint>
@@ -92,10 +94,12 @@ namespace PbpZones
     };
 
     // Up to `cap` moves of one bot each (from, to), from a zone with more
-    // there than its room to one with fewer: each time from the zone furthest
-    // over that has someone to move, to the one furthest under (the first of
-    // equals). Fewer once the zones even out, or nobody over can be moved.
-    std::vector<std::pair<size_t, size_t>> PlanMoves(std::vector<Count> zones, uint32_t cap);
+    // there than its room to one with fewer: each time from any zone over
+    // its room that has someone to move, to any zone under it, each picked by
+    // `dice` from those, all alike -- however far over or under, however far
+    // apart, so someone may cross the city. Fewer once the zones even out, or
+    // nobody over can be moved.
+    std::vector<std::pair<size_t, size_t>> PlanMoves(std::vector<Count> zones, uint32_t cap, Dice const& dice);
 }
 
 #endif // PLAYERBOTS_PLUS_ZONES_TEXT_H

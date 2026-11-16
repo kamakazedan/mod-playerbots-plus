@@ -1038,8 +1038,18 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #          a small room, so a small part), round the fountain and down to
 #          the foot of the bank's steps (its middle to one side, toward the
 #          steps: the statue is no window), the Valley of Heroes, Cathedral
-#          Square, the Mage Quarter, the Dwarven District, Old Town, the
-#          harbor and outside the gates.
+#          Square and inside the Cathedral of Light, the Park (on the lawn
+#          by the moonwell and the druid trainers), the Mage Quarter, the
+#          Dwarven District by its forges, Old Town -- the street, outside
+#          the Pig and Whistle and inside it among its tables, outside the
+#          Champions' Hall, and SI:7's yard by its training dummies -- the
+#          Keep's throne room, War Room (its battlemasters) and Royal
+#          Library, the harbor (the quay, and the piers for the boats to
+#          Northrend and to Auberdine) and outside the gates. Those inside a
+#          building have their middles among the people who stand in it
+#          (the tavernkeeper's tables, the librarians, the battlemasters, the
+#          trainers): placed from the game's own spawns, not walked, so
+#          .pbp hangouts after a restart is the check that bots find room.
 #          The two auction houses' middles are where a player stands before
 #          the auctioneers (60.8, 70.7 and 54.9, 63.7 on the city maps), at
 #          the height of an NPC that stands on that floor.
@@ -1060,17 +1070,28 @@ PlayerbotsPlus.Hangout.HeightTolerance = 6
 #        put at says so in the log, once; .pbp hangouts shows why.
 #        Maps: 0 Eastern Kingdoms, 1 Kalimdor, 530 Outland and the Blood
 #        Elf and Draenei lands, 571 Northrend.
-PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 16 the Trade District in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindAuction = "0 -8815.2 652.9 94.9 14 12 outside the auction house in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindAuctionHall = "0 -8814.8 666.5 95.5 10 4 the auction house in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 5 the bank in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindFountain = "0 -8869.0 643.0 96.4 18 12 by the fountain in the Trade District in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindValley = "0 -8955.0 525.0 96.4 20 10 the Valley of Heroes in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindCathedral = "0 -8635.0 800.0 97.0 24 14 Cathedral Square in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindMageQuarter = "0 -9010.0 850.0 106.0 18 8 the Mage Quarter in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindDwarven = "0 -8425.0 595.0 94.8 18 6 the Dwarven District in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindOldTown = "0 -8675.0 445.0 99.5 16 6 Old Town in Stormwind"
-PlayerbotsPlus.Hangout.Spot.StormwindHarbor = "0 -8565.5 1195.5 5.4 20 8 the harbor in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindTrade = "0 -8833.4 628.6 94.0 22 30 the Trade District in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindAuction = "0 -8815.2 652.9 94.9 14 21 outside the auction house in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindAuctionHall = "0 -8814.8 666.5 95.5 10 10 the auction house in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindBank = "0 -8914.0 621.5 99.6 14 12 the bank in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindFountain = "0 -8869.0 643.0 96.4 18 26 by the fountain in the Trade District in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindValley = "0 -8955.0 525.0 96.4 20 5 the Valley of Heroes in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindCathedral = "0 -8635.0 800.0 97.0 24 2 Cathedral Square in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindCathedralInside = "0 -8530.0 843.0 106.5 10 3 inside the Cathedral of Light in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindPark = "0 -8752.0 1083.0 90.8 16 5 the Park in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindMageQuarter = "0 -9010.0 850.0 106.0 18 5 the Mage Quarter in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindDwarven = "0 -8428.0 610.0 95.2 10 5 by the forges in the Dwarven District in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindOldTown = "0 -8675.0 445.0 99.5 16 5 Old Town in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindPigAndWhistle = "0 -8637.5 427.7 102.1 14 4 outside the Pig and Whistle in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindTavern = "0 -8610.5 389.0 102.9 10 5 inside the Pig and Whistle tavern in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindChampionsHall = "0 -8744.6 407.3 98.2 14 4 outside the Champions' Hall in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindSI7 = "0 -8762.0 360.0 101.1 10 5 by the training dummies at SI:7 in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindThrone = "0 -8450.5 345.0 121.3 10 2 the throne room of the Keep in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindWarRoom = "0 -8398.0 279.0 121.0 10 2 the War Room in the Keep in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindLibrary = "0 -8350.0 400.0 122.4 10 1 the Royal Library in the Keep in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindHarbor = "0 -8565.5 1195.5 5.4 20 1 the harbor in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindNorthPier = "0 -8290.0 1340.0 5.3 12 2 the pier for the boat to Northrend in Stormwind"
+PlayerbotsPlus.Hangout.Spot.StormwindSouthPier = "0 -8628.0 1295.0 5.3 12 2 the pier for the boat to Auberdine in Stormwind"
 PlayerbotsPlus.Hangout.Spot.StormwindGates = "0 -9100.0 380.0 93.8 22 14 outside the gates of Stormwind"
 PlayerbotsPlus.Hangout.Spot.IronforgeCommons = "0 -4918.9 -940.4 501.6 22 12 the Commons in Ironforge"
 PlayerbotsPlus.Hangout.Spot.OrgrimmarValley = "1 1657.9 -4433.0 17.5 22 14 the Valley of Strength in Orgrimmar"
@@ -1132,33 +1153,57 @@ PlayerbotsPlus.Hangout.HotSpots = "StormwindTrade|StormwindAuction|StormwindAuct
 #        a few, some or most of them, by the zone's tier -- that drifts as
 #        the server runs, so people are seen to move about the city, one
 #        corner filling up while another empties. A tier is "least start
-#        most", in percent of the city's people. A zone is "tier spot spot
-#        ...": its tier and its spots, all in one city, which share the
-#        zone's part of its places by their capacities. The city's places
-#        (see CityWeights), less those of its spots in no zone -- where duels
-#        are fought (Duels.Spots, never in a zone) and the zeppelin tower
-#        keep as many people as written -- go to its zones by their shares,
-#        which start where their tiers say and always add up to 100: the
-#        tiers of a city's zones have to be able to (the least of them no
-#        more than 100, the most no less), or the city has none. Zones 0: no
-#        zones anywhere. With no Zone keys, and no Spot keys of your own
-#        either, these are the defaults; with spots of your own, write your
-#        zones too.
+#        most", in percent of the city's people; ZoneTier.<City>.<Name> is a
+#        city's own numbers for that tier, used for its zones instead of
+#        ZoneTier.<Name> (a zone line still says "low", "high"...), so that a
+#        city with more or fewer zones can start them adding up to 100. A
+#        zone is "tier spot spot ...": its tier and its spots, all in one
+#        city, which share the zone's part of its places by their
+#        capacities. The city's places (see CityWeights), less those of its
+#        spots in no zone -- where duels are fought (Duels.Spots, never in a
+#        zone) and the zeppelin tower keep as many people as written -- go to
+#        its zones by their shares, which start where their tiers say and
+#        always add up to 100: the tiers of a city's zones have to be able to
+#        (the least of them no more than 100, the most no less), or the city
+#        has none. Zones 0: no zones anywhere. With no Zone keys, and no Spot
+#        keys of your own either, these are the defaults; with spots of your
+#        own, write your zones too.
 #          Orgrimmar: the Valley of Strength, high (its five spots); the
 #          crossroads by the Valley of Spirits, medium; the Valley of Wisdom,
 #          the Cleft of Shadow (most of its people at its mouth), the Valley
 #          of Honor and the road west of the Hall of Legends, low.
-#        Default: 1, Low "1 5 10", Medium "10 15 20", High "50 65 80", (below)
+#          Stormwind: the Trade District, high (its five spots); Old Town,
+#          medium (its street, the Pig and Whistle outside and in, the
+#          Champions' Hall and SI:7's training dummies); the Dwarven
+#          District's forges, the Cathedral (its square and inside), the
+#          Park, the Mage Quarter, the Valley of Heroes, the harbor (both
+#          piers and the quay) and the Keep (throne room, War Room and Royal
+#          Library), low. With seven low zones Stormwind has its own low,
+#          "1 3 6", and its own high, "50 64 80", so it starts at 64 + 15 +
+#          7 x 3 = 100.
+#        Default: 1, Low "1 5 10", Medium "10 15 20", High "50 65 80",
+#        Stormwind.High "50 64 80", Stormwind.Low "1 3 6", (below)
 PlayerbotsPlus.Hangout.Zones = 1
 PlayerbotsPlus.Hangout.ZoneTier.Low = "1 5 10"
 PlayerbotsPlus.Hangout.ZoneTier.Medium = "10 15 20"
 PlayerbotsPlus.Hangout.ZoneTier.High = "50 65 80"
+PlayerbotsPlus.Hangout.ZoneTier.Stormwind.High = "50 64 80"
+PlayerbotsPlus.Hangout.ZoneTier.Stormwind.Low = "1 3 6"
 PlayerbotsPlus.Hangout.Zone.Orgrimmar.Strength = "high OrgrimmarValley OrgrimmarAuctionHall OrgrimmarBank OrgrimmarCourtyard OrgrimmarGateway"
 PlayerbotsPlus.Hangout.Zone.Orgrimmar.Spirits = "medium OrgrimmarSpirits"
 PlayerbotsPlus.Hangout.Zone.Orgrimmar.Wisdom = "low OrgrimmarWisdom"
 PlayerbotsPlus.Hangout.Zone.Orgrimmar.Cleft = "low OrgrimmarCleft OrgrimmarCleftStone OrgrimmarCleftDepths"
 PlayerbotsPlus.Hangout.Zone.Orgrimmar.Honor = "low OrgrimmarHonor"
 PlayerbotsPlus.Hangout.Zone.Orgrimmar.WestRoad = "low OrgrimmarWestRoad"
+PlayerbotsPlus.Hangout.Zone.Stormwind.Trade = "high StormwindTrade StormwindAuction StormwindAuctionHall StormwindBank StormwindFountain"
+PlayerbotsPlus.Hangout.Zone.Stormwind.OldTown = "medium StormwindOldTown StormwindPigAndWhistle StormwindTavern StormwindChampionsHall StormwindSI7"
+PlayerbotsPlus.Hangout.Zone.Stormwind.Dwarven = "low StormwindDwarven"
+PlayerbotsPlus.Hangout.Zone.Stormwind.Cathedral = "low StormwindCathedral StormwindCathedralInside"
+PlayerbotsPlus.Hangout.Zone.Stormwind.Park = "low StormwindPark"
+PlayerbotsPlus.Hangout.Zone.Stormwind.MageQuarter = "low StormwindMageQuarter"
+PlayerbotsPlus.Hangout.Zone.Stormwind.Valley = "low StormwindValley"
+PlayerbotsPlus.Hangout.Zone.Stormwind.Harbor = "low StormwindNorthPier StormwindSouthPier StormwindHarbor"
+PlayerbotsPlus.Hangout.Zone.Stormwind.Keep = "low StormwindThrone StormwindWarRoom StormwindLibrary"
 
 #    PlayerbotsPlus.Hangout.ZoneShiftSeconds
 #    PlayerbotsPlus.Hangout.ZoneShiftStep
@@ -1181,15 +1226,21 @@ PlayerbotsPlus.Hangout.ZonePull = 10
 #    PlayerbotsPlus.Hangout.ZoneMovesAtOnce
 #        Every ZoneMoveSeconds (5 to 600), in a city in zones someone is in,
 #        up to ZoneMovesAtOnce (0 to 20) of the bots in zones with more
-#        people than their share get up and walk to zones with fewer: from
-#        the spot most over its room, the one there longest, to the spot with
-#        the most room to spare, where it settles for the rest of its time.
-#        Only one free to go: there two minutes or more with two or more
-#        left, not AFK nor on a bench, about nothing else, nobody talking
-#        with it or targeting it. 0: nobody moves, and newcomers alone fill
-#        the zones short of people (as they always go where there is room).
-#        .pbp hangouts shows each zone's share, and how many are there
-#        against its room.
+#        people than their share get up and go to zones with fewer -- from
+#        any zone over its share to any zone short, picked at random each
+#        time however far apart, so now and then someone crosses the whole
+#        city. Of those free to go in that zone, one with a mount first (it
+#        rides there: playerbots puts a random bot out in the open on its
+#        mount), then one from the spot most over its room, the one there
+#        longest; to the spot with the most room to spare, where it settles
+#        for the rest of its time. One sent a long way has longer to get
+#        there than Hangout.TravelSeconds (a second for every four yards,
+#        and half a minute). Only one free to go: there two minutes or more
+#        with two or more left, not AFK nor on a bench, about nothing else,
+#        nobody talking with it or targeting it. 0: nobody moves, and
+#        newcomers alone fill the zones short of people (as they always go
+#        where there is room). .pbp hangouts shows each zone's share, and how
+#        many are there against its room.
 #        Default: 15, 3
 PlayerbotsPlus.Hangout.ZoneMoveSeconds = 15
 PlayerbotsPlus.Hangout.ZoneMovesAtOnce = 3
@@ -1243,7 +1294,8 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 #       keep still (something every RestlessMinSeconds to
 #       RestlessMaxSeconds), and the rest shuffle about every
 #       ShuffleMinSeconds to ShuffleMaxSeconds. Each time, it may go on an
-#       errand (ErrandChance) or fishing (FishChance), or hop about
+#       errand (ErrandChance), fishing (FishChance) or to practise on a
+#       training dummy (PractiseChance), or hop about
 #       (JumpChance; on a mount, rear: RearChance), or run about
 #       (WanderChance), or else take a step or two within its spot
 #       (StepMin to StepMax yards, walking WalkChance of the time). Nobody
@@ -1324,12 +1376,28 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 #       none and room for one, as playerbots gives its bots one) and fishes
 #       for FishMinMinutes to FishMaxMinutes, then puts its own weapons back
 #       and goes back to its place.
+#     * Practising (Practise, PractiseChance): one that does not heal walks
+#       over to one of its city's training dummies (the game's own, which
+#       take no harm: Stormwind's are in SI:7's yard in Old Town, Orgrimmar's
+#       in the Valley of Honor, Thunder Bluff's on Hunter Rise, and
+#       Ironforge, the Undercity, Darnassus, the Exodar and Silvermoon have
+#       theirs; Dalaran and Shattrath have none) within
+#       PractiseRange and on its level of the city, with nobody at it -- of
+#       those, one nearest its own level -- stands before it, at arm's length
+#       or a spell's way off, and its own AI fights it as it would anything,
+#       with what it has, for PractiseMinSeconds to PractiseMaxSeconds. Then
+#       it stops (its pet too) and walks back to its spot. With a dummy
+#       within 80 yards (the SI:7 spot, the Valley of Honor) it goes
+#       PractiseNearChance of the time instead. A dummy lets go of whoever
+#       has not hit it for five seconds: set on it again twice running, it
+#       gives up. Two and a half minutes to get there, or it gives up.
 #
 #   Everything is let go of the moment the bot is wanted for anything else:
-#   an invite, a trade, a fight, a queue. Its weapons go back, and nobody is
-#   left dancing. ".pbp status" counts all of it on its "City life:" line;
-#   with PlayerbotsPlus.Debug on, each gawk, dance party, errand, flight
-#   and fishing trip is logged.
+#   an invite, a trade, a fight (one with anything but its training dummy),
+#   a queue. Its weapons go back, nobody is left dancing, and nobody is left
+#   hitting a dummy. ".pbp status" counts all of it on its "City life:"
+#   line; with PlayerbotsPlus.Debug on, each gawk, dance party, errand,
+#   flight, fishing trip and practice is logged.
 #
 ###############################################################################
 
@@ -1527,6 +1595,25 @@ PlayerbotsPlus.CityLife.FishChance = 8
 PlayerbotsPlus.CityLife.FishMinMinutes = 3
 PlayerbotsPlus.CityLife.FishMaxMinutes = 10
 PlayerbotsPlus.CityLife.FishPlaces = 4
+
+#    PlayerbotsPlus.CityLife.Practise
+#    PlayerbotsPlus.CityLife.PractiseChance
+#    PlayerbotsPlus.CityLife.PractiseNearChance
+#    PlayerbotsPlus.CityLife.PractiseRange
+#    PlayerbotsPlus.CityLife.PractiseMinSeconds
+#    PlayerbotsPlus.CityLife.PractiseMaxSeconds
+#        Practising on a training dummy (see above): on or off; the percent
+#        of a shuffler's or a restless one's moves that are a walk over to
+#        one (0: none) -- and with one within 80 yards, the percent instead;
+#        how far the dummy may be (yards, 20 to 1000); and how long it
+#        practises (seconds, 10 to 900).
+#        Default: 1, 3, 25, 500, 45, 150
+PlayerbotsPlus.CityLife.Practise = 1
+PlayerbotsPlus.CityLife.PractiseChance = 3
+PlayerbotsPlus.CityLife.PractiseNearChance = 25
+PlayerbotsPlus.CityLife.PractiseRange = 500
+PlayerbotsPlus.CityLife.PractiseMinSeconds = 45
+PlayerbotsPlus.CityLife.PractiseMaxSeconds = 150
 
 ###############################################################################
 #

@@ -296,18 +296,35 @@ int main(int argc, char** argv)
             }
         };
         const std::vector<C> zones = { { 60, 66, 4 }, { 20, 15, 2 }, { 5, 5, 1 }, { 16, 14, 0 } };
-        check("three from the fullest to the emptiest", PbpZones::PlanMoves(zones, 3), "0>1 0>1 0>1");
-        check("on until nobody over can move", PbpZones::PlanMoves(zones, 10), "0>1 0>1 0>1 0>1");
-        check("none at once", PbpZones::PlanMoves(zones, 0), "");
-        check("even: none", PbpZones::PlanMoves({ { 5, 5, 3 }, { 10, 10, 3 } }, 3), "");
-        check("over but nobody free", PbpZones::PlanMoves({ { 5, 9, 0 }, { 10, 6, 3 } }, 3), "");
-        check("over, nowhere short", PbpZones::PlanMoves({ { 5, 9, 4 }, { 10, 10, 3 } }, 3), "");
-        // The furthest over gives first; the furthest short takes first.
-        check("by how far", PbpZones::PlanMoves({ { 5, 7, 2 }, { 5, 9, 2 }, { 5, 4, 0 }, { 5, 2, 0 } }, 3),
-              "1>3 1>3 0>2");
-        // Someone over with nobody free leaves it to the next one over.
-        check("next over if the first cannot", PbpZones::PlanMoves({ { 5, 9, 0 }, { 5, 6, 1 }, { 5, 3, 0 } }, 3),
+        check("dice first: the first over to the first short", PbpZones::PlanMoves(zones, 3, first), "0>1 0>1 0>1");
+        check("dice last: the last short, until it is not", PbpZones::PlanMoves(zones, 3, last), "0>3 0>3 0>1");
+        check("on until nobody over can move", PbpZones::PlanMoves(zones, 10, first), "0>1 0>1 0>1 0>1");
+        check("none at once", PbpZones::PlanMoves(zones, 0, first), "");
+        check("even: none", PbpZones::PlanMoves({ { 5, 5, 3 }, { 10, 10, 3 } }, 3, first), "");
+        check("over but nobody free", PbpZones::PlanMoves({ { 5, 9, 0 }, { 10, 6, 3 } }, 3, first), "");
+        check("over, nowhere short", PbpZones::PlanMoves({ { 5, 9, 4 }, { 10, 10, 3 } }, 3, first), "");
+        // However far over or short: any of them, as the dice fall.
+        const std::vector<C> four = { { 5, 7, 2 }, { 5, 9, 2 }, { 5, 4, 0 }, { 5, 2, 0 } };
+        check("any over to any short (first)", PbpZones::PlanMoves(four, 3, first), "0>2 0>3 1>3");
+        check("any over to any short (last)", PbpZones::PlanMoves(four, 3, last), "1>3 1>3 0>3");
+        // Someone over with nobody free leaves it to the others over.
+        check("only those with someone free", PbpZones::PlanMoves({ { 5, 9, 0 }, { 5, 6, 1 }, { 5, 3, 0 } }, 3, first),
               "1>2");
+        // Every zone over gives and every zone short takes, all alike: one
+        // just over as likely as one far over, so anyone may cross the city.
+        std::mt19937 rng(161126);
+        const PbpZones::Dice dice = [&rng](uint32_t n)
+        { return std::uniform_int_distribution<uint32_t>(0, n - 1)(rng); };
+        const std::vector<C> six = { { 10, 30, 20 }, { 10, 12, 20 }, { 10, 11, 20 }, { 10, 0, 0 }, { 10, 8, 0 },
+                                     { 10, 9, 0 } };
+        std::map<std::string, int> pairs;
+        for (int i = 0; i < 9000; ++i)
+            ++pairs[text(PbpZones::PlanMoves(six, 1, dice))];
+        Eq("every pair of over and short comes up", pairs.size(), 9);
+        bool alike = true;
+        for (auto const& [pair, n] : pairs)
+            alike = alike && n > 850 && n < 1150;
+        True("each pair about as likely", alike);
     }
 
     // ---- what the conf ships -------------------------------------------------------------------------
@@ -319,7 +336,7 @@ int main(int argc, char** argv)
     {
         const auto tiers     = ConfLines(conf, "PlayerbotsPlus.Hangout.ZoneTier.");
         const auto codeTiers = CodeList(config, "kDefaultZoneTiers");
-        Eq("tiers in the conf", tiers.size(), 3);
+        Eq("tiers in the conf (three, and Stormwind's own high and low)", tiers.size(), 5);
         True("the conf's tiers are the code's", tiers == codeTiers);
         std::map<std::string, PbpZones::Tier> byName;
         for (auto const& [name, value] : tiers)
@@ -333,7 +350,7 @@ int main(int argc, char** argv)
 
         const auto zones     = ConfLines(conf, "PlayerbotsPlus.Hangout.Zone.");
         const auto codeZones = CodeList(config, "kDefaultHangoutZones");
-        Eq("zones in the conf", zones.size(), 6);
+        Eq("zones in the conf (Orgrimmar's six, Stormwind's nine)", zones.size(), 15);
         True("the conf's zones are the code's", zones == codeZones);
 
         const auto spots = ConfLines(conf, "PlayerbotsPlus.Hangout.Spot.");
@@ -368,22 +385,31 @@ int main(int argc, char** argv)
                                                                        duels.find(spotKey + "\"") == std::string::npos);
             }
             True(key + " is named for its city", key.rfind(city + ".", 0) == 0);
-            byCity[city].push_back(byName[line.tier]);
+            // The city's own numbers for the tier, if it has them (as the code reads them).
+            std::string own = key.substr(0, key.find('.')) + "." + line.tier;
+            std::transform(own.begin(), own.end(), own.begin(), [](unsigned char c) { return std::tolower(c); });
+            byCity[city].push_back(byName.contains(own) ? byName[own] : byName[line.tier]);
         }
         for (auto const& [city, tiers] : byCity)
         {
             True(city + "'s zones add up", PbpZones::CanAddUp(tiers));
-            True(city + " has three to six zones", tiers.size() >= 3 && tiers.size() <= 6);
+            True(city + " has three to ten zones", tiers.size() >= 3 && tiers.size() <= 10);
+            uint32_t starts = 0;
+            for (PbpZones::Tier const& t : tiers)
+                starts += t.start;
+            Eq(city + "'s zones start at 100 in all", starts, 100);
         }
-        // Orgrimmar's every spot in the city is in a zone; the gates and the
-        // zeppelin tower, outside its walls, are not.
+        Eq("Stormwind's zones", byCity["Stormwind"].size(), 9);
+        // Every spot in Orgrimmar and Stormwind is in a zone; outside their
+        // walls, the gates (and Orgrimmar's zeppelin tower) are not.
         for (auto const& [key, value] : spots)
         {
             PbpSpotLine s;
-            if (!PbpParseSpotLine(value, s) || PbpCityOf(s.name) != "Orgrimmar")
+            if (!PbpParseSpotLine(value, s) || (PbpCityOf(s.name) != "Orgrimmar" && PbpCityOf(s.name) != "Stormwind"))
                 continue;
-            const bool outside = key == "OrgrimmarGates" || key == "OrgrimmarZeppelins";
-            True("Orgrimmar's " + key + (outside ? " is in no zone" : " is in a zone"), taken.contains(key) != outside);
+            const bool outside = key == "OrgrimmarGates" || key == "OrgrimmarZeppelins" || key == "StormwindGates";
+            True(PbpCityOf(s.name) + "'s " + key + (outside ? " is in no zone" : " is in a zone"),
+                 taken.contains(key) != outside);
         }
     }
 

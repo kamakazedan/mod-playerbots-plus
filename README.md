@@ -12,7 +12,7 @@ their own words.
 |---|---|
 | [The auction house](#the-auction-house) | Sell what they have no use for and buy upgrades, under their own names |
 | [City hangouts](#city-hangouts) | Gather where players do in the capitals: on a bench, mounted, or AFK |
-| [City life](#city-life) | Shift about, hop, run about, show off, dance, look at a rare mount, run errands, fish and fly in and out while they hang out |
+| [City life](#city-life) | Shift about, hop, run about, show off, dance, look at a rare mount, run errands, fish, practise on the training dummies and fly in and out while they hang out |
 | [Stuck on a mount](#stuck-on-a-mount) | Stop getting on and off their mount at a herb they can't pick, and move on |
 | [On foot indoors](#on-foot-indoors) | Get off their mount in a bank, an inn or a cave, instead of standing at the counter on it |
 | [Out of the fire](#out-of-the-fire) | Step out of a campfire, bonfire or brazier, burning or not, instead of standing in it |
@@ -104,7 +104,7 @@ Commons, the Valley of Strength, outside the bank in Dalaran. Playerbots never
 sends a bot anywhere in particular, so idle bots in a city just wander from
 NPC to NPC. With hangouts, they gather where players do.
 
-- **Where:** 39 spots in the capitals, Shattrath and Dalaran come set up:
+- **Where:** 50 spots in the capitals, Shattrath and Dalaran come set up:
   - Orgrimmar: in the Valley of Strength in front of the inn and the auction
     house, inside the auction house in front of the auctioneers, outside the
     bank, the open middle of it and just inside the gates, then the
@@ -114,8 +114,13 @@ NPC to NPC. With hangouts, they gather where players do.
     the Valley of Honor, outside the gates and the zeppelin tower.
   - Stormwind: the Trade District, outside the auction house and inside it in
     front of the auctioneers, the bank, round the fountain in front of the
-    bank's steps, the Valley of Heroes, Cathedral Square, the Mage Quarter,
-    the Dwarven District, Old Town, the harbor and outside the gates.
+    bank's steps, the Valley of Heroes, Cathedral Square and inside the
+    Cathedral of Light, the Park, the Mage Quarter, the Dwarven District by
+    its forges, Old Town (its street, outside the Pig and Whistle and inside
+    it, outside the Champions' Hall, and SI:7's training dummies), the Keep
+    (the throne room, the War Room and the Royal Library), the harbor (the
+    quay and the piers for the boats to Northrend and Auberdine) and outside
+    the gates.
   - Thunder Bluff: the middle of it, among the trainers and below the
     auction house, and outside the bank.
   - Dalaran, from level 68 and for both sides: outside both banks, Runeweaver
@@ -133,20 +138,27 @@ NPC to NPC. With hangouts, they gather where players do.
   Thunder Bluff, the banks and auction houses. A spot with more people than
   its radius holds grows to fit them (`Hangout.RoomPerBot`).
   `Hangout.Places` is how many in all.
-- **Zones (Orgrimmar for now):** a city can be split into zones, each with a
-  share of its people by its tier -- low 1 to 10 percent (starting at 5),
-  medium 10 to 20 (15), high 50 to 80 (65) -- always adding up to 100.
-  Orgrimmar's are the Valley of Strength (high), the crossroads by the
-  Valley of Spirits (medium), and the Valley of Wisdom, the Cleft of Shadow,
-  the Valley of Honor and the road west of the Hall of Legends (low). Every
-  30 seconds the shares drift a little, at random within their limits, and
-  every 15 seconds up to 3 bots get up from a zone with more people than its
-  share and walk over to one with fewer, so the crowd is seen to move about
-  the city. The spots outside its walls (the gates where duels are fought,
-  the zeppelin tower) keep their own people, and a city in zones has no hot
-  spots. `.pbp hangouts` shows each zone's share and who is there
-  (`Hangout.Zone.*`, `Hangout.ZoneTier.*`, `Hangout.ZoneShiftSeconds`,
-  `Hangout.ZoneMoveSeconds`, `Hangout.ZoneMovesAtOnce`).
+- **Zones (Orgrimmar and Stormwind for now):** a city can be split into
+  zones, each with a share of its people by its tier -- low 1 to 10 percent
+  (starting at 5), medium 10 to 20 (15), high 50 to 80 (65) -- always adding
+  up to 100; a city can have its own numbers for a tier, so its zones start
+  at 100 whatever their number. Orgrimmar's are the Valley of Strength
+  (high), the crossroads by the Valley of Spirits (medium), and the Valley of
+  Wisdom, the Cleft of Shadow, the Valley of Honor and the road west of the
+  Hall of Legends (low). Stormwind's are the Trade District (high, 50 to 80
+  starting at 64), Old Town (medium), and the Dwarven District's forges, the
+  Cathedral, the Park, the Mage Quarter, the Valley of Heroes, the harbor and
+  the Keep (low, 1 to 6 starting at 3). Every 30 seconds the shares drift a
+  little, at random within their limits, and every 15 seconds up to 3 bots
+  get up from a zone with more people than its share and go over to one with
+  fewer -- any zone over to any zone short, at random, so now and then one
+  crosses the whole city, riding there when it has a mount -- so the crowd
+  is seen to move about the city. The spots outside its walls (the gates
+  where duels are fought, the zeppelin tower) keep their own people, and a
+  city in zones has no hot spots. `.pbp hangouts` shows each zone's share
+  and who is there (`Hangout.Zone.*`, `Hangout.ZoneTier.*`,
+  `Hangout.ZoneShiftSeconds`, `Hangout.ZoneMoveSeconds`,
+  `Hangout.ZoneMovesAtOnce`).
 - **When a spot is full:** a bot sent or fetched to a spot where there's
   nowhere left to stand walks on to another spot in the city with room, and
   the full spot takes nobody more for a while (`Hangout.FullMinutes`, or
@@ -205,8 +217,9 @@ real player, since nobody else would see it:
   the same kind.
 - **Tempers:** some stay put the whole time, some can't keep still, and the
   rest shift about every minute or two: a step or two, a few hops, a run off
-  somewhere near and back, or off on an errand or to fish. Nobody moves while
-  it's talking or emoting, or sat down or AFK.
+  somewhere near and back, or off on an errand, to fish or to practise on a
+  training dummy. Nobody moves while it's talking or emoting, or sat down or
+  AFK.
 - **Showing off:** now and then (about every quarter of an hour) a clown
   spends a minute or so making its mount rear up and roar over and over, a
   couple of seconds apart -- hopping about, where it can't ride. With
@@ -234,10 +247,17 @@ real player, since nobody else would see it:
 - **Fishing:** those who know fishing go to the water's edge near their spot
   (found from the map's own water) and fish for a few minutes, with a pole
   from their bags.
+- **Training dummies:** now and then one walks over to one of the city's
+  training dummies with nobody at it -- the one nearest its level -- and
+  practises on it for a minute or two, its own AI fighting it with whatever
+  it has, then walks back. Those at a spot right by the dummies (SI:7 in
+  Stormwind, the Valley of Honor in Orgrimmar) go far more often. Healers
+  don't: there's nothing on a dummy to heal. Every capital has dummies but
+  Dalaran and Shattrath.
 
 An invite, a trade, a fight or a queue lets a bot go at once, with its own
-weapons back in its hands. `.pbp hangouts` counts it all on its "City life:"
-line.
+weapons back in its hands and nobody left hitting a dummy. `.pbp hangouts`
+counts it all on its "City life:" line.
 
 Settings: `PlayerbotsPlus.CityLife.*`.
 

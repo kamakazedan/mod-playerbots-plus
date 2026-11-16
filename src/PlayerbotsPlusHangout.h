@@ -201,6 +201,7 @@ struct PbpHangoutStats
     uint64_t redirected = 0;  // fetched, no room at the spot: on to another spot in the city
     uint64_t zoneShifts = 0;  // times a zoned city's shares drifted (Hangout.Zone.*)
     uint64_t zoneMoves  = 0;  // ...bots that moved from a zone over its room to one under it
+    uint64_t zoneMovesRiding = 0;  // ...of them, ones with a mount (picked first, to ride across)
     // City life (CityLife.*)
     uint64_t steps     = 0;   // stepped to another place at their spot
     uint64_t turns     = 0;   // looked round (someone near, someone speaking)
@@ -226,8 +227,12 @@ struct PbpHangoutStats
     uint64_t flewOut   = 0;   // left by flight path
     uint64_t fished    = 0;   // went fishing at the water's edge
     uint64_t casts     = 0;   // ...lines cast
+    uint64_t practises = 0;   // off to practise on a training dummy
+    uint64_t practised = 0;   // ...got there and set about it
+    uint64_t practiseNoBlows = 0;  // ...gave up, its goes ending with no blow landed
     uint32_t fishPlaces = 0;  // places to fish from, found so far
     uint32_t services  = 0;   // bankers, auctioneers and mailboxes found so far
+    uint32_t dummies   = 0;   // training dummies found so far, in cities with spots
     uint32_t hanging   = 0;   // there now
     uint32_t away      = 0;   // ...of whom AFK
     uint32_t duelling  = 0;   // ...of whom in a duel or just out of one

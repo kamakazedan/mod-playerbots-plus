@@ -110,38 +110,57 @@ spot (`.pbp hangouts`).
 ## A city in zones
 
 A city with zones (`Hangout.Zone.<City>.<Name>`: a tier and its spots;
-Orgrimmar first, the user's call, then Stormwind and the rest) shares its
-people out by zone, not by hot spot: its spots outside every zone (the
-gates duels are fought at, which are never in one -- those bots are kept
-for the duels -- and the zeppelin tower) keep their written capacity, the
-rest of its places (`g_HangoutZonePlaces`) go to its zones by a share each,
-and a zoned spot's written capacity is only its part of its zone
+Orgrimmar first, the user's call, then Stormwind -- its nine zones the
+user's own -- then the rest) shares its people out by zone, not by hot
+spot: its spots outside every zone (the gates duels are fought at, which
+are never in one -- those bots are kept for the duels -- and the zeppelin
+tower) keep their written capacity, the rest of its places
+(`g_HangoutZonePlaces`) go to its zones by a share each, and a zoned
+spot's written capacity is only its part of its zone
 (`PbpHangoutSpot::written`). The shares are whole percent, always adding up
-to 100 within each tier's limits; they drift every `ZoneShiftSeconds`
+to 100 within each tier's limits. A city may have its own numbers for a
+tier (`Hangout.ZoneTier.<City>.<Tier>`, looked up before the shared one)
+so its zones start at 100: Stormwind, with seven low zones, starts them at
+3 and its high at 64. The shares drift every `ZoneShiftSeconds`
 (`PbpZones::Drift`: a pull back to the start, a random step, then
 `AddUpTo100`) and every `ZoneMoveSeconds` up to `ZoneMovesAtOnce` bots a
 city move from zones over their room to zones under it (`PlanMoves`), only
-in a city a real player is in. The sums are `PlayerbotsPlusZonesText`
-(pure, tested, with the conf it ships). A move is `MoveTo`: `Send` to the
-new spot with the rest of its visit (`until`) kept, the way an errand's
-return is; only a bot `Movable` says is free (settled a while, a while
-left, not AFK, on a bench, busy or targeted). The zones are read after the
-duels (`LoadHangoutZones`, after `LoadPetsDuels`), which say where duels
-are; the shares live in the hangouts (`ShareZones`, `ShareOf`), never in
-the spots' `capacity`.
+in a city a real player is in -- from any zone over to any zone short,
+both picked at random, however far apart (the user's call: now and then
+someone crosses the city), one with a mount first (`OwnsMount`: it rides
+there), with longer to get there for a long way (`TravelAllowance`, a
+visit's `travelSecs`). The sums are `PlayerbotsPlusZonesText` (pure,
+tested, with the conf it ships). A move is `MoveTo`: `Send` to the new spot
+with the rest of its visit (`until`) kept, the way an errand's return is;
+only a bot `Movable` says is free (settled a while, a while left, not AFK,
+on a bench, busy or targeted). The zones are read after the duels
+(`LoadHangoutZones`, after `LoadPetsDuels`), which say where duels are; the
+shares live in the hangouts (`ShareZones`, `ShareOf`), never in the spots'
+`capacity`.
 
 ## City life lives in the hangouts
 
 What the crowd does while it hangs out (`PlayerbotsPlus.CityLife.*`) is part
 of a visit in `PlayerbotsPlusHangout.cpp`, not a module of its own: a step, a
-hop, a run about, a bout of showing off, an errand, fishing, a look at a rare
-mount, a dance or walking over to talk is the visit's `Act` (or its `Errand`
-and `Flying` phases), started only when it is `FreeForLife` and near a real
-player, and undone by `EndAct` and `Let` -- the dance state off, its own
-weapons back in its hands. Moving it goes through `Shift` (its AI stays
-held); a walk across the city (an errand, a flight) frees the AI and uses
-playerbots' own `go camp` and `ChangeToTravelFlight`. The sums with no game
-in them are `PlayerbotsPlusCityLifeText` (tested).
+hop, a run about, a bout of showing off, an errand, fishing, practising on a
+training dummy, a look at a rare mount, a dance or walking over to talk is
+the visit's `Act` (or its `Errand`, `Practising` and `Flying` phases),
+started only when it is `FreeForLife` and near a real player, and undone by
+`EndAct` and `Let` -- the dance state off, its own weapons back in its
+hands. Moving it goes through `Shift` (its AI stays held); a walk across the
+city (an errand, a flight, the dummies) frees the AI and uses playerbots'
+own `go camp` and `ChangeToTravelFlight`. The sums with no game in them are
+`PlayerbotsPlusCityLifeText` (tested).
+
+Practising is the one thing a visit does that puts a bot in a fight: the
+dummy (a spawn whose script is `npc_training_dummy`, found per zone by
+`DummiesIn`) is engaged with it (`EngageWithTarget`, so it is on the dummy's
+threat list) and its own AI fights it. The fight lasts as long as it lands
+blows, so every way out of a visit stops it (`Let` calls `StopPractise`) --
+a bot lost track of would hit a dummy for good -- and a practising bot is
+let go for `WantedBesidesFight`, never for `Wanted`, which counts its own
+fight. `StopPractise` stops only that fight: one with anything else is the
+bot's AI's.
 
 How lively a bot is there is its temperament (`CityLife.Temperament.<Name>`,
 `PbpCityLife::Temperament`, parsed in the pure file): settled once a visit

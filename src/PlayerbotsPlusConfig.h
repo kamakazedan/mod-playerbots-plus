@@ -261,6 +261,12 @@ namespace pbp
     extern uint32_t    g_LifeFishMinMinutes;     // ...for this long
     extern uint32_t    g_LifeFishMaxMinutes;
     extern uint32_t    g_LifeFishPlaces;         // ...places to fish from, at most, round each spot
+    extern bool        g_LifePractise;           // practising on the city's training dummies
+    extern uint32_t    g_LifePractiseChance;     // ...a fidget that is a walk over to one (percent)
+    extern uint32_t    g_LifePractiseNearChance; // ...with one within 80 yards (percent)
+    extern float       g_LifePractiseRange;      // ...within this far, yards
+    extern uint32_t    g_LifePractiseMinSeconds; // ...at it this long
+    extern uint32_t    g_LifePractiseMaxSeconds;
     extern uint32_t    g_LifeWanderChance;       // a fidget that is a run off somewhere near, and back (percent)
     extern float       g_LifeWanderRange;        // ...this far from its place at most, yards
     extern uint32_t    g_LifeShowOffMinutes;     // a show-off's bout of showing off: a chance about every this
