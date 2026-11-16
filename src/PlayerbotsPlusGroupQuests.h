@@ -47,6 +47,10 @@
 //     again;
 //   * nobody came at all: it tries it alone, as many tries, and still
 //     answers anyone who asks about it;
+//   * two who meet out questing, both holding one of the zone's and up to
+//     it, may talk each other into doing it together (the chat module has
+//     them say so in /say, near a real player): a party for it there and
+//     then, the one who asked leading, with no ask in General;
 //   * done, it is handed in where it is taken back (playerbots' questing
 //     first; after a minute there, here, with the reward that suits it).
 //     One gone grey is let go.
@@ -92,6 +96,18 @@ bool PbpGroupQuests_Busy(Player* bot);
 // One of the group quests this knows: a quest log keeper keeps it.
 bool PbpGroupQuests_IsOne(uint32_t questId);
 
+// Two bots that meet while out questing, and talk each other into doing one
+// of their group quests together (PlayerbotsPlus::GroupQuestFor,
+// GroupQuestTogether: the chat module has them say so in /say). Which one
+// they could do now, by each other in its zone -- both random bots of a side
+// within 30 yards, out of a group and wanted by nothing else, neither walking
+// for one, with others for one already or resting from one, both still at it
+// and up to it; the one nearest their level, 0 for none -- and a party for
+// it, `a` leading: they get together where they stand and go, as any party
+// does, with no ask in General. False when they cannot after all.
+uint32_t PbpGroupQuests_For(Player* a, Player* b);
+bool PbpGroupQuests_Together(Player* a, Player* b, uint32_t questId);
+
 // Every party and count, for the full report (PlayerbotsPlusReport).
 std::vector<std::string> PbpGroupQuests_Status();
 
@@ -118,6 +134,7 @@ struct PbpGroupQuestsStats
     uint64_t engaged    = 0;   // members brought into the party's fight, standing by while it went on
     uint64_t asks       = 0;   // asks for help in General
     uint64_t answers    = 0;   // ...answered by one who came along
+    uint64_t talkedInto = 0;   // pairs that met and talked each other into one (PbpGroupQuests_Together)
     uint64_t parties    = 0;   // parties that got together and went
     uint64_t solos      = 0;   // ...and bots that went alone, nobody having come
     uint64_t done       = 0;   // quests a party (or one alone) did

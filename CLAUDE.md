@@ -353,6 +353,13 @@ more suggested players). Built without mod-dungeon-clear too.
   whether it picked it or not; left out, the rest stood and watched the
   puller die.
 - What they say is mod-ollama-chat's: `BotEventType::GroupQuest*`.
+- Two who meet out questing may be talked into one together by the chat
+  module (`PlayerbotsPlus::GroupQuestFor` and `GroupQuestTogether`, API 10;
+  `PbpGroupQuests_For`, `_Together`): a party there and then, the asker
+  leading, straight into Meeting -- no ask, no answer, so nothing is raised
+  for the chat module to say again in General. `FreeToTalk` and
+  `CouldTogether` are the checks, the same for both calls: what the chat
+  module was told they could do is what they then do.
 
 ## Bots playerbots is not running
 

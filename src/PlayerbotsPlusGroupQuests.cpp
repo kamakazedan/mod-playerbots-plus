@@ -2169,6 +2169,44 @@ namespace
         return true;
     }
 
+    // ---- two talked into one (PbpGroupQuests_For, _Together) -----------------------------
+
+    // Two who meet while out questing and talk each other into doing one of
+    // their group quests together (the chat module has them say it in /say):
+    // within this of each other, they get together where they stand.
+    constexpr float kTogetherYards = 30.0f;
+
+    // Free to be talked into one: alive, out of a fight, a group, an invite
+    // and a duel, wanted by nothing else, on playerbots' own questing, not
+    // walking for one, not with others for one already (alone, asking for
+    // help with one, is fine: it has found its help), not resting from one.
+    bool FreeToTalk(Player* bot, Clock::time_point now)
+    {
+        PlayerbotAI* ai = PbpAiOf(bot);
+        if (!bot->IsAlive() || bot->IsInCombat() || bot->GetGroup() || bot->GetGroupInvite() || bot->duel ||
+            !Free(bot, ai) || !ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT))
+            return false;
+        uint64 const key = bot->GetGUID().GetRawValue();
+        if (g_walks.contains(key))
+            return false;
+        if (Party const* party = PartyOf(key); party && (party->members.size() > 1 || party->phase != Phase::Recruiting))
+            return false;
+        auto const cooling = g_cooldown.find(key);
+        return cooling == g_cooldown.end() || now >= cooling->second;
+    }
+
+    // Both by each other in its zone, of a side, both still at it and up to it.
+    bool CouldTogether(Player* a, Player* b, GroupQuest const& q)
+    {
+        if (a->GetTeamId() != b->GetTeamId() || a->GetMapId() != b->GetMapId() || a->GetZoneId() != q.zone ||
+            b->GetZoneId() != q.zone || a->GetExactDist(b) > kTogetherYards)
+            return false;
+        for (Player* bot : { a, b })
+            if (!StillAt(bot, q) || !UpTo(bot, q))
+                return false;
+        return true;
+    }
+
     // A few idle bots are looked at: one to hand in, quests to take, or help
     // to ask for.
     void Look(Clock::time_point now)
@@ -2287,6 +2325,62 @@ bool PbpGroupQuests_Busy(Player* bot)
     return g_partyOf.contains(key) || g_walks.contains(key);
 }
 
+uint32_t PbpGroupQuests_For(Player* a, Player* b)
+{
+    if (!g_Pbp.enable || !g_Pbp.groupQuests.enable || !a || !b || a == b || !a->IsInWorld() || !b->IsInWorld())
+        return 0;
+    Index();
+    Clock::time_point const now = Clock::now();
+    if (!FreeToTalk(a, now) || !FreeToTalk(b, now))
+        return 0;
+    auto const zone = g_byZone.find(a->GetZoneId());
+    if (zone == g_byZone.end())
+        return 0;
+    // The one nearest their level, as people would pick.
+    int32 const level = (int32(a->GetLevel()) + int32(b->GetLevel())) / 2;
+    uint32 best = 0;
+    int32 bestGap = 0;
+    for (uint32 id : zone->second)
+    {
+        auto const q = g_quests.find(id);
+        if (q == g_quests.end() || !CouldTogether(a, b, q->second))
+            continue;
+        Quest const* quest = sObjectMgr->GetQuestTemplate(id);
+        int32 const gap = std::abs((quest ? a->GetQuestLevel(quest) : q->second.level) - level);
+        if (!best || gap < bestGap)
+        {
+            best = id;
+            bestGap = gap;
+        }
+    }
+    return best;
+}
+
+bool PbpGroupQuests_Together(Player* a, Player* b, uint32_t questId)
+{
+    if (!questId || !g_Pbp.enable || !g_Pbp.groupQuests.enable || !a || !b || a == b || !a->IsInWorld() ||
+        !b->IsInWorld())
+        return false;
+    Index();
+    Clock::time_point const now = Clock::now();
+    auto const q = g_quests.find(questId);
+    if (q == g_quests.end() || !FreeToTalk(a, now) || !FreeToTalk(b, now) || !CouldTogether(a, b, q->second))
+        return false;
+    // One of them asking for help with one on its own has found its help
+    // here, whatever it was asking about.
+    for (Player* bot : { a, b })
+        if (Party* own = PartyOf(bot->GetGUID().GetRawValue()))
+            Dissolve(own->id, "it went with someone it met instead", false, now);
+    Party& p = NewParty(a, questId, now);
+    Join(p, b);
+    Meet(p, now);   // where they stand: the next look makes them a party, and they go
+    ++g_stats.talkedInto;
+    LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Group quests: {} (level {}) and {} (level {}) talked each "
+             "other into {} in {} -- they go and do it together.", a->GetName(), a->GetLevel(), b->GetName(),
+             b->GetLevel(), TitleOf(questId), Zone(p.zone));
+    return true;
+}
+
 bool PbpGroupQuests_IsOne(uint32_t questId)
 {
     if (!g_Pbp.enable || !g_Pbp.groupQuests.enable)
@@ -2318,7 +2412,8 @@ PbpBrief PbpGroupQuests_Brief(bool full)
                           std::to_string(st.walksBusy) + " kept given other things to do, " +
                           std::to_string(st.walksAway) + " taken off elsewhere), " + std::to_string(st.walksPut) +
                           " put there with nobody about; " + std::to_string(st.asks) + " asks for help, " +
-                          std::to_string(st.answers) + " answered; " + std::to_string(st.partyPut) +
+                          std::to_string(st.answers) + " answered, " + std::to_string(st.talkedInto) +
+                          " pairs talked each other into one; " + std::to_string(st.partyPut) +
                           " put with their party, " + std::to_string(st.engaged) + " brought into its fight.");
     if (!on)
         return b;
@@ -2366,7 +2461,8 @@ std::vector<std::string> PbpGroupQuests_Status()
                   " kept given other things to do, " + std::to_string(st.walksAway) + " taken off elsewhere), " +
                   std::to_string(st.walksPut) + " put where they were going (playerbots not running them, nobody "
                   "about); " + std::to_string(st.asks) + " asks for help, " + std::to_string(st.answers) +
-                  " answered; " + std::to_string(st.partyPut) + " put with their party the same way, " +
+                  " answered, " + std::to_string(st.talkedInto) + " pairs that met talked each other into one; " +
+                  std::to_string(st.partyPut) + " put with their party the same way, " +
                   std::to_string(st.engaged) + " standing by brought into its fight; " +
                   std::to_string(st.parties) + " parties went, " + std::to_string(st.solos) +
                   " went alone; " + std::to_string(st.done) + " quests done, " + std::to_string(st.failedTries) +

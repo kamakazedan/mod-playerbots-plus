@@ -38,7 +38,8 @@ class Player;
 // 7: what things are worth (ItemWorth) and how rarely they drop (DropChance).
 // 8: where things drop (DropSourcesOf).
 // 9: only its own loot is sold (LootedByBot).
-#define PLAYERBOTS_PLUS_API_VERSION 9
+// 10: group quests talked into (GroupQuestFor, GroupQuestTogether).
+#define PLAYERBOTS_PLUS_API_VERSION 10
 
 namespace PlayerbotsPlus
 {
@@ -151,6 +152,24 @@ namespace PlayerbotsPlus
     // there does. If the crowd is at its room, two of it head off to make
     // room. False when they cannot go after all.
     bool GoDuel(Player* a, Player* b);
+
+    // ---- Group quests talked into (PlayerbotsPlus.GroupQuests.*)
+
+    // A group quest of the zone `a` and `b` stand in that they could go and
+    // do together now: two of playerbots' random bots of a side within 30
+    // yards of each other, out of a group and wanted by nothing else, neither
+    // walking for one, with others for one already or resting from one, both
+    // holding it -- not done, not given up on, not grey, able to try it again
+    // -- and up to it (an elite one at its level or above). The one nearest
+    // their level; 0 for none. A chat module that has two bots talk each
+    // other into doing one together asks this first.
+    uint32_t GroupQuestFor(Player* a, Player* b);
+
+    // ...and once they have: a party for `quest`, `a` leading, `b` in it.
+    // They get together where they stand and go and do it, as any party for
+    // one does -- with no ask in General, and no answer. False when they
+    // cannot after all.
+    bool GroupQuestTogether(Player* a, Player* b, uint32_t quest);
 
     // ---- City life (PlayerbotsPlus.CityLife.*): what the crowd does while it
     // hangs out -- shifting about, looking round, hopping, dancing, errands,

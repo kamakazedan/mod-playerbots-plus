@@ -668,6 +668,10 @@ this builds on.
   asks about that quest meanwhile is told to come along. Then it goes with
   whoever came. With mod-ollama-chat, the asks and answers are said in General
   in each bot's own words.
+- **Meeting out questing.** Two bots by each other who both hold one of the
+  zone's, and are up to it, may talk each other into doing it together
+  (mod-ollama-chat has them say so in /say, near a real player): a party for
+  it there and then, the one who asked leading, with no ask in General.
 - **Doing it.** The party meets where its leader is, the rest walking over
   from wherever they are in the zone (15 minutes), and does the quest. The
   leader goes for what the quest is for, the named elite or whatever drops
@@ -722,7 +726,8 @@ the full report (`.pbp report`) each party and what it is doing. Settings:
   - A bot that was stuck on its mount knows it, and may laugh it off.
   - A rogue that can't sap the star says why in party.
   - Bots asking for help with a group quest say so in General, and those who
-    have it answer.
+    have it answer. Two out questing who both have one may talk it over in
+    /say near you, and then go and do it together.
   - In a city, one of those who came over to look at a rare mount says
     something about it, and dances come with the /dance emote. Bots talking in
     /say stay put while they do, those near look round at whoever speaks, and

@@ -1,6 +1,7 @@
 #include "PlayerbotsPlus.h"
 #include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusDuels.h"
+#include "PlayerbotsPlusGroupQuests.h"
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusLooted.h"
 #include "PlayerbotsPlusMute.h"
@@ -61,6 +62,16 @@ namespace PlayerbotsPlus
     bool GoDuel(Player* a, Player* b)
     {
         return PbpDuels_Go(a, b);
+    }
+
+    uint32_t GroupQuestFor(Player* a, Player* b)
+    {
+        return PbpGroupQuests_For(a, b);
+    }
+
+    bool GroupQuestTogether(Player* a, Player* b, uint32_t quest)
+    {
+        return PbpGroupQuests_Together(a, b, quest);
     }
 
     double DropChance(uint32_t itemId)
