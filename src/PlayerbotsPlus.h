@@ -39,7 +39,9 @@ class Player;
 // 8: where things drop (DropSourcesOf).
 // 9: only its own loot is sold (LootedByBot).
 // 10: group quests talked into (GroupQuestFor, GroupQuestTogether).
-#define PLAYERBOTS_PLUS_API_VERSION 10
+// 11: what a bot made itself with its professions is its own to sell too
+//     (LootedByBot).
+#define PLAYERBOTS_PLUS_API_VERSION 11
 
 namespace PlayerbotsPlus
 {
@@ -101,14 +103,15 @@ namespace PlayerbotsPlus
     };
     bool DropSourcesOf(uint32_t itemId, DropSources& out);
 
-    // ---- A bot sells only what it looted itself (PlayerbotsPlusLooted)
+    // ---- A bot sells only what it looted or made itself (PlayerbotsPlusLooted)
 
     // Did `bot` loot this stack itself -- from a kill, a chest, a herb or an
-    // ore vein, a skinned beast, fishing, or won on a roll -- with nothing but
-    // more loot added to it since? A bot sells only such a stack, wherever it
-    // sells: never what playerbots handed it for nothing (its gear, ammo,
-    // food, potions, reagents, stones and oils), nor anything it bought, was
-    // given, made or got from a quest. `item` is one in its bags.
+    // ore vein, a skinned beast, fishing, or won on a roll -- or make it with
+    // its professions (from API 11), with nothing but more of its own added
+    // to it since? A bot sells only such a stack, wherever it sells: never
+    // what playerbots handed it for nothing (its gear, ammo, food, potions,
+    // reagents, stones and oils), nor anything it bought, was given or got
+    // from a quest. `item` is one in its bags.
     bool LootedByBot(Player* bot, Item* item);
 
     // ---- City hangouts (PlayerbotsPlus.Hangout.*)

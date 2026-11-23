@@ -28,8 +28,9 @@ namespace
 
     enum class Kind : uint8_t
     {
-        Stored,   // something stored for a bot (StoreNewItem): loot or not
+        Stored,   // something stored for a bot (StoreNewItem): its own or not
         Looted,   // ...it was loot (the loot or roll hook straight after)
+        Made,     // ...it made it (the craft hook straight after)
         Out,      // a stack left its bags whole
         In,       // something came into its bags from the post, a trade or a guild bank
     };
@@ -37,7 +38,7 @@ namespace
     struct Note
     {
         Kind     kind  = Kind::Stored;
-        uint64_t id    = 0;   // a store, and the loot that came with it
+        uint64_t id    = 0;   // a store, and the loot or craft that came with it
         uint32_t owner = 0;   // the bot's character guid
         uint32_t stack = 0;   // the stack's item guid
         uint32_t entry = 0;
@@ -67,11 +68,11 @@ namespace
         return session && session->IsHeadless();
     }
 
-    // The store a loot or roll hook comes straight after, on the same thread.
-    // Those hooks must not follow their Item*: a module whose hook runs first
-    // may have destroyed it (mod-junk-to-gold destroys grey loot in its own
-    // OnPlayerLootItem), and a new item destroyed is deleted on the spot. They
-    // only compare its address with this one's.
+    // The store a loot, roll or craft hook comes straight after, on the same
+    // thread. Those hooks must not follow their Item*: a module whose hook
+    // runs first may have destroyed it (mod-junk-to-gold destroys grey loot in
+    // its own OnPlayerLootItem), and a new item destroyed is deleted on the
+    // spot. They only compare its address with this one's.
     struct Pending
     {
         Player const* player = nullptr;
@@ -80,7 +81,8 @@ namespace
     };
     thread_local Pending t_pending;
 
-    void Took(Player* player, Item* item)
+    // `kind`: Looted or Made.
+    void Took(Player* player, Item* item, Kind kind)
     {
         const bool match = item && t_pending.item == item && t_pending.player == player;
         const uint64_t id = t_pending.id;
@@ -88,7 +90,7 @@ namespace
         if (!match)
             return;
         Note n;
-        n.kind = Kind::Looted;
+        n.kind = kind;
         n.id   = id;
         Push(n);
     }
@@ -154,9 +156,10 @@ namespace
             ++g_stats.joined;
     }
 
-    // The notes so far, in the order they came. A store and the loot that
-    // came with it are both in one batch: the hooks run one after the other
-    // inside StoreLootItem or the roll, never across a world tick.
+    // The notes so far, in the order they came. A store and the loot or craft
+    // that came with it are both in one batch: the hooks run one after the
+    // other inside StoreLootItem, the roll or the craft, never across a world
+    // tick.
     void Drain()
     {
         std::vector<Note> notes;
@@ -168,14 +171,16 @@ namespace
         if (notes.empty())
             return;
 
-        std::unordered_set<uint64_t> looted;
+        std::unordered_set<uint64_t> looted, made;
         for (Note const& n : notes)
             if (n.kind == Kind::Looted)
                 looted.insert(n.id);
+            else if (n.kind == Kind::Made)
+                made.insert(n.id);
 
         for (Note const& n : notes)
         {
-            if (n.kind == Kind::Looted)
+            if (n.kind == Kind::Looted || n.kind == Kind::Made)
                 continue;   // read with its store
             PbpLooted::Stack const* found = Find(n.stack);
             switch (n.kind)
@@ -183,12 +188,20 @@ namespace
                 case Kind::Stored:
                 {
                     ++g_stats.stored;
-                    const bool loot = looted.contains(n.id);
-                    if (loot)
+                    PbpLooted::From from = PbpLooted::From::Other;
+                    if (looted.contains(n.id))
+                    {
+                        from = PbpLooted::From::Loot;
                         ++g_stats.looted;
-                    if (!found && (!loot || !Sellable(n.entry)))
+                    }
+                    else if (made.contains(n.id))
+                    {
+                        from = PbpLooted::From::Made;
+                        ++g_stats.made;
+                    }
+                    if (!found && (from == PbpLooted::From::Other || !Sellable(n.entry)))
                         break;   // nothing it knew, and nothing to know
-                    const PbpLooted::After after = PbpLooted::Stored(found, n.owner, n.count, n.after, loot);
+                    const PbpLooted::After after = PbpLooted::Stored(found, n.owner, n.count, n.after, from);
                     if (!found && after.known)
                         ++g_stats.marked;
                     else if (found && !after.known)
@@ -222,7 +235,7 @@ namespace
 
     // Now and then, every stack it knows of a bot that is about: used up,
     // sold to a vendor or destroyed is forgotten, and one with more in it
-    // than loot put there is not its loot any more. One away (up for
+    // than its own put there is not its own any more. One away (up for
     // auction, in the post) is left until it comes back.
     void Sweep(uint32_t diff)
     {
@@ -275,7 +288,7 @@ namespace
         auto writeKept = [&]()
         {
             if (keptRows)
-                trans->Append("REPLACE INTO playerbots_plus_looted (item, owner, `count`, away) VALUES " + kept);
+                trans->Append("REPLACE INTO playerbots_plus_looted (item, owner, `count`, away, made) VALUES " + kept);
             kept.clear();
             keptRows = 0;
         };
@@ -290,8 +303,8 @@ namespace
         {
             if (PbpLooted::Stack const* s = Find(stack))
             {
-                kept += fmt::format("{}({},{},{},{})", keptRows ? "," : "", stack, s->owner, s->count,
-                                    s->away ? 1 : 0);
+                kept += fmt::format("{}({},{},{},{},{})", keptRows ? "," : "", stack, s->owner, s->count,
+                                    s->away ? 1 : 0, s->made ? 1 : 0);
                 if (++keptRows >= kRowsPerQuery)
                     writeKept();
             }
@@ -318,7 +331,8 @@ namespace
 PbpLootedPlayerScript::PbpLootedPlayerScript()
     : PlayerScript("PbpLootedPlayerScript",
                    { PLAYERHOOK_ON_STORE_NEW_ITEM, PLAYERHOOK_ON_LOOT_ITEM, PLAYERHOOK_ON_GROUP_ROLL_REWARD_ITEM,
-                     PLAYERHOOK_ON_AFTER_MOVE_ITEM_FROM_INVENTORY, PLAYERHOOK_ON_AFTER_MOVE_ITEM_TO_INVENTORY })
+                     PLAYERHOOK_ON_CREATE_ITEM, PLAYERHOOK_ON_AFTER_MOVE_ITEM_FROM_INVENTORY,
+                     PLAYERHOOK_ON_AFTER_MOVE_ITEM_TO_INVENTORY })
 {
 }
 
@@ -342,13 +356,19 @@ void PbpLootedPlayerScript::OnPlayerStoreNewItem(Player* player, Item* item, uin
 
 void PbpLootedPlayerScript::OnPlayerLootItem(Player* player, Item* item, uint32 /*count*/, ObjectGuid /*lootguid*/)
 {
-    Took(player, item);
+    Took(player, item, Kind::Looted);
 }
 
 void PbpLootedPlayerScript::OnPlayerGroupRollRewardItem(Player* player, Item* item, uint32 /*count*/,
                                                         RollVote /*voteType*/, Roll* /*roll*/)
 {
-    Took(player, item);
+    Took(player, item, Kind::Looted);
+}
+
+// A craft's (Spell::DoCreateItem): straight after its StoreNewItem, as loot's.
+void PbpLootedPlayerScript::OnPlayerCreateItem(Player* player, Item* item, uint32 /*count*/)
+{
+    Took(player, item, Kind::Made);
 }
 
 void PbpLootedPlayerScript::OnPlayerAfterMoveItemFromInventory(Player* player, Item* it, uint8 /*bag*/,
@@ -378,8 +398,10 @@ void PbpLootedPlayerScript::OnPlayerAfterMoveItemToInventory(Player* player, Ite
 
 // ---- the world thread -------------------------------------------------------------------
 
-bool PbpLooted_IsLooted(Player* bot, Item* item)
+bool PbpLooted_IsOwn(Player* bot, Item* item, bool* made)
 {
+    if (made)
+        *made = false;
     if (!bot || !item || !g_loaded)
         return false;
     Drain();
@@ -399,7 +421,18 @@ bool PbpLooted_IsLooted(Player* bot, Item* item)
         ++g_stats.refused;
     }
     Set(stack, after);
+    if (made && after.known)
+        *made = after.stack.made;
     return after.known;
+}
+
+bool PbpLooted_KnownMade(uint32_t itemGuidLow)
+{
+    if (!g_loaded)
+        return false;
+    Drain();
+    PbpLooted::Stack const* found = Find(itemGuidLow);
+    return found && found->made;
 }
 
 void PbpLooted_Load()
@@ -411,9 +444,14 @@ void PbpLooted_Load()
         "`owner` INT UNSIGNED NOT NULL, "
         "`count` INT UNSIGNED NOT NULL DEFAULT 0, "
         "`away` TINYINT UNSIGNED NOT NULL DEFAULT 0, "
+        "`made` TINYINT UNSIGNED NOT NULL DEFAULT 0, "
         "PRIMARY KEY (`item`)"
-        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='mod-playerbots-plus: stacks bots looted themselves, the only "
-        "things they sell'");
+        ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='mod-playerbots-plus: stacks bots looted or made themselves, "
+        "the only things they sell'");
+    // Made before what bots make counted as their own too.
+    if (!CharacterDatabase.Query("SHOW COLUMNS FROM `playerbots_plus_looted` LIKE 'made'"))
+        CharacterDatabase.DirectExecute(
+            "ALTER TABLE `playerbots_plus_looted` ADD COLUMN `made` TINYINT UNSIGNED NOT NULL DEFAULT 0");
     // Gone since, or with someone else now: forgotten.
     CharacterDatabase.DirectExecute(
         "DELETE l FROM playerbots_plus_looted AS l LEFT JOIN item_instance AS i ON i.guid = l.item "
@@ -421,7 +459,8 @@ void PbpLooted_Load()
 
     g_stacks.clear();
     g_changed.clear();
-    if (QueryResult result = CharacterDatabase.Query("SELECT item, owner, `count`, away FROM playerbots_plus_looted"))
+    if (QueryResult result =
+            CharacterDatabase.Query("SELECT item, owner, `count`, away, made FROM playerbots_plus_looted"))
     {
         do
         {
@@ -430,11 +469,12 @@ void PbpLooted_Load()
             s.owner = f[1].Get<uint32>();
             s.count = f[2].Get<uint32>();
             s.away  = f[3].Get<uint8>() != 0;
+            s.made  = f[4].Get<uint8>() != 0;
             g_stacks[f[0].Get<uint32>()] = s;
         } while (result->NextRow());
     }
     g_loaded = true;
-    LOG_INFO("server.loading", "[Playerbots Plus] Bots sell only their own loot: {} stacks they looted themselves "
+    LOG_INFO("server.loading", "[Playerbots Plus] Bots sell only what they looted or made: {} stacks of their own "
              "known.", g_stacks.size());
 }
 
@@ -464,6 +504,9 @@ PbpLootedStats PbpLooted_GetStats()
 {
     PbpLootedStats s = g_stats;
     s.known = g_stacks.size();
+    for (auto const& [stack, st] : g_stacks)
+        if (st.made)
+            ++s.knownMade;
     std::lock_guard<std::mutex> lock(g_noteMutex);
     s.dropped = g_dropped;
     return s;

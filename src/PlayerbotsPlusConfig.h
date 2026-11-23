@@ -120,6 +120,36 @@ struct PbpGroupQuestSettings
     uint32_t cooldownMinutes    = 30;      // after a party, before it asks for help again
 };
 
+// Professions: crafting (PlayerbotsPlusCrafting).
+struct PbpCraftSettings
+{
+    bool     enable          = true;
+    uint32_t intervalMs      = 5000;    // how often a few bots are looked at
+    uint32_t botsPerInterval = 5;       // ...this many at most each time
+    uint32_t minMinutes      = 20;      // a bot crafts again after this long...
+    uint32_t maxMinutes      = 60;      // ...to this
+    uint32_t minLevel        = 5;
+    uint32_t maxCasts        = 10;      // crafts at one go
+    uint32_t minChance       = 25;      // percent: a skill-up worth the materials
+    uint32_t sellMarginPct   = 130;     // made to sell: worth at least this share of what goes into it
+    bool     buyFromVendors  = true;    // thread, flux, vials and tools from a vendor nearby, in a city or an inn's town
+    uint32_t spendSharePct   = 20;      // ...at most this share of its gold at one go
+    uint32_t reservePerLevel = 2000;    // ...and never below this, copper per level
+    bool     stationVisits   = true;    // nobody about: put by a forge or an anvil of its town to use it, and back
+    bool     campfire        = true;    // a cook makes its own fire
+    uint32_t usageChecks     = 10;      // playerbots' judgement of what it could make, asked at most this often
+    bool     logCrafts       = false;
+};
+
+// Professions: skill earned, never handed out (PlayerbotsPlusSkills).
+struct PbpSkillSettings
+{
+    bool     enable          = true;    // profession skill only from gathering and crafting
+    bool     classPairs      = true;    // a bot whose pair does not suit its class gets one that does
+    uint32_t intervalMs      = 1000;    // how often bots are looked over...
+    uint32_t botsPerInterval = 100;     // ...this many at a time
+};
+
 // The full report (PlayerbotsPlusReport): every counter, spot, run and party,
 // in a file in the server's logs folder.
 struct PbpReportSettings
@@ -135,6 +165,8 @@ struct PbpSettings
     PbpLedgerSettings     ledger;
     PbpBotDungeonSettings dungeons;
     PbpGroupQuestSettings groupQuests;
+    PbpCraftSettings      crafting;
+    PbpSkillSettings      skills;
     PbpReportSettings     report;
 };
 

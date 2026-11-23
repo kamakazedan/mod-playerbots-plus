@@ -1,5 +1,6 @@
 #include "PlayerbotsPlusReport.h"
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusCrafting.h"
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusFire.h"
@@ -17,6 +18,7 @@
 #include "PlayerbotsPlusMute.h"
 #include "PlayerbotsPlusPets.h"
 #include "PlayerbotsPlusRevive.h"
+#include "PlayerbotsPlusSkills.h"
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusStuck.h"
 
@@ -115,13 +117,13 @@ namespace
                                   "Mail left, bags full: {}.",
                                   st.tooCheap, st.takenDown, st.bagsFull));
         PbpLootedStats const lo = PbpLooted_GetStats();
-        out.push_back(fmt::format("Only their own loot sold: {} stacks bots looted themselves known ({} since startup); "
-                                  "{} had something else added and {} went to someone else, so are not theirs to "
-                                  "sell; {} used up or gone. {} stacks asked about before selling (the auction "
-                                  "house, Trade chat), {} not their own loot. {} things stored for bots noted ({} "
-                                  "loot, {} notes dropped); written {} times.",
-                                  lo.known, lo.marked, lo.joined, lo.moved, lo.gone, lo.asked, lo.refused, lo.stored,
-                                  lo.looted, lo.dropped, lo.writes));
+        out.push_back(fmt::format("Only their own sold: {} stacks bots looted or made themselves known ({} of them "
+                                  "some made; {} since startup); {} had something else added and {} went to "
+                                  "someone else, so are not theirs to sell; {} used up or gone. {} stacks asked "
+                                  "about before selling (the auction house, Trade chat), {} not their own. {} things "
+                                  "stored for bots noted ({} loot, {} made, {} notes dropped); written {} times.",
+                                  lo.known, lo.knownMade, lo.marked, lo.joined, lo.moved, lo.gone, lo.asked,
+                                  lo.refused, lo.stored, lo.looted, lo.made, lo.dropped, lo.writes));
 
         PbpHangoutStats const h = PbpHangout_GetStats();
         out.push_back(fmt::format("City hangouts: {} - {} hanging out ({} AFK), {} on their way, {} spots ({} with an "
@@ -266,6 +268,10 @@ namespace
             dungeons.push_back(std::move(line));
         section("Bot dungeons: every queue and run", dungeons);
         section("Group quests: every party", PbpGroupQuests_Status());
+        std::vector<std::string> professions = PbpCrafting_Brief(true).lines;
+        for (std::string& line : PbpSkills_Brief(true).lines)
+            professions.push_back(std::move(line));
+        section("Professions: crafting, and skill earned", professions);
 
         // The economy reads the ledger's table: fresh when asked for, and
         // at most once an hour on the clock.
@@ -347,6 +353,8 @@ std::vector<std::string> PbpReport_Overview()
     lines.push_back(MarketLine());
     take(PbpDungeons_Brief(false), 1);
     take(PbpGroupQuests_Brief(false), 1);
+    take(PbpCrafting_Brief(false), 1);
+    take(PbpSkills_Brief(false), 1);
     lines.push_back(FixesLine());
     if (PbpLedgerStats const lg = PbpLedger_GetStats(); g_Pbp.ledger.enable && lg.dropped)
         issues.push_back(fmt::format("The economy ledger dropped {} things it was told of, too many at once.",

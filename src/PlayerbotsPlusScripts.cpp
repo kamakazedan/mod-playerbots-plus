@@ -1,4 +1,5 @@
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusCrafting.h"
 #include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusDungeons.h"
@@ -17,6 +18,7 @@
 #include "PlayerbotsPlusPets.h"
 #include "PlayerbotsPlusReport.h"
 #include "PlayerbotsPlusRevive.h"
+#include "PlayerbotsPlusSkills.h"
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusStuck.h"
 
@@ -64,8 +66,10 @@ namespace
         {
             PbpDrops_Load();
             PbpGround_Load();
-            // What each bot looted itself: the only things bots sell.
+            // What each bot looted or made itself: the only things bots sell.
             PbpLooted_Load();
+            // What each bot has earned of its professions.
+            PbpSkills_Load();
         }
 
         void OnUpdate(uint32 diff) override
@@ -74,9 +78,13 @@ namespace
             // looks at what they have (the ledger), and anything this tick
             // pays them is counted next tick, before the next look.
             PbpLedger_Update(diff);
-            // What each bot looted itself, the only things it sells: kept
-            // with the module switched off too, for Trade chat's sake.
+            // What each bot looted or made itself, the only things it sells:
+            // kept with the module switched off too, for Trade chat's sake.
             PbpLooted_Update(diff);
+            // Professions: switched off, nothing is held and what they
+            // earned is kept; those at a craft finish it and are let go.
+            PbpSkills_Update(diff);
+            PbpCrafting_Update(diff);
             // These two also run with the module switched off: they let go
             // whoever they are holding (sat down, AFK, kept on foot). The
             // fires' notes are taken either way, so none pile up.
@@ -110,6 +118,7 @@ namespace
         {
             PbpLedger_Shutdown();
             PbpLooted_Shutdown();
+            PbpSkills_Shutdown();
         }
     };
 
@@ -186,6 +195,8 @@ namespace
                 { "dungeons", dungeonsTable },
                 { "groupquests", HandleGroupQuests, SEC_GAMEMASTER, Console::Yes },
                 { "economy", HandleEconomy, SEC_GAMEMASTER,  Console::Yes },
+                { "professions", HandleProfessions, SEC_GAMEMASTER, Console::Yes },
+                { "craft",  HandleCraft,  SEC_GAMEMASTER,    Console::No  },
                 { "visit",  HandleVisit,  SEC_GAMEMASTER,    Console::No  },
                 { "fires",  HandleFires,  SEC_GAMEMASTER,    Console::No  },
                 { "hangouts", HandleHangouts, SEC_GAMEMASTER, Console::Yes },
@@ -227,7 +238,7 @@ namespace
         {
             for (std::string const& line : PbpReport_Overview())
                 handler->SendSysMessage(line);
-            handler->SendSysMessage("More: .pbp hangouts | dungeons | groupquests | economy. " +
+            handler->SendSysMessage("More: .pbp hangouts | dungeons | groupquests | economy | professions. " +
                                     More("Every counter, spot, run and party"));
             return true;
         }
@@ -286,6 +297,35 @@ namespace
         static bool HandleEconomy(ChatHandler* handler, Optional<uint32> days)
         {
             Brief(handler, PbpLedger_Brief(days ? *days : 7), "Every figure, the last 7 days");
+            return true;
+        }
+
+        // .pbp professions: bots crafting, and their skill earned.
+        static bool HandleProfessions(ChatHandler* handler)
+        {
+            PbpBrief b = PbpCrafting_Brief(true);
+            PbpBrief const skills = PbpSkills_Brief(true);
+            b.lines.insert(b.lines.end(), skills.lines.begin(), skills.lines.end());
+            b.issues.insert(b.issues.end(), skills.issues.begin(), skills.issues.end());
+            Brief(handler, b, "Every count");
+            return true;
+        }
+
+        // .pbp craft [name]: what that bot (or the one selected) would make
+        // now, and why, and it starts.
+        static bool HandleCraft(ChatHandler* handler, Optional<PlayerIdentifier> target)
+        {
+            if (!target)
+                target = PlayerIdentifier::FromTargetOrSelf(handler);
+            Player* bot = target ? target->GetConnectedPlayer() : nullptr;
+            if (!bot)
+            {
+                handler->SendErrorMessage("Select a bot, or name one that is online.");
+                return false;
+            }
+            std::string report;
+            PbpCrafting_Now(bot, report);
+            handler->SendSysMessage(report);
             return true;
         }
 
@@ -437,6 +477,7 @@ void Addmod_playerbots_plusScripts()
     new PlayerbotsPlusCommandScript();
     new PbpLedgerPlayerScript();
     new PbpLootedPlayerScript();
+    new PbpSkillsPlayerScript();
     new PbpStuckScript();
     new PbpFireScript();
     new PbpMuteScript();

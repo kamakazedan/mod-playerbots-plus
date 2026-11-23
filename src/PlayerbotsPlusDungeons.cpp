@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusDungeons.h"
 
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusCrafting.h"
 #include "PlayerbotsPlusDungeonQuests.h"
 #include "PlayerbotsPlusDungeonsText.h"
 #include "PlayerbotsPlusGroupQuests.h"
@@ -225,7 +226,8 @@ namespace
             return false;
         if (bot->HasAura(lfg::LFG_SPELL_DUNGEON_DESERTER) || sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_NONE)
             return false;
-        if (PbpHangout_Has(bot) || PbpDungeonQuests_Walking(bot) || PbpGroupQuests_Busy(bot))
+        if (PbpHangout_Has(bot) || PbpDungeonQuests_Walking(bot) || PbpGroupQuests_Busy(bot) ||
+            PbpCrafting_Busy(bot))
             return false;
         return sRandomPlayerbotMgr.IsRandomBot(bot);
     }

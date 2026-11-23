@@ -81,7 +81,7 @@ namespace PlayerbotsPlus
 
     bool LootedByBot(Player* bot, Item* item)
     {
-        return PbpLooted_IsLooted(bot, item);
+        return PbpLooted_IsOwn(bot, item);
     }
 
     bool DropSourcesOf(uint32_t itemId, DropSources& out)

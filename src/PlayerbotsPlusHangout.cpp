@@ -2,6 +2,7 @@
 #include "PlayerbotsPlus.h"
 #include "PlayerbotsPlusCityLifeText.h"
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusCrafting.h"
 #include "PlayerbotsPlusDungeonQuests.h"
 #include "PlayerbotsPlusFire.h"
 #include "PlayerbotsPlusGroupQuests.h"
@@ -864,7 +865,7 @@ namespace
     {
         return !bot->IsAlive() || bot->GetGroup() || bot->GetGroupInvite() || bot->GetTradeData() || bot->duel ||
                bot->GetGuildIdInvited() || bot->GetArenaTeamIdInvited() || Queued(bot) || PbpGroupQuests_Busy(bot) ||
-               PbpDungeonQuests_Walking(bot);
+               PbpDungeonQuests_Walking(bot) || PbpCrafting_Busy(bot);
     }
 
     // ...or a fight. A held AI would see none of it.

@@ -90,12 +90,14 @@ PlayerbotsPlus.Report.File = "PlayerbotsPlusReport.log"
 #   rather than a vendor: anything of common (white) quality or better that is
 #   not soulbound, not for its quests, not for its professions and not worth
 #   wearing -- cloth, leather, herbs and ore it has no profession for, gear it
-#   will never put on. One whole stack per auction, and only one it looted
-#   itself: never what playerbots hands it for nothing (gear, ammo, food,
-#   potions, reagents, stones, oils), nor anything it bought, was given, made
-#   or got from a quest. Each stack a bot loots is remembered (in the
-#   characters database, playerbots_plus_looted) until something that is not
-#   loot is added to it; Trade chat goes by the same (mod-ollama-chat).
+#   will never put on. One whole stack per auction, and only one it looted or
+#   made itself (BOTS CRAFT, below), whatever went into it: never what
+#   playerbots hands it for nothing (gear, ammo, food, potions, reagents,
+#   stones, oils -- of those kinds, only what it made), nor anything it
+#   bought, was given or got from a quest. Each stack a bot loots or makes is
+#   remembered (in the characters database, playerbots_plus_looted) until
+#   something that is not its own is added to it; Trade chat goes by the same
+#   (mod-ollama-chat).
 #
 #   What it asks, per one: a little under the cheapest one already up (any
 #   seller's, the auction house bot's too); if there is none, what it is worth
@@ -384,6 +386,190 @@ PlayerbotsPlus.Ledger.Enable = 1
 PlayerbotsPlus.Ledger.FlushMinutes = 10
 PlayerbotsPlus.Ledger.CensusMinutes = 30
 PlayerbotsPlus.Ledger.KeepDays = 90
+
+###############################################################################
+#
+#   PROFESSIONS EARNED, NOT HANDED OUT
+#
+#   Playerbots sets every random bot's professions to five times its level
+#   each time it looks the bot over -- every level gained, every refresh,
+#   every re-roll -- so no bot ever had to gather or craft for its skill.
+#   With this on, a random bot's two professions, its cooking and its first
+#   aid rise only by the game's own skill-ups: a herb picked, an ore mined, a
+#   beast skinned, a craft (BOTS CRAFT, below). Whatever playerbots hands out
+#   is taken back at once.
+#
+#     - What a bot has the first time this sees it is its own, and it earns on
+#       from there. So is what playerbots gives a bot it makes over from
+#       scratch (a full re-roll, at a new level).
+#     - Its cap is the rank a player of its level with that skill would have
+#       trained: Journeyman from level 10 with 50, Expert from 20 with 125,
+#       Artisan from 35 with 200, Master from 50 with 275, Grand Master from
+#       65 with 350.
+#     - Fishing is left as playerbots has it: nothing is made with it, and
+#       city life's fishing needs it.
+#
+#   .pbp professions shows how it goes. What each bot has earned is kept in
+#   the characters database, table playerbots_plus_skills.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Skills.Enable
+#        Switched off, nothing is held: playerbots hands skill out again. What
+#        bots had earned is kept, and held again once it is back on.
+#        Default: 1
+PlayerbotsPlus.Skills.Enable = 1
+
+#    PlayerbotsPlus.Skills.ClassPairs
+#        A random bot whose two professions are not a pair that suits its class
+#        gets one that does: playerbots' own pairs for the class, as often as
+#        it takes each (mining and blacksmithing for a warrior, skinning and
+#        leatherworking for a rogue, tailoring and enchanting for a mage...).
+#        It keeps whichever of its two fits; the new one starts at the skill of
+#        the one it replaces, with the recipes a trainer would teach it there.
+#        Playerbots is told the new pair, so it keeps it. (Playerbots gave
+#        most bots made before Playerbots.ClassMatchingProfessionChance went
+#        up any two.)
+#        Default: 1
+PlayerbotsPlus.Skills.ClassPairs = 1
+
+#    PlayerbotsPlus.Skills.IntervalMs
+#    PlayerbotsPlus.Skills.BotsPerInterval
+#        Every IntervalMs (250-60000), this many random bots (1-5000) are
+#        looked over: their skill first seen, their pair, and anything held
+#        that is off. (Playerbots setting a skill is put right at once.) At
+#        most 5 pairs are changed a look.
+#        Default: 1000, 100
+PlayerbotsPlus.Skills.IntervalMs = 1000
+PlayerbotsPlus.Skills.BotsPerInterval = 100
+
+###############################################################################
+#
+#   BOTS CRAFT
+#
+#   No random bot ever crafted anything on its own. With this on, now and
+#   then a random bot that is on its own -- out of a fight and out of any
+#   group, not hanging out in a city, not busy with a dungeon or a group
+#   quest -- looks at what its professions can make from what it carries,
+#   and makes:
+#
+#     - an upgrade for itself, by playerbots' own judgement: once, and puts
+#       it on;
+#     - else what may raise its skill, the least gold of materials for each
+#       point it can expect first: the grind of a profession, as a player
+#       does it (a recipe whose chance of a point is under MinChance is not
+#       worth its materials);
+#     - else what is worth well more than what goes into it (SellMarginPct),
+#       to sell.
+#
+#   What it makes is its own to sell, on the auction house and in Trade chat,
+#   whatever went into it.
+#
+#   Every craft is the game's own: the spell cast, the reagents, tools and
+#   station it checks, the cast time stood through, the skill-up it rolls
+#   (PROFESSIONS EARNED, above). The bot's AI is held still while it works
+#   (MaxCasts at one go) and let go at once for a fight, a trade, an invite
+#   or a duel.
+#
+#     - A recipe that wants a forge, an anvil or a fire (smelting,
+#       blacksmithing, cooking) is made at one in reach where the bot stands.
+#       In a city, or at an inn, with nobody about to see it (Inactive's
+#       UnseenYards), a bot is put by one of the town's to use it and back
+#       after (StationVisits); one out of town with nothing else to make but
+#       what it has the makings of for one is looked at again next time it is
+#       in town. Out of town, a cook makes its own campfire when it knows how
+#       and has what that takes (Campfire).
+#     - In a city or at an inn, thread, flux, vials, salt and a missing tool
+#       are bought from a vendor nearby that sells them, at its price
+#       (BuyFromVendors): at most SpendSharePct of its gold at one go, and
+#       never below ReservePerLevel copper a level, kept for repairs and
+#       training.
+#
+#   Enchanting gear, disenchanting, prospecting and milling are not done yet.
+#   .pbp craft [name] shows what a bot (or the one selected) would make now,
+#   and why, and starts it; .pbp professions shows how it goes.
+#
+###############################################################################
+
+#    PlayerbotsPlus.Crafting.Enable
+#        Default: 1
+PlayerbotsPlus.Crafting.Enable = 1
+
+#    PlayerbotsPlus.Crafting.IntervalMs
+#    PlayerbotsPlus.Crafting.BotsPerInterval
+#        Every IntervalMs (1000-600000), at most this many bots (1-50) whose
+#        turn it is are looked at.
+#        Default: 5000, 5
+PlayerbotsPlus.Crafting.IntervalMs = 5000
+PlayerbotsPlus.Crafting.BotsPerInterval = 5
+
+#    PlayerbotsPlus.Crafting.MinMinutes
+#    PlayerbotsPlus.Crafting.MaxMinutes
+#        A bot's turn comes round again this many minutes after its last one
+#        (1-1440), at random between the two.
+#        Default: 20, 60
+PlayerbotsPlus.Crafting.MinMinutes = 20
+PlayerbotsPlus.Crafting.MaxMinutes = 60
+
+#    PlayerbotsPlus.Crafting.MinLevel
+#        Bots below this level (1-80) do not craft.
+#        Default: 5
+PlayerbotsPlus.Crafting.MinLevel = 5
+
+#    PlayerbotsPlus.Crafting.MaxCasts
+#        Crafts at one go (1-100).
+#        Default: 10
+PlayerbotsPlus.Crafting.MaxCasts = 10
+
+#    PlayerbotsPlus.Crafting.MinChance
+#        Percent: a recipe made for a skill-up only with at least this chance
+#        of one (0-100). The game's own chances: certain while the recipe is
+#        orange, falling evenly from its yellow to its grey.
+#        Default: 25
+PlayerbotsPlus.Crafting.MinChance = 25
+
+#    PlayerbotsPlus.Crafting.SellMarginPct
+#        Made to sell only when worth at least this percent of what goes into
+#        it (100-1000), by the market's own worth of things.
+#        Default: 130
+PlayerbotsPlus.Crafting.SellMarginPct = 130
+
+#    PlayerbotsPlus.Crafting.BuyFromVendors
+#    PlayerbotsPlus.Crafting.SpendSharePct
+#    PlayerbotsPlus.Crafting.ReservePerLevel
+#        Buys what it is short of from a vendor nearby, in a city or at an inn;
+#        at most this percent of its gold at one go (0-100), never going below
+#        this much copper a level.
+#        Default: 1, 20, 2000
+PlayerbotsPlus.Crafting.BuyFromVendors = 1
+PlayerbotsPlus.Crafting.SpendSharePct = 20
+PlayerbotsPlus.Crafting.ReservePerLevel = 2000
+
+#    PlayerbotsPlus.Crafting.StationVisits
+#        In a city or at an inn, with nobody about to see, a bot is put by a
+#        forge, an anvil or a fire of the town (within 300 yards) to use it,
+#        and back where it was after.
+#        Default: 1
+PlayerbotsPlus.Crafting.StationVisits = 1
+
+#    PlayerbotsPlus.Crafting.Campfire
+#        A cook out of reach of a fire makes its own, when it knows how and
+#        has what it takes.
+#        Default: 1
+PlayerbotsPlus.Crafting.Campfire = 1
+
+#    PlayerbotsPlus.Crafting.UsageChecks
+#        Playerbots' judgement of whether something it could make is an
+#        upgrade for it is asked of at most this many things a look (0-100):
+#        it is the costly part.
+#        Default: 10
+PlayerbotsPlus.Crafting.UsageChecks = 10
+
+#    PlayerbotsPlus.Crafting.LogCrafts
+#        Each bot that goes to work, and what it makes, in the log
+#        (module.playerbotsplus, INFO).
+#        Default: 0
+PlayerbotsPlus.Crafting.LogCrafts = 0
 
 ###############################################################################
 #

@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusGroupQuests.h"
 
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusCrafting.h"
 #include "PlayerbotsPlusDungeonQuests.h"
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusDungeonsText.h"
@@ -491,7 +492,7 @@ namespace
         if (!ai || !ai->IsBotAI() || ai->GetMaster() || !sRandomPlayerbotMgr.IsRandomBot(bot))
             return false;
         if (sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_NONE || PbpHangout_Has(bot) ||
-            PbpDungeons_Busy(bot) || PbpDungeonQuests_Walking(bot))
+            PbpDungeons_Busy(bot) || PbpDungeonQuests_Walking(bot) || PbpCrafting_Busy(bot))
             return false;
         return true;
     }

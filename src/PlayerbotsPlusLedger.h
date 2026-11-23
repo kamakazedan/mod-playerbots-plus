@@ -98,6 +98,12 @@ void PbpLedger_Shutdown();
 // The market took `copper` out of a random bot's auction house mail.
 void PbpLedger_MailMoney(uint64_t copper);
 
+// `count` of `item` were bought from a vendor for a random bot without the
+// vendor's window (PlayerbotsPlusCrafting: thread, vials, flux for its
+// profession), just stored with StoreNewItem: counted as a vendor buy, as
+// the game's own buying is. World thread, straight after the store.
+void PbpLedger_VendorBought(Player* bot, Item* item, uint32_t count);
+
 // The economy over the last `days`, every figure: for the full report
 // (PlayerbotsPlusReport). Reads the ledger's table: not every world tick.
 std::vector<std::string> PbpLedger_Report(uint32_t days);

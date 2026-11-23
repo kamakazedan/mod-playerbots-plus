@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusDungeonQuests.h"
 
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusCrafting.h"
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusDungeonsText.h"
 #include "PlayerbotsPlusGroupQuests.h"
@@ -347,7 +348,7 @@ namespace
         if (!ai || !ai->IsBotAI() || ai->GetMaster() || !ai->HasStrategy("new rpg", BOT_STATE_NON_COMBAT))
             return false;
         if (sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_NONE || PbpHangout_Has(bot) || PbpDungeons_Busy(bot) ||
-            PbpGroupQuests_Busy(bot))
+            PbpGroupQuests_Busy(bot) || PbpCrafting_Busy(bot))
             return false;
         auto const& data = ai->rpgInfo.data;
         if (!std::holds_alternative<NewRpgInfo::Idle>(data) && !std::holds_alternative<NewRpgInfo::Rest>(data) &&

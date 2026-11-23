@@ -933,6 +933,16 @@ void PbpLedgerPlayerScript::OnPlayerSpellCast(Player* player, Spell* spell, bool
         NoteItem(NoteKind::Used, player, item, 1);
 }
 
+void PbpLedger_VendorBought(Player* bot, Item* item, uint32_t count)
+{
+    // StoreNewItem has just stored it on this thread: the record it left is
+    // the one to go by, as the game's own vendor hook does.
+    Stored stored;
+    if (!TakeStored(bot, item, stored))
+        return;
+    NoteStored(NoteKind::Vendor, bot, stored, count);
+}
+
 void PbpLedger_OnAuctionAdded(AuctionEntry const* auction)
 {
     NoteAuction(NoteKind::AuctionAdded, auction);

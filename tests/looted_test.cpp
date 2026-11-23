@@ -1,5 +1,5 @@
-// Tests for what a bot looted itself (src/PlayerbotsPlusLootedRules.cpp),
-// which has no game types in it. Not part of the server build: AzerothCore
+// Tests for what a bot looted or made itself
+// (src/PlayerbotsPlusLootedRules.cpp), which has no game types in it. Not part of the server build: AzerothCore
 // only compiles a module's src/. Run tests/build.sh.
 
 #include "PlayerbotsPlusLootedRules.h"
@@ -22,9 +22,10 @@ namespace
     }
 
     // The record is known, and is exactly this.
-    void Is(char const* what, PbpLooted::After const& a, uint32_t owner, uint32_t count, bool away)
+    void Is(char const* what, PbpLooted::After const& a, uint32_t owner, uint32_t count, bool away,
+            bool made = false)
     {
-        Check(what, a.known && a.stack == PbpLooted::Stack{ owner, count, away });
+        Check(what, a.known && a.stack == PbpLooted::Stack{ owner, count, away, made });
     }
 
     void Gone(char const* what, PbpLooted::After const& a)
@@ -40,23 +41,23 @@ int main()
 
     // ---- stored --------------------------------------------------------------------------
     {
-        Is("a new stack of loot is its loot", Stored(nullptr, bot, 3, 3, true), bot, 3, false);
-        Gone("playerbots' free stack is not", Stored(nullptr, bot, 20, 20, false));
-        Gone("loot onto a stack that was not loot is not", Stored(nullptr, bot, 2, 22, true));
-        Gone("loot over several stacks is not known whole", Stored(nullptr, bot, 25, 5, true));
-        Gone("nothing stored", Stored(nullptr, bot, 0, 0, true));
+        Is("a new stack of loot is its loot", Stored(nullptr, bot, 3, 3, From::Loot), bot, 3, false);
+        Gone("playerbots' free stack is not", Stored(nullptr, bot, 20, 20, From::Other));
+        Gone("loot onto a stack that was not loot is not", Stored(nullptr, bot, 2, 22, From::Loot));
+        Gone("loot over several stacks is not known whole", Stored(nullptr, bot, 25, 5, From::Loot));
+        Gone("nothing stored", Stored(nullptr, bot, 0, 0, From::Loot));
 
         Stack const own{ bot, 5, false };
-        Is("more loot onto its loot", Stored(&own, bot, 2, 7, true), bot, 7, false);
-        Is("more loot onto its loot, some used meanwhile", Stored(&own, bot, 2, 4, true), bot, 4, false);
-        Gone("more loot onto its loot after something joined it", Stored(&own, bot, 2, 9, true));
-        Gone("playerbots topping its loot up", Stored(&own, bot, 15, 20, false));
-        Gone("a vendor's onto its loot", Stored(&own, bot, 1, 6, false));
+        Is("more loot onto its loot", Stored(&own, bot, 2, 7, From::Loot), bot, 7, false);
+        Is("more loot onto its loot, some used meanwhile", Stored(&own, bot, 2, 4, From::Loot), bot, 4, false);
+        Gone("more loot onto its loot after something joined it", Stored(&own, bot, 2, 9, From::Loot));
+        Gone("playerbots topping its loot up", Stored(&own, bot, 15, 20, From::Other));
+        Gone("a vendor's onto its loot", Stored(&own, bot, 1, 6, From::Other));
 
         Stack const theirs{ other, 5, false };
-        Gone("loot onto a stack someone else looted", Stored(&theirs, bot, 2, 7, true));
+        Gone("loot onto a stack someone else looted", Stored(&theirs, bot, 2, 7, From::Loot));
         Stack const away{ bot, 5, true };
-        Gone("a stack that is away cannot take loot", Stored(&away, bot, 2, 7, true));
+        Gone("a stack that is away cannot take loot", Stored(&away, bot, 2, 7, From::Loot));
     }
 
     // ---- away and back -------------------------------------------------------------------
@@ -88,15 +89,35 @@ int main()
 
     // ---- a run of them: looted, topped up, sold ------------------------------------------
     {
-        After a = Stored(nullptr, bot, 4, 4, true);              // four looted
-        a = Stored(&a.stack, bot, 1, 5, true);                     // one more
+        After a = Stored(nullptr, bot, 4, 4, From::Loot);              // four looted
+        a = Stored(&a.stack, bot, 1, 5, From::Loot);                     // one more
         Is("looted twice", a, bot, 5, false);
         a = Seen(&a.stack, bot, 3);                                // two used
         a = MovedOut(&a.stack, bot);                               // listed
         a = MovedIn(&a.stack, bot);                                // back unsold
         Is("used, listed and back", a, bot, 3, false);
-        a = Stored(&a.stack, bot, 20, 23, false);                  // playerbots tops it up
+        a = Stored(&a.stack, bot, 20, 23, From::Other);                  // playerbots tops it up
         Gone("topped up for nothing: not its to sell", a);
+    }
+
+    // ---- made by its own craft -------------------------------------------------------------
+    {
+        Is("a new stack it made is its own", Stored(nullptr, bot, 5, 5, From::Made), bot, 5, false, true);
+        Gone("what it made onto a stack that was not its own is not", Stored(nullptr, bot, 1, 21, From::Made));
+
+        Stack const made{ bot, 5, false, true };
+        Is("more made onto what it made", Stored(&made, bot, 1, 6, From::Made), bot, 6, false, true);
+        Gone("playerbots topping what it made up", Stored(&made, bot, 20, 25, From::Other));
+        After const listed = MovedOut(&made, bot);
+        Is("made, up for auction: away, still made", listed, bot, 5, true, true);
+        Is("made, back from the auction house: still made", MovedIn(&listed.stack, bot), bot, 5, false, true);
+        Is("made, some used: the rest still made", Seen(&made, bot, 2), bot, 2, false, true);
+
+        Stack const looted{ bot, 3, false, false };
+        Is("made onto its loot: its own, some of it made", Stored(&looted, bot, 1, 4, From::Made), bot, 4, false,
+           true);
+        Is("loot onto what it made: its own, still some of it made", Stored(&made, bot, 2, 7, From::Loot), bot, 7,
+           false, true);
     }
 
     std::printf("looted: %d checks, %d failed\n", g_checks, g_fails);

@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusMarket.h"
 #include "PlayerbotsPlus.h"
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusCrafting.h"
 #include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusLooted.h"
@@ -305,6 +306,8 @@ namespace
             return no("is in a battleground");
         if (bot->GetTradeData())
             return no("is trading with someone");
+        if (PbpCrafting_Busy(bot))
+            return no("is crafting");
         Map* map = bot->GetMap();
         if (!map || map->Instanceable())
             return no("is in a dungeon");
@@ -435,21 +438,15 @@ namespace
         return sold.contains(entry);
     }
 
-    // Kinds of thing that are never loot of a bot's own: its free supplies,
-    // what a vendor sells. Whether this very stack is its loot is
-    // PbpLooted's (Listable).
-    bool OwnLoot(ItemTemplate const* proto)
-    {
-        return !HandedOutFree(proto) && !SoldByVendors(proto->ItemId);
-    }
-
     // Could go on the auction house at all, before playerbots is asked.
     bool Listable(Player* bot, Item* item, ItemTemplate const* proto, TraderState const& state)
     {
         auto const& m = Cfg();
         if (!proto || proto->Quality < m.sellMinQuality || proto->Quality > m.sellMaxQuality)
             return false;
-        if (!OwnLoot(proto))
+        // What a vendor sells is never a bot's own: it bought it there (food,
+        // thread for its profession...).
+        if (SoldByVendors(proto->ItemId))
             return false;
         if (!proto->SellPrice)
             return false;   // worthless to anyone
@@ -474,10 +471,16 @@ namespace
 
         if (NeededForQuest(bot, proto->ItemId))
             return false;
-        // Only what it looted itself: never what playerbots handed it for
-        // nothing, nor anything it bought, was given, made or got from a
-        // quest (PlayerbotsPlusLooted).
-        return PbpLooted_IsLooted(bot, item);
+        // Only what it looted or made itself: never what playerbots handed
+        // it for nothing, nor anything it bought, was given or got from a
+        // quest (PlayerbotsPlusLooted). Of the kinds playerbots hands out
+        // (potions, food, stones, oils...), only what it made: one it
+        // looted may yet be joined by a free one in its bags, and it is
+        // handed them again at every refresh anyway.
+        bool made = false;
+        if (!PbpLooted_IsOwn(bot, item, &made))
+            return false;
+        return made || !HandedOutFree(proto);
     }
 
     uint32_t PickHours()
@@ -994,16 +997,18 @@ namespace
     }
 
     // Its own auctions of something it should never have put up (its free
-    // supplies, vendor goods: listed before they were kept out), taken down
-    // the way a player cancels one: the deposit is gone, the item comes back
-    // by mail. Not one somebody has bid on: that one runs its course.
+    // supplies it did not make, vendor goods: listed before they were kept
+    // out), taken down the way a player cancels one: the deposit is gone, the
+    // item comes back by mail. Not one somebody has bid on: that one runs its
+    // course.
     void TakeDown(Player* bot, AuctionHouseObject* house, VisitReport& r)
     {
         std::vector<AuctionEntry*> wrong;
         for (auto const& [id, auction] : house->GetAuctions())
             if (auction && auction->owner == bot->GetGUID() && !auction->bidder)
                 if (ItemTemplate const* proto = sObjectMgr->GetItemTemplate(auction->item_template))
-                    if (!OwnLoot(proto))
+                    if (SoldByVendors(proto->ItemId) ||
+                        (HandedOutFree(proto) && !PbpLooted_KnownMade(auction->item_guid.GetCounter())))
                         wrong.push_back(auction);
 
         uint32_t taken = 0;

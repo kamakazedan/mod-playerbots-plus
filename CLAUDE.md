@@ -49,9 +49,14 @@ These hooks are the exception, and they touch nothing of the world:
   tick decides whose bot it was (`IsInRandomAccountList`, the character
   cache) and adds it up. Never look up a random bot from a map thread.
 - `PbpLootedPlayerScript`'s hooks (an item stored, looted, won on a roll,
-  moved out of or into the bags) run on map threads. They note the stack's
-  guid and counts under a mutex, and the world tick (or a question, first)
-  sorts them out.
+  made, moved out of or into the bags) run on map threads. They note the
+  stack's guid and counts under a mutex, and the world tick (or a question,
+  first) sorts them out.
+- `PbpSkillsPlayerScript`'s hooks (a skill-up the game rolled, a skill set by
+  anyone) run on map threads: playerbots sets skills from the bot's AI tick.
+  They note the guid, skill and values under a mutex; whether it is a random
+  bot is the world tick's to say. The module's own `SetSkill` is no news
+  (`t_ours`, thread_local).
 
 ## An Item* in a hook may already be freed
 
@@ -212,30 +217,69 @@ same order, without the declined names a client sends. It only touches a pet
 that still has the name it was tamed with (its family's: "Cat"), because
 playerbots' own "rename pet" command leaves the game's renamed flag set.
 
-## A bot sells only what it looted itself
+## A bot sells only what it looted or made itself
 
 The user's rule for every playerbot, wherever it sells -- the auction house
 here, Trade chat in mod-ollama-chat: only what it looted itself, from a kill,
-a chest, a herb or an ore vein, a skinned beast, fishing, or won on a roll.
-Never what playerbots hands it for nothing (gear, ammo, food, potions,
-reagents, stones, oils, poisons, bags, again at every refresh), nor anything
-bought, given, made or a quest's. A list of free things is not enough: the
-weightstones playerbots hands out are Consumable/Other, not Item Enhancement,
-and "selling [Adamantite Weightstone] x20, 3g 30s!" went out in Trade.
+a chest, a herb or an ore vein, a skinned beast, fishing, or won on a roll,
+and what it made with its professions, whatever went into it (the user's
+call, with bots crafting). Never what playerbots hands it for nothing (gear,
+ammo, food, potions, reagents, stones, oils, poisons, bags, again at every
+refresh), nor anything bought, given or a quest's. A list of free things is
+not enough: the weightstones playerbots hands out are Consumable/Other, not
+Item Enhancement, and "selling [Adamantite Weightstone] x20, 3g 30s!" went out
+in Trade.
 
 `PlayerbotsPlusLooted` keeps it by the stack, in `playerbots_plus_looted`: a
-stack that came out of a loot window or a roll whole (`StoreNewItem` with the
-loot or roll hook straight after, paired by a note id) is its loot, and stays
-so while only more loot joins it. Topped up by anything else -- a store with
-no loot hook, a trade's, the post's (`OnPlayerAfterMoveItemToInventory` into
-a stack that was not away), or more in it than last seen -- it is not, however
-little that was; up for auction or in the post (`away`) and back whole, it
-still is. The sums are `PbpLooted` (`PlayerbotsPlusLootedRules`, pure,
-tested). It can only err the safe way: some loot no longer counted, never a
-free thing sold. Anything new that sells asks `PbpLooted_IsLooted` (another
-module, `PlayerbotsPlus::LootedByBot`, API 9) of the very stack it sells, last,
-and sells nothing when it says no. `HandedOutFree` and `SoldByVendors` stay as
-kinds of thing never to list.
+stack that came out of a loot window, a roll or a craft whole (`StoreNewItem`
+with the loot, roll or `OnPlayerCreateItem` hook straight after, paired by a
+note id) is its own, and stays so while only more of its own joins it (`made`:
+some of it was made). Topped up by anything else -- a store with no such hook,
+a trade's, the post's (`OnPlayerAfterMoveItemToInventory` into a stack that
+was not away), or more in it than last seen -- it is not, however little that
+was; up for auction or in the post (`away`) and back whole, it still is. The
+sums are `PbpLooted` (`PlayerbotsPlusLootedRules`, pure, tested). It can only
+err the safe way: some of its own no longer counted, never a free thing sold.
+Anything new that sells asks `PbpLooted_IsOwn` (another module,
+`PlayerbotsPlus::LootedByBot`, API 9; made too from API 11) of the very stack
+it sells, last, and sells nothing when it says no. `SoldByVendors` stays a
+kind of thing never to list, and `HandedOutFree` one never to list unless the
+stack is made (`PbpLooted_IsOwn`'s `made`; `PbpLooted_KnownMade` for one up
+for auction): a potion it brewed, never one it looted.
+
+## Professions: earned, and used
+
+Playerbots sets a random bot's professions to level x 5 at every
+`InitSkills` (a level gained, a refresh, a re-roll) and never crafts on its
+own. Two parts change that; neither needs a language model, and nothing here
+makes a bot say anything about it.
+
+- `PlayerbotsPlusSkills` holds a random bot's two professions, cooking and
+  first aid at what it earned. What it has when first seen is its own (the
+  user's call: "keep it, earn from there"), and so is what playerbots gives a
+  bot it makes over from scratch (the skill taken away, then given again:
+  `g_fresh`). Every game skill-up (`OnPlayerUpdateSkill`) is added; every
+  `SetSkill` that is not this module's (`OnPlayerSetSkill`) is put back at
+  once, the cap the rank a player of that level and skill would have trained
+  (`PbpCraft::RankFor`). Fishing is not held: nothing is made with it, and
+  city life's fishing needs it. A pair that does not suit the class is
+  changed (`Skills.ClassPairs`, playerbots' own pairs and weights, the user's
+  call: "only those that don't fit"), the new one at the old one's skill,
+  with `InitAvailableSpells` for its recipes, and playerbots told the pair
+  (`firstSkill`, `secondSkill`, `professionRollType`) so it keeps it.
+- `PlayerbotsPlusCrafting` has a few free random bots at a time make what
+  `PbpCraft::Choose` picks (pure, tested): an upgrade for itself first, else
+  the cheapest copper a point, else what sells well over its materials. Every
+  craft is the game's own cast (`CastSpell`, not triggered): reagents, tools,
+  station, cast time, skill-up. The bot's AI is held (`SetNextCheckDelay`
+  every tick) and let go for anything it would answer. A forge or anvil is
+  one the game itself finds in reach (`GameObjectFocusCheck`), or one of the
+  town's the bot is put by while nobody would see (`PbpUnseen`, as hangouts
+  fetch bots) and put back after. What it is short of is bought from the
+  town's vendors at their price, the ledger told (`PbpLedger_VendorBought`).
+  A hanging-out bot, one in a group, a dungeon or a group quest never
+  crafts; and the other parts leave a crafting one alone
+  (`PbpCrafting_Busy`): a new part that takes bots over checks it too.
 
 ## Playerbots' judgement, not ours
 
@@ -466,9 +510,9 @@ the cheap first look. Never the falling flag: a bot can be left with it.
 `PlayerbotsPlusLedgerText.{h,cpp}`, `PlayerbotsPlusDungeonsText.{h,cpp}`,
 `PlayerbotsPlusGroupQuestsText.{h,cpp}`, `PlayerbotsPlusCityLifeText.{h,cpp}`,
 `PlayerbotsPlusDropChance.{h,cpp}`, `PlayerbotsPlusGroundGrid.{h,cpp}`,
-`PlayerbotsPlusLootedRules.{h,cpp}` and `PlayerbotsPlusZonesText.{h,cpp}` have
-no game types in them, so they can be tested without a server. Keep it that
-way: `tests/build.sh`. The text test also checks the conf against the code:
+`PlayerbotsPlusLootedRules.{h,cpp}`, `PlayerbotsPlusZonesText.{h,cpp}` and
+`PlayerbotsPlusCraftText.{h,cpp}` have no game types in them, so they can be
+tested without a server. Keep it that way: `tests/build.sh`. The text test also checks the conf against the code:
 every key the code reads is in the conf, and the default mute list, hangout
 spots, companion lists and pet names are the same in both; the zones test,
 the default zones and tiers, and that each city's zones can add up.
@@ -476,7 +520,7 @@ the default zones and tiers, and that each city's zones can add up.
 ## What it tells you: a few lines in game, the rest in a file
 
 `.pbp status` and the parts' own commands (`hangouts`, `dungeons`,
-`groupquests`, `economy`) say a few short lines each -- a part's `PbpBrief`:
+`groupquests`, `economy`, `professions`) say a few short lines each -- a part's `PbpBrief`:
 how it stands, then what looks wrong (`issues`) -- and the full report
 (`PlayerbotsPlusReport.cpp`, `Report.File` in the logs folder, every
 `Report.Minutes` and on `.pbp report`) has every counter, spot, run and

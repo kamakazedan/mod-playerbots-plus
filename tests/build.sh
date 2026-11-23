@@ -5,9 +5,10 @@
 # (party size, what to ask for, what next), city life's sums (tempers,
 # rare mounts, rings of people, hops), drop chances from loot tables
 # (groups, references, containers, where a thing drops) and feet on the
-# ground's sums (playerbots' grind grid, falls), what a bot looted itself,
-# the only things it sells, and a city's hangout zones (shares that drift
-# and add up, places, moves) with what the conf ships. Needs only g++:
+# ground's sums (playerbots' grind grid, falls), what a bot looted or made
+# itself, the only things it sells, a city's hangout zones (shares that drift
+# and add up, places, moves) with what the conf ships, and professions' sums
+# (skill-up chances, ranks, pairs for a class, what to craft). Needs only g++:
 # none of them has game types in it. Run from anywhere: bash tests/build.sh
 # (OUT=<dir> puts the binaries elsewhere).
 set -e
@@ -27,6 +28,7 @@ g++ "${FLAGS[@]}" "$T/ground_test.cpp" "$ROOT/src/PlayerbotsPlusGroundGrid.cpp" 
 g++ "${FLAGS[@]}" "$T/looted_test.cpp" "$ROOT/src/PlayerbotsPlusLootedRules.cpp" -o "$OUT/looted_test"
 g++ "${FLAGS[@]}" "$T/zones_test.cpp" "$ROOT/src/PlayerbotsPlusZonesText.cpp" "$ROOT/src/PlayerbotsPlusText.cpp" \
     -o "$OUT/zones_test"
+g++ "${FLAGS[@]}" "$T/craft_test.cpp" "$ROOT/src/PlayerbotsPlusCraftText.cpp" -o "$OUT/craft_test"
 "$OUT/market_price_test"
 "$OUT/text_test" "$ROOT"
 "$OUT/ledger_test"
@@ -37,3 +39,4 @@ g++ "${FLAGS[@]}" "$T/zones_test.cpp" "$ROOT/src/PlayerbotsPlusZonesText.cpp" "$
 "$OUT/ground_test"
 "$OUT/looted_test"
 "$OUT/zones_test" "$ROOT"
+"$OUT/craft_test"

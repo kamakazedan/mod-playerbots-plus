@@ -1318,6 +1318,30 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     for (uint64_t guid : PbpLedger::GuidList(sConfigMgr->GetOption<std::string>("AuctionHouseBot.GUIDs", "", false)))
         l.auctionBots.insert(uint32_t(guid));
 
+    PbpCraftSettings& c = s.crafting;
+    c.enable          = B("PlayerbotsPlus.Crafting.Enable", true);
+    c.intervalMs      = std::clamp<uint32_t>(U("PlayerbotsPlus.Crafting.IntervalMs", 5000), 1000, 600000);
+    c.botsPerInterval = std::clamp<uint32_t>(U("PlayerbotsPlus.Crafting.BotsPerInterval", 5), 1, 50);
+    c.minMinutes      = std::clamp<uint32_t>(U("PlayerbotsPlus.Crafting.MinMinutes", 20), 1, 1440);
+    c.maxMinutes      = std::clamp<uint32_t>(U("PlayerbotsPlus.Crafting.MaxMinutes", 60), c.minMinutes, 1440);
+    c.minLevel        = std::clamp<uint32_t>(U("PlayerbotsPlus.Crafting.MinLevel", 5), 1, 80);
+    c.maxCasts        = std::clamp<uint32_t>(U("PlayerbotsPlus.Crafting.MaxCasts", 10), 1, 100);
+    c.minChance       = std::min<uint32_t>(U("PlayerbotsPlus.Crafting.MinChance", 25), 100);
+    c.sellMarginPct   = std::clamp<uint32_t>(U("PlayerbotsPlus.Crafting.SellMarginPct", 130), 100, 1000);
+    c.buyFromVendors  = B("PlayerbotsPlus.Crafting.BuyFromVendors", true);
+    c.spendSharePct   = std::min<uint32_t>(U("PlayerbotsPlus.Crafting.SpendSharePct", 20), 100);
+    c.reservePerLevel = U("PlayerbotsPlus.Crafting.ReservePerLevel", 2000);
+    c.stationVisits   = B("PlayerbotsPlus.Crafting.StationVisits", true);
+    c.campfire        = B("PlayerbotsPlus.Crafting.Campfire", true);
+    c.usageChecks     = std::min<uint32_t>(U("PlayerbotsPlus.Crafting.UsageChecks", 10), 100);
+    c.logCrafts       = B("PlayerbotsPlus.Crafting.LogCrafts", false);
+
+    PbpSkillSettings& sk = s.skills;
+    sk.enable          = B("PlayerbotsPlus.Skills.Enable", true);
+    sk.classPairs      = B("PlayerbotsPlus.Skills.ClassPairs", true);
+    sk.intervalMs      = std::clamp<uint32_t>(U("PlayerbotsPlus.Skills.IntervalMs", 1000), 250, 60000);
+    sk.botsPerInterval = std::clamp<uint32_t>(U("PlayerbotsPlus.Skills.BotsPerInterval", 100), 1, 5000);
+
     s.report.minutes = std::min<uint32_t>(U("PlayerbotsPlus.Report.Minutes", 10), 1440);
     s.report.file    = sConfigMgr->GetOption<std::string>("PlayerbotsPlus.Report.File", "PlayerbotsPlusReport.log");
     if (s.report.file.empty())

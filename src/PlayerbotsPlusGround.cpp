@@ -1,5 +1,6 @@
 #include "PlayerbotsPlusGround.h"
 #include "PlayerbotsPlusConfig.h"
+#include "PlayerbotsPlusCrafting.h"
 #include "PlayerbotsPlusDungeonQuests.h"
 #include "PlayerbotsPlusDungeons.h"
 #include "PlayerbotsPlusGroundGrid.h"
@@ -168,7 +169,7 @@ namespace
     bool OneOfOurs(Player* bot)
     {
         return PbpHangout_Has(bot) || PbpGroupQuests_Busy(bot) || PbpDungeons_Busy(bot) ||
-               PbpDungeonQuests_Walking(bot);
+               PbpDungeonQuests_Walking(bot) || PbpCrafting_Busy(bot);
     }
 
     // Down, as anyone falls: from where it is to `to`. Its AI waits for the
