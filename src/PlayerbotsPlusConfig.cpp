@@ -105,7 +105,11 @@ namespace pbp
     uint32_t    g_LifeFishChance           = 8;
     uint32_t    g_LifeFishMinMinutes       = 3;
     uint32_t    g_LifeFishMaxMinutes       = 10;
-    uint32_t    g_LifeFishPlaces           = 4;
+    uint32_t    g_LifeFishPlaces           = 6;
+    float       g_LifeFishRange            = 90.0f;
+    bool        g_LifeCraft                = true;
+    uint32_t    g_LifeCraftChance          = 6;
+    float       g_LifeCraftRange           = 80.0f;
     bool        g_LifePractise             = true;
     uint32_t    g_LifePractiseChance       = 3;
     uint32_t    g_LifePractiseNearChance   = 25;
@@ -523,7 +527,11 @@ namespace
         g_LifeFishChance     = pct("PlayerbotsPlus.CityLife.FishChance", 8);
         range("PlayerbotsPlus.CityLife.FishMinMinutes", "PlayerbotsPlus.CityLife.FishMaxMinutes", 3, 10, 1, 60,
               g_LifeFishMinMinutes, g_LifeFishMaxMinutes);
-        g_LifeFishPlaces     = std::min<uint32_t>(20, U("PlayerbotsPlus.CityLife.FishPlaces", 4));
+        g_LifeFishPlaces     = std::min<uint32_t>(20, U("PlayerbotsPlus.CityLife.FishPlaces", 6));
+        g_LifeFishRange      = std::clamp(F("PlayerbotsPlus.CityLife.FishRange", 90.0f), 20.0f, 200.0f);
+        g_LifeCraft          = B("PlayerbotsPlus.CityLife.Craft", true);
+        g_LifeCraftChance    = pct("PlayerbotsPlus.CityLife.CraftChance", 6);
+        g_LifeCraftRange     = std::clamp(F("PlayerbotsPlus.CityLife.CraftRange", 80.0f), 10.0f, 300.0f);
         g_LifePractise       = B("PlayerbotsPlus.CityLife.Practise", true);
         g_LifePractiseChance = pct("PlayerbotsPlus.CityLife.PractiseChance", 3);
         g_LifePractiseNearChance = pct("PlayerbotsPlus.CityLife.PractiseNearChance", 25);
@@ -1481,13 +1489,14 @@ void PlayerbotsPlus_LoadConfig(bool reload)
         LOG_INFO(where,
                  "[Playerbots Plus] City life on, within {:.0f} yd of a real player: {}% parked, {}% restless, the "
                  "rest fidget every {}-{} s; hops {}%, mounts rearing {}% (done back {}%), runs about {}%, errands "
-                 "{}%, fishing {}%, practising on a training dummy {}% ({}% by one); rare mounts looked at {}, dance "
-                 "parties {}; flights in {}%, out {}%. Temperaments: {} (without a chat module: {}); showing off "
-                 "about every {} min.",
+                 "{}%, fishing {}%, crafting {}%, practising on a training dummy {}% ({}% by one); rare mounts "
+                 "looked at {}, dance parties {}; flights in {}%, out {}%. Temperaments: {} (without a chat module: "
+                 "{}); showing off about every {} min.",
                  pbp::g_LifeRange, pbp::g_LifeParkedShare, pbp::g_LifeRestlessShare, pbp::g_LifeShuffleMinSeconds,
                  pbp::g_LifeShuffleMaxSeconds, pbp::g_LifeJumpChance, pbp::g_LifeRearChance,
                  pbp::g_LifeRearBackChance, pbp::g_LifeWanderChance, pbp::g_LifeErrandChance,
-                 pbp::g_LifeFish ? pbp::g_LifeFishChance : 0u, pbp::g_LifePractise ? pbp::g_LifePractiseChance : 0u,
+                 pbp::g_LifeFish ? pbp::g_LifeFishChance : 0u, pbp::g_LifeCraft ? pbp::g_LifeCraftChance : 0u,
+                 pbp::g_LifePractise ? pbp::g_LifePractiseChance : 0u,
                  pbp::g_LifePractise ? pbp::g_LifePractiseNearChance : 0u, pbp::g_LifeGawk ? "on" : "off",
                  pbp::g_LifeDance ? "on" : "off", pbp::g_LifeFlyInChance, pbp::g_LifeFlyOutChance,
                  kinds.empty() ? "none" : kinds, shares.empty() ? "everyone the default" : shares + ", the rest the default",

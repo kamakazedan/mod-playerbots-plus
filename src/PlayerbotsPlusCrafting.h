@@ -8,8 +8,10 @@
 // someone who tells it to, and the auction house market bought bots
 // materials they never used. Now a few bots at a time (Crafting.*) -- random
 // bots on their own, out of a fight and out of any group, not hanging out in
-// a city (that crowd is the hangouts') -- look at what their professions can
-// make from what they carry, and make:
+// a city -- look at what their professions can make from what they carry,
+// and make what is below. The crowd hanging out in a city does too, as part
+// of city life, where someone sees it (CityLife.Craft: PbpCrafting_City*):
+// at its place, or at a forge or an anvil of the city it walks over to.
 //
 //   * an upgrade for themselves -- once, and put on;
 //   * else what may raise their skill (PbpCraft::PointChance), the cheapest
@@ -50,8 +52,30 @@ class Player;
 
 void PbpCrafting_Update(uint32_t diff);   // world tick
 
-// Is `bot` crafting just now (held at it)?
+// Is `bot` crafting just now, on its own (held at it)? Other parts leave
+// it alone. A craft city life started is the hangout's, and not this.
 bool PbpCrafting_Busy(Player* bot);
+
+// Is `bot` at any craft just now, city life's too?
+bool PbpCrafting_AtIt(Player* bot);
+
+// ---- City life (PlayerbotsPlusHangout): the crowd hanging out crafts too,
+// where someone sees it -- at its place, or at a forge or an anvil of the
+// city it walks over to. World thread.
+
+// Something `bot` could make now with what it carries and what the city's
+// vendors sell: false if nothing. A forge, an anvil or a fire wanted is one
+// within `walk` yards with a way there: `x, y, z` where to stand by it, `o`
+// facing it; else `x, y, z` is where it stands. Kept for CityBegin, for two
+// minutes.
+bool PbpCrafting_CityPlan(Player* bot, float walk, float& x, float& y, float& z, float& o);
+
+// Got there: buys what it is short of and starts. False: it could not (the
+// plan is dropped). Its AI stays the hangout's to hold.
+bool PbpCrafting_CityBegin(Player* bot);
+
+// Stops a craft city life started (a cast is cut short), and drops a plan.
+void PbpCrafting_CityCancel(Player* bot);
 
 // .pbp craft [name]: what it would make now and why, and start it. False
 // with `report` saying why not.
@@ -64,6 +88,7 @@ struct PbpCraftingStats
     uint64_t noRoom       = 0;   // ...something, but no room in their bags for it
     uint64_t waitTown     = 0;   // ...nothing, but something at a forge or an anvil: looked at again in town
     uint64_t sessions     = 0;   // went to work
+    uint64_t cityLife     = 0;   // ...of them hanging out in a city, someone near to see
     uint64_t forUse       = 0;   // ...an upgrade for itself
     uint64_t forSkill     = 0;   // ...for a skill-up
     uint64_t forSale      = 0;   // ...to sell

@@ -449,9 +449,10 @@ PlayerbotsPlus.Skills.BotsPerInterval = 100
 #
 #   No random bot ever crafted anything on its own. With this on, now and
 #   then a random bot that is on its own -- out of a fight and out of any
-#   group, not hanging out in a city, not busy with a dungeon or a group
-#   quest -- looks at what its professions can make from what it carries,
-#   and makes:
+#   group, not busy with a dungeon or a group quest -- looks at what its
+#   professions can make from what it carries, and makes the first of these
+#   it can (those hanging out in a city do it there, where someone sees it,
+#   as part of CITY LIFE: CityLife.Craft):
 #
 #     - an upgrade for itself, by playerbots' own judgement: once, and puts
 #       it on;
@@ -1512,12 +1513,12 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 #       keep still (something every RestlessMinSeconds to
 #       RestlessMaxSeconds), and the rest shuffle about every
 #       ShuffleMinSeconds to ShuffleMaxSeconds. Each time, it may go on an
-#       errand (ErrandChance), fishing (FishChance) or to practise on a
-#       training dummy (PractiseChance), sit down on a free seat near it
-#       (Hangout.IndoorChairs), or hop about
-#       (JumpChance; on a mount, rear: RearChance), or run about
-#       (WanderChance), or else take a step or two within its spot
-#       (StepMin to StepMax yards, walking WalkChance of the time). Nobody
+#       errand (ErrandChance), fishing (FishChance), crafting (CraftChance)
+#       or to practise on a training dummy (PractiseChance), sit down on a
+#       free seat near it (Hangout.IndoorChairs), or hop about (JumpChance;
+#       on a mount, rear: RearChance), or run about (WanderChance), or else
+#       take a step or two within its spot (StepMin to StepMax yards,
+#       walking WalkChance of the time). Nobody
 #       moves while it is talking or emoting (mod-ollama-chat says when),
 #       sat down, AFK, or about something else.
 #     * Running about (WanderChance): off at a run somewhere 8 to
@@ -1586,15 +1587,21 @@ PlayerbotsPlus.Hangout.FullMinutes = 10
 #       400 yards) and flies out, FlyOutChance of the time, to somewhere for
 #       its level (playerbots' own pick).
 #     * Fishing (Fish, FishChance): one on foot that knows fishing walks to
-#       one of its spot's places to fish from within 70 yards with nobody
-#       there -- found once per spot from the map's own water (a water's
-#       edge looking out over water deep enough to fish, in sight, a way
-#       there from the spot; FishPlaces at most, the nearest first, six
+#       one of its spot's places to fish from within FishRange yards with
+#       nobody there -- found once per spot from the map's own water (a
+#       water's edge looking out over water deep enough to fish, in sight, a
+#       way there from the spot; FishPlaces at most, the nearest first, six
 #       yards apart; logged as "N places to fish from by ...") -- takes out
 #       a fishing pole (its own, or a plain one put in its bags if it has
 #       none and room for one, as playerbots gives its bots one) and fishes
 #       for FishMinMinutes to FishMaxMinutes, then puts its own weapons back
 #       and goes back to its place.
+#     * Crafting (Craft, CraftChance): one on foot with something to make
+#       (BOTS CRAFT: an upgrade, its trade's grind, something to sell, from
+#       what it carries and what the city's vendors sell) makes it where it
+#       stands -- or, wanting a forge, an anvil or a fire, walks over to the
+#       nearest of the city's within CraftRange yards it has a way to, makes
+#       it there facing it, and walks back to its place.
 #     * Practising (Practise, PractiseChance): one that does not heal walks
 #       over to one of its city's training dummies (the game's own, which
 #       take no harm: Stormwind's are in SI:7's yard in Old Town, Orgrimmar's
@@ -1804,16 +1811,33 @@ PlayerbotsPlus.CityLife.FlyOutChance = 30
 #    PlayerbotsPlus.CityLife.FishMinMinutes
 #    PlayerbotsPlus.CityLife.FishMaxMinutes
 #    PlayerbotsPlus.CityLife.FishPlaces
+#    PlayerbotsPlus.CityLife.FishRange
 #        Fishing (see above): on or off; the percent of a shuffler's or a
 #        restless one's moves that are a go at it (if it can); how long it
-#        fishes (minutes, 1 to 60); and the most places to fish from found
-#        for each spot (0 to 20).
-#        Default: 1, 8, 3, 10, 4
+#        fishes (minutes, 1 to 60); the most places to fish from found for
+#        each spot (0 to 20); and how far from its spot, and from where it
+#        stands, it walks to fish (yards, 20 to 200: far enough for the
+#        canals round Stormwind's Trade District, not only water at the
+#        spot's edge).
+#        Default: 1, 8, 3, 10, 6, 90
 PlayerbotsPlus.CityLife.Fish = 1
 PlayerbotsPlus.CityLife.FishChance = 8
 PlayerbotsPlus.CityLife.FishMinMinutes = 3
 PlayerbotsPlus.CityLife.FishMaxMinutes = 10
-PlayerbotsPlus.CityLife.FishPlaces = 4
+PlayerbotsPlus.CityLife.FishPlaces = 6
+PlayerbotsPlus.CityLife.FishRange = 90
+
+#    PlayerbotsPlus.CityLife.Craft
+#    PlayerbotsPlus.CityLife.CraftChance
+#    PlayerbotsPlus.CityLife.CraftRange
+#        Crafting (see above, and BOTS CRAFT): on or off; the percent of a
+#        shuffler's or a restless one's moves that are a go at it (if it has
+#        something to make); and how far it walks to a forge, an anvil or a
+#        fire of the city (yards, 10 to 300). Needs Crafting.Enable on.
+#        Default: 1, 6, 80
+PlayerbotsPlus.CityLife.Craft = 1
+PlayerbotsPlus.CityLife.CraftChance = 6
+PlayerbotsPlus.CityLife.CraftRange = 80
 
 #    PlayerbotsPlus.CityLife.Practise
 #    PlayerbotsPlus.CityLife.PractiseChance

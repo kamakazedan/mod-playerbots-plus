@@ -306,7 +306,7 @@ namespace
             return no("is in a battleground");
         if (bot->GetTradeData())
             return no("is trading with someone");
-        if (PbpCrafting_Busy(bot))
+        if (PbpCrafting_AtIt(bot))
             return no("is crafting");
         Map* map = bot->GetMap();
         if (!map || map->Instanceable())

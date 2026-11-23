@@ -24,6 +24,7 @@
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
+#include "PathGenerator.h"
 #include "Player.h"
 #include "SharedDefines.h"
 #include "SpellAuraDefines.h"
@@ -441,6 +442,32 @@ namespace
         return best;
     }
 
+    // One of its town's it could walk to from where it stands (city life:
+    // the crowd is seen), within `walk` yards and with a way there: the
+    // nearest of the few nearest that has one.
+    Station const* StationToWalkTo(Player* bot, uint32_t focus, float walk)
+    {
+        auto it = g_stations.find(bot->GetMapId());
+        if (it == g_stations.end())
+            return nullptr;
+        std::vector<std::pair<float, Station const*>> near;
+        for (Station const& s : it->second)
+            if (s.focus == focus)
+                if (const float d = bot->GetExactDist(s.x, s.y, s.z); d <= walk)
+                    near.emplace_back(d, &s);
+        std::sort(near.begin(), near.end(), [](auto const& a, auto const& b) { return a.first < b.first; });
+        for (size_t i = 0; i < near.size() && i < 3; ++i)
+        {
+            Station const* s = near[i].second;
+            PathGenerator path(bot);
+            path.CalculatePath(s->x, s->y, s->z, false);
+            if ((path.GetPathType() & PATHFIND_NORMAL) &&
+                !(path.GetPathType() & (PATHFIND_NOPATH | PATHFIND_INCOMPLETE)))
+                return s;
+        }
+        return nullptr;
+    }
+
     // Everything a spell takes from its caster's bags: its reagents, its tools.
     bool HasWhatItTakes(Player* bot, SpellInfo const* info)
     {
@@ -473,8 +500,9 @@ namespace
     struct Access
     {
         bool           inReach = false;
-        Station const* putBy   = nullptr;
-        bool           fire    = false;   // a cooking fire: it makes one
+        Station const* putBy   = nullptr;   // put by it, nobody about (its own crafting)
+        Station const* walkTo  = nullptr;   // walked over to (city life)
+        bool           fire    = false;     // a cooking fire: it makes one
     };
 
     struct Plan
@@ -578,7 +606,9 @@ namespace
         return std::min<uint64_t>(money - reserve, money * Cfg().spendSharePct / 100);
     }
 
-    bool MakePlan(Player* bot, PlayerbotAI* ai, Plan& plan)
+    // `walk`: for city life, a forge or an anvil is one it walks over to
+    // within this far (it is seen), never one it is put by; 0 for its own.
+    bool MakePlan(Player* bot, PlayerbotAI* ai, Plan& plan, float walk = 0.0f)
     {
         ReadRecipes();
         ReadPlaces();
@@ -615,14 +645,16 @@ namespace
                     {
                         Access fresh;
                         fresh.inReach = FocusInReach(bot, r.focus);
-                        if (!fresh.inReach)
+                        if (!fresh.inReach && walk > 0.0f)
+                            fresh.walkTo = StationToWalkTo(bot, r.focus, walk);
+                        else if (!fresh.inReach)
                             fresh.putBy = StationToPutBy(bot, r.focus);
-                        if (!fresh.inReach && !fresh.putBy && r.focus == kCookingFire)
+                        if (!fresh.inReach && !fresh.putBy && !fresh.walkTo && r.focus == kCookingFire)
                             fresh.fire = CanMakeFire(bot);
                         known = byFocus.emplace(r.focus, fresh).first;
                     }
                     a = known->second;
-                    if (!a.inReach && !a.putBy && !a.fire)
+                    if (!a.inReach && !a.putBy && !a.walkTo && !a.fire)
                     {
                         if (!InTown(bot) && CarriesOne(r, have))
                             plan.wantsTown = true;
@@ -727,8 +759,20 @@ namespace
         uint32_t          map = 0;
         float             ox = 0.0f, oy = 0.0f, oz = 0.0f, oo = 0.0f;
         bool              fireCast = false;
+        bool              cityLife = false;   // city life's: its AI is the hangout's to hold and let go
     };
     std::unordered_map<uint64_t, Session> g_sessions;
+
+    // City life's: what a bot hanging out is to make, while it walks over.
+    struct CityPlan
+    {
+        Plan              plan;
+        float             x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;   // where it works, facing what
+        bool              station = false;                           // ...a forge or an anvil walked to
+        Clock::time_point until{};
+    };
+    std::unordered_map<uint64_t, CityPlan> g_cityPlans;
+    constexpr auto kCityWalkWithin = std::chrono::minutes(2);
 
     struct Due
     {
@@ -804,7 +848,7 @@ namespace
 
     void Release(Player* bot, PlayerbotAI* ai, Session const& s)
     {
-        if (ai)
+        if (ai && !s.cityLife)
             ai->SetNextCheckDelay(0);
         if (!bot->IsInWorld())
             return;
@@ -819,7 +863,7 @@ namespace
             ai->DoSpecificAction("equip upgrade", Event(), true);
     }
 
-    bool Start(Player* bot, PlayerbotAI* ai, Plan const& plan, std::string* report)
+    bool Start(Player* bot, PlayerbotAI* ai, Plan const& plan, std::string* report, bool cityLife = false)
     {
         auto fail = [report](char const* why)
         {
@@ -849,12 +893,13 @@ namespace
         }
 
         Session s;
-        s.spell   = r.spell;
-        s.left    = plan.casts;
-        s.gapMs   = r.gapMs;
-        s.focus   = r.focus;
-        s.why     = plan.why;
-        s.started = Clock::now();
+        s.spell    = r.spell;
+        s.left     = plan.casts;
+        s.gapMs    = r.gapMs;
+        s.focus    = r.focus;
+        s.why      = plan.why;
+        s.started  = Clock::now();
+        s.cityLife = cityLife;
 
         ReadyToWork(bot, r.spell);
         if (putBy)
@@ -891,6 +936,8 @@ namespace
         g_sessions[bot->GetGUID().GetRawValue()] = s;
 
         ++g_stats.sessions;
+        if (cityLife)
+            ++g_stats.cityLife;
         switch (plan.why)
         {
             case PbpCraft::Why::Use:   ++g_stats.forUse;   break;
@@ -1038,6 +1085,10 @@ void PbpCrafting_Update(uint32_t diff)
             ++it;
     }
 
+    // City life's plans it never got round to.
+    for (auto it = g_cityPlans.begin(); it != g_cityPlans.end();)
+        it = now > it->second.until ? g_cityPlans.erase(it) : std::next(it);
+
     PbpCraftSettings const& c = Cfg();
     if (!g_Pbp.enable || !c.enable)
         return;
@@ -1099,7 +1150,104 @@ void PbpCrafting_Update(uint32_t diff)
 
 bool PbpCrafting_Busy(Player* bot)
 {
+    if (!bot)
+        return false;
+    auto it = g_sessions.find(bot->GetGUID().GetRawValue());
+    return it != g_sessions.end() && !it->second.cityLife;
+}
+
+bool PbpCrafting_AtIt(Player* bot)
+{
     return bot && g_sessions.contains(bot->GetGUID().GetRawValue());
+}
+
+bool PbpCrafting_CityPlan(Player* bot, float walk, float& x, float& y, float& z, float& o)
+{
+    if (!bot || !g_Pbp.enable || !Cfg().enable || bot->GetLevel() < Cfg().minLevel || !bot->IsAlive() ||
+        bot->IsInCombat() || bot->IsNonMeleeSpellCast(false))
+        return false;
+    const uint64_t key = bot->GetGUID().GetRawValue();
+    if (g_sessions.contains(key))
+        return false;
+    PlayerbotAI* ai = PbpAiOf(bot);
+    if (!ai || !ai->IsBotAI())
+        return false;
+    ++g_stats.looked;
+    CityPlan cp;
+    if (!MakePlan(bot, ai, cp.plan, std::max(walk, 1.0f)))
+    {
+        ++g_stats.nothing;
+        return false;
+    }
+    Recipe const& r = *cp.plan.recipe;
+    if (!RoomFor(bot, r))
+    {
+        ++g_stats.noRoom;
+        return false;
+    }
+    if (r.focus && !cp.plan.access.inReach)
+    {
+        Station const* st = cp.plan.access.walkTo;
+        if (!st || !SpotBy(bot, *st, cp.x, cp.y, cp.z))
+            return false;
+        cp.o       = std::atan2(st->y - cp.y, st->x - cp.x);
+        cp.station = true;
+    }
+    else
+    {
+        cp.x = bot->GetPositionX();
+        cp.y = bot->GetPositionY();
+        cp.z = bot->GetPositionZ();
+        cp.o = bot->GetOrientation();
+    }
+    cp.until = Clock::now() + kCityWalkWithin;
+    x = cp.x;
+    y = cp.y;
+    z = cp.z;
+    o = cp.o;
+    g_cityPlans[key] = std::move(cp);
+    return true;
+}
+
+bool PbpCrafting_CityBegin(Player* bot)
+{
+    if (!bot)
+        return false;
+    const uint64_t key = bot->GetGUID().GetRawValue();
+    auto it = g_cityPlans.find(key);
+    if (it == g_cityPlans.end())
+        return false;
+    CityPlan cp = std::move(it->second);
+    g_cityPlans.erase(it);
+    PlayerbotAI* ai = PbpAiOf(bot);
+    if (!ai || g_sessions.contains(key) || Clock::now() > cp.until || !bot->IsAlive() || bot->IsInCombat())
+        return false;
+    if (cp.station)
+    {
+        // Walked over: the forge or the anvil is in reach now, as the game looks for it.
+        if (!FocusInReach(bot, cp.plan.recipe->focus))
+        {
+            Failed("", SPELL_FAILED_REQUIRES_SPELL_FOCUS);
+            return false;
+        }
+        cp.plan.access.inReach = true;
+    }
+    return Start(bot, ai, cp.plan, nullptr, true);
+}
+
+void PbpCrafting_CityCancel(Player* bot)
+{
+    if (!bot)
+        return;
+    const uint64_t key = bot->GetGUID().GetRawValue();
+    g_cityPlans.erase(key);
+    auto it = g_sessions.find(key);
+    if (it == g_sessions.end() || !it->second.cityLife)
+        return;
+    if (bot->IsNonMeleeSpellCast(false))
+        bot->InterruptNonMeleeSpells(false);
+    ++g_stats.cutShort;
+    g_sessions.erase(it);
 }
 
 bool PbpCrafting_Now(Player* bot, std::string& report)
@@ -1147,10 +1295,11 @@ PbpBrief PbpCrafting_Brief(bool full)
     PbpBrief b;
     PbpCraftingStats const s = PbpCrafting_GetStats();
     const bool on = g_Pbp.enable && g_Pbp.crafting.enable;
-    b.lines.push_back(fmt::format("Crafting: {} -- {} at it now; {} went to work ({} for an upgrade, {} for skill, {} "
-                                  "to sell), {} crafts; {} looked at with nothing worth making.",
-                                  on ? "on" : "OFF", s.working, s.sessions, s.forUse, s.forSkill, s.forSale, s.casts,
-                                  s.nothing));
+    b.lines.push_back(fmt::format("Crafting: {} -- {} at it now; {} went to work ({} hanging out in a city; {} for an "
+                                  "upgrade, {} for skill, {} to sell), {} crafts; {} looked at with nothing worth "
+                                  "making.",
+                                  on ? "on" : "OFF", s.working, s.sessions, s.cityLife, s.forUse, s.forSkill,
+                                  s.forSale, s.casts, s.nothing));
     if (full)
     {
         b.lines.push_back(fmt::format("{} recipes known to it. At a forge, an anvil or a fire {} times ({} put by one "

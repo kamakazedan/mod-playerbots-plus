@@ -295,6 +295,10 @@ namespace pbp
     extern uint32_t    g_LifeFishMinMinutes;     // ...for this long
     extern uint32_t    g_LifeFishMaxMinutes;
     extern uint32_t    g_LifeFishPlaces;         // ...places to fish from, at most, round each spot
+    extern float       g_LifeFishRange;          // ...within this far of its spot, and of it, yards
+    extern bool        g_LifeCraft;              // crafting where someone sees it (PlayerbotsPlusCrafting)
+    extern uint32_t    g_LifeCraftChance;        // ...a fidget that is a go at it (percent)
+    extern float       g_LifeCraftRange;         // ...a forge or an anvil walked to within this far, yards
     extern bool        g_LifePractise;           // practising on the city's training dummies
     extern uint32_t    g_LifePractiseChance;     // ...a fidget that is a walk over to one (percent)
     extern uint32_t    g_LifePractiseNearChance; // ...with one within 80 yards (percent)

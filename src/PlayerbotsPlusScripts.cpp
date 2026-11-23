@@ -294,9 +294,19 @@ namespace
         }
 
         // .pbp economy [days]: the random bots' economy over the last days (7).
-        static bool HandleEconomy(ChatHandler* handler, Optional<uint32> days)
+        // .pbp economy [days] [full]: the economy in a few lines, or every
+        // figure (what the report file has) with "full".
+        static bool HandleEconomy(ChatHandler* handler, Optional<uint32> days, Optional<EXACT_SEQUENCE("full")> full)
         {
-            Brief(handler, PbpLedger_Brief(days ? *days : 7), "Every figure, the last 7 days");
+            if (full)
+            {
+                for (std::string const& line : PbpLedger_Report(days ? *days : 7))
+                    handler->SendSysMessage(line);
+                return true;
+            }
+            PbpBrief b = PbpLedger_Brief(days ? *days : 7);
+            b.lines.push_back(fmt::format("Every figure: .pbp economy {} full.", days ? *days : 7));
+            Brief(handler, b, "The last 7 days, with everything else");
             return true;
         }
 

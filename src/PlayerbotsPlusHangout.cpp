@@ -123,6 +123,7 @@ namespace
         Dancing,    // dancing, in a dance party or with someone dancing (or about to join one)
         Chatting,   // over by who it is talking to in /say (a chat module's)
         Fishing,    // at the water's edge with a line out
+        Crafting,   // at a craft, at its place or at a forge or an anvil it walked to (PlayerbotsPlusCrafting)
         Wandering,  // run off somewhere near (a leg or three), and back after
         ShowingOff  // its mount rearing up and roaring over and over (on foot: hopping about), for a minute
     };
@@ -192,6 +193,8 @@ namespace
         Clock::time_point dummyAt{};             // ...set on it then
         Clock::time_point nextDummyTry{};
         float             fishO       = 0.0f;    // Fishing: facing the water
+        float             craftO      = 0.0f;    // Crafting: facing what it works at
+        bool              craftBegun  = false;   // ...at it (PbpCrafting_CityBegin took)
         ObjectGuid        oldMain, oldOff;       // ...its weapons, back in its hands after
         bool              poleOn      = false;
         Clock::time_point nextCast{};
@@ -890,6 +893,8 @@ namespace
         PutAwayPole(bot, v);
         if (v.dummy)
             StopPractise(bot, v);
+        if (v.act == Act::Crafting)
+            PbpCrafting_CityCancel(bot);   // nor left at a craft its AI knows nothing of
         v.act = Act::None;
         if (v.afkSet && bot->isAFK())
             bot->ToggleAFK();
@@ -2183,7 +2188,9 @@ namespace
         Map* map = near->GetMap();
         if (!g_LifeFish || !g_LifeFishPlaces || !map || map->GetId() != s.map)
             return found;
-        const float reach = s.radius + 30.0f;
+        // As far as one would walk to fish (FishRange): a canal or a harbour
+        // round the corner, not only water at the spot's edge.
+        const float reach = std::max(s.radius + 30.0f, g_LifeFishRange);
         std::vector<FishPlace> edges;
         for (float dx = -reach; dx <= reach; dx += 5.0f)
             for (float dy = -reach; dy <= reach; dy += 5.0f)
@@ -2954,6 +2961,8 @@ namespace
             bot->SetUInt32Value(UNIT_NPC_EMOTESTATE, EMOTE_ONESHOT_NONE);
         if (v.act == Act::Fishing)
             PutAwayPole(bot, v);
+        if (v.act == Act::Crafting)
+            PbpCrafting_CityCancel(bot);
         v.act = Act::None;
         v.actWith.Clear();
         ScheduleFidget(v, now);
@@ -3080,6 +3089,12 @@ namespace
                 bot->SetFacingTo(v.fishO);
                 v.nextCast = now + std::chrono::milliseconds(std::uniform_int_distribution<int>(800, 2500)(Rng()));
                 v.castFails = 0;
+                break;
+            case Act::Crafting:
+                // At the forge or the anvil it walked to: at it (CraftTick ends
+                // the act if that did not take).
+                bot->SetFacingTo(v.craftO);
+                v.craftBegun = PbpCrafting_CityBegin(bot);
                 break;
             case Act::Wandering:
                 // Got there: a look round, a moment, then on or back.
@@ -3242,7 +3257,7 @@ namespace
             return false;
         for (const FishPlace& f : FishPlacesAt(s, bot))
         {
-            if (f.map != bot->GetMapId() || bot->GetExactDist2d(f.x, f.y) > 70.0f)
+            if (f.map != bot->GetMapId() || bot->GetExactDist2d(f.x, f.y) > g_LifeFishRange)
                 continue;
             if (TakenByOther(f.map, f.x, f.y, 3.0f, bot->GetGUID().GetRawValue()))
                 continue;
@@ -3262,6 +3277,53 @@ namespace
             return true;
         }
         return false;
+    }
+
+    // ---- crafting -----------------------------------------------------------------------
+
+    // Something to make (PlayerbotsPlusCrafting) where someone sees it: at
+    // its place, or at a forge or an anvil of the city it walks over to. On
+    // foot: nobody crafts from the saddle.
+    bool StartCrafting(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (!g_LifeCraft || !g_LifeCraftChance || v.posture != Posture::Stand || bot->IsMounted())
+            return false;
+        float x = 0.0f, y = 0.0f, z = 0.0f, o = 0.0f;
+        if (!PbpCrafting_CityPlan(bot, g_LifeCraftRange, x, y, z, o))
+            return false;
+        const bool here = bot->GetExactDist2d(x, y) < 1.5f;
+        if (!here && TakenByOther(bot->GetMapId(), x, y, 1.5f, bot->GetGUID().GetRawValue()))
+        {
+            PbpCrafting_CityCancel(bot);   // someone of the crowd is to stand there
+            return false;
+        }
+        v.act        = Act::Crafting;
+        v.actUntil   = now + std::chrono::minutes(6);
+        v.craftO     = o;
+        v.craftBegun = false;
+        ++g_stats.crafts;
+        if (here)
+        {
+            // Nothing to walk to: at it where it stands.
+            v.craftBegun = PbpCrafting_CityBegin(bot);
+            if (!v.craftBegun)
+                EndAct(bot, ai, v, now);
+            return true;
+        }
+        LeavePlace(v);
+        Shift(bot, ai, v, x, y, z, false, now);
+        ++g_stats.craftWalks;
+        if (g_PbpDebug)
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} walks over to a forge or an anvil to craft.",
+                     bot->GetName());
+        return true;
+    }
+
+    // At a craft: done when it is, or when it never took.
+    void CraftTick(Player* bot, PlayerbotAI* ai, Visit& v, const Clock::time_point now)
+    {
+        if (now >= v.actUntil || !g_LifeCraft || !v.craftBegun || !PbpCrafting_AtIt(bot))
+            EndAct(bot, ai, v, now);
     }
 
     // ---- running about ---------------------------------------------------------------
@@ -3371,6 +3433,9 @@ namespace
         if (roll > g_LifeErrandChance && roll <= g_LifeErrandChance + g_LifeFishChance &&
             StartFishing(bot, ai, v, s, now))
             return;
+        const uint32_t beforeCraft = g_LifeErrandChance + g_LifeFishChance;
+        if (roll > beforeCraft && roll <= beforeCraft + g_LifeCraftChance && StartCrafting(bot, ai, v, now))
+            return;
         // Standing about near a free seat -- a bench; inside, a chair too --
         // now and then it goes and sits down on it, the likelier the more its
         // temperament likes a bench.
@@ -3378,7 +3443,7 @@ namespace
             return;
         // Over to practise on a training dummy: likelier with one near. Not
         // one that heals: there is nothing on a dummy to heal.
-        const uint32_t before = g_LifeErrandChance + g_LifeFishChance;
+        const uint32_t before = beforeCraft + g_LifeCraftChance;
         if (g_LifePractise && roll > before &&
             roll <= before + std::max(g_LifePractiseChance, g_LifePractiseNearChance) && !PlayerbotAI::IsHeal(bot))
         {
@@ -3894,6 +3959,9 @@ namespace
                     continue;
                 case Act::Fishing:
                     FishTick(bot, ai, v, now);
+                    continue;
+                case Act::Crafting:
+                    CraftTick(bot, ai, v, now);
                     continue;
                 case Act::Wandering:
                     WanderTick(bot, ai, v, now);
@@ -4434,10 +4502,12 @@ PbpBrief PbpHangout_Brief(bool full)
     if (on && g_LifeEnable)
         b.lines.push_back(fmt::format("City life: on -- {} steps, {} hops, {} mounts reared ({} done back), {} runs "
                                       "about, {} show-offs ({} told to stop), {} rare mounts looked at, {} dance "
-                                      "parties, {} errands, {} flew in, {} flew out, {} went fishing, {} practised on "
-                                      "a training dummy.",
+                                      "parties, {} errands, {} flew in, {} flew out, {} went fishing, {} set about "
+                                      "crafting ({} at a forge or an anvil they walked to), {} practised on a training "
+                                      "dummy.",
                                       h.steps, h.hops, h.rears, h.rearedBack, h.wanders, h.showOffs, h.calmedDown,
-                                      h.gawks, h.dances, h.errands, h.flewIn, h.flewOut, h.fished, h.practised));
+                                      h.gawks, h.dances, h.errands, h.flewIn, h.flewOut, h.fished, h.crafts,
+                                      h.craftWalks, h.practised));
     else
         b.lines.push_back("City life: off.");
     if (!on)

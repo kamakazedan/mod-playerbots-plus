@@ -226,6 +226,8 @@ struct PbpHangoutStats
     uint64_t flyElsewhere = 0;  // ...came down somewhere else
     uint64_t flewOut   = 0;   // left by flight path
     uint64_t fished    = 0;   // went fishing at the water's edge
+    uint64_t crafts    = 0;   // set about crafting (PlayerbotsPlusCrafting), at its place or at a forge or anvil
+    uint64_t craftWalks = 0;  // ...walked over to a forge or an anvil for it
     uint64_t casts     = 0;   // ...lines cast
     uint64_t seated    = 0;   // stood about, then sat down on a free seat near it (a bench; inside, a chair)
     uint64_t practises = 0;   // off to practise on a training dummy

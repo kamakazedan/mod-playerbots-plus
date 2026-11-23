@@ -158,9 +158,9 @@ shares live in the hangouts (`ShareZones`, `ShareOf`), never in the spots'
 
 What the crowd does while it hangs out (`PlayerbotsPlus.CityLife.*`) is part
 of a visit in `PlayerbotsPlusHangout.cpp`, not a module of its own: a step, a
-hop, a run about, a bout of showing off, an errand, fishing, practising on a
-training dummy, a look at a rare mount, a dance or walking over to talk is
-the visit's `Act` (or its `Errand`, `Practising` and `Flying` phases),
+hop, a run about, a bout of showing off, an errand, fishing, crafting,
+practising on a training dummy, a look at a rare mount, a dance or walking
+over to talk is the visit's `Act` (or its `Errand`, `Practising` and `Flying` phases),
 started only when it is `FreeForLife` and near a real player, and undone by
 `EndAct` and `Let` -- the dance state off, its own weapons back in its
 hands. Moving it goes through `Shift` (its AI stays held); a walk across the
@@ -277,9 +277,17 @@ makes a bot say anything about it.
   town's the bot is put by while nobody would see (`PbpUnseen`, as hangouts
   fetch bots) and put back after. What it is short of is bought from the
   town's vendors at their price, the ledger told (`PbpLedger_VendorBought`).
-  A hanging-out bot, one in a group, a dungeon or a group quest never
-  crafts; and the other parts leave a crafting one alone
-  (`PbpCrafting_Busy`): a new part that takes bots over checks it too.
+  One in a group, a dungeon or a group quest never crafts; and the other
+  parts leave a crafting one alone (`PbpCrafting_Busy`): a new part that
+  takes bots over checks it too.
+- The crowd hanging out crafts as city life's `Act::Crafting`, near a real
+  player so it is seen: `PbpCrafting_CityPlan` (never a station it is put
+  by -- one it walks to, `CityLife.CraftRange`), the hangout walks it there,
+  `PbpCrafting_CityBegin` on arrival, and `EndAct`/`Let` call
+  `PbpCrafting_CityCancel`. Its AI is the hangout's: such a session never
+  lets it go (`Session::cityLife`), and `PbpCrafting_Busy` says no of it
+  (the hangout would let its own crowd go); `PbpCrafting_AtIt` says yes of
+  every craft (the market).
 
 ## Playerbots' judgement, not ours
 
