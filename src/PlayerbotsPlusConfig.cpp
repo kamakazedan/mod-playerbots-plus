@@ -1342,7 +1342,16 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     c.stationVisits   = B("PlayerbotsPlus.Crafting.StationVisits", true);
     c.campfire        = B("PlayerbotsPlus.Crafting.Campfire", true);
     c.usageChecks     = std::min<uint32_t>(U("PlayerbotsPlus.Crafting.UsageChecks", 10), 100);
+    c.disenchant      = B("PlayerbotsPlus.Crafting.Disenchant", true);
+    c.disenchantMaxQuality = std::clamp<uint32_t>(U("PlayerbotsPlus.Crafting.DisenchantMaxQuality", 3), 2, 4);
+    c.milling         = B("PlayerbotsPlus.Crafting.Milling", true);
+    c.prospecting     = B("PlayerbotsPlus.Crafting.Prospecting", true);
+    c.breakdownMaxCasts = std::clamp<uint32_t>(U("PlayerbotsPlus.Crafting.BreakdownMaxCasts", 5), 1, 50);
+    c.enchantOwnGear  = B("PlayerbotsPlus.Crafting.EnchantOwnGear", true);
     c.logCrafts       = B("PlayerbotsPlus.Crafting.LogCrafts", false);
+
+    s.rolls.disenchant              = B("PlayerbotsPlus.Rolls.Disenchant", true);
+    s.rolls.disenchantBoeMaxQuality = std::min<uint32_t>(U("PlayerbotsPlus.Rolls.DisenchantBoEMaxQuality", 2), 4);
 
     PbpSkillSettings& sk = s.skills;
     sk.enable          = B("PlayerbotsPlus.Skills.Enable", true);

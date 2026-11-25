@@ -138,7 +138,20 @@ struct PbpCraftSettings
     bool     stationVisits   = true;    // nobody about: put by a forge or an anvil of its town to use it, and back
     bool     campfire        = true;    // a cook makes its own fire
     uint32_t usageChecks     = 10;      // playerbots' judgement of what it could make, asked at most this often
+    bool     disenchant      = true;    // an enchanter breaks down spare gear of its own
+    uint32_t disenchantMaxQuality = 3;  // ...of this quality at most (2 uncommon, 3 rare, 4 epic)
+    bool     milling         = true;    // a scribe mills its herbs
+    bool     prospecting     = true;    // a jewelcrafter prospects its ore
+    uint32_t breakdownMaxCasts = 5;     // pieces, or lots of five, broken down at one go
+    bool     enchantOwnGear  = true;    // an enchanter puts enchants on its own gear, for its points
     bool     logCrafts       = false;
+};
+
+// Loot rolls (PlayerbotsPlusRolls).
+struct PbpRollSettings
+{
+    bool     disenchant         = true;   // an enchanter rolls Disenchant on gear it would only sell
+    uint32_t disenchantBoeMaxQuality = 2; // ...on gear that binds when equipped, up to this quality (0: never)
 };
 
 // Professions: skill earned, never handed out (PlayerbotsPlusSkills).
@@ -166,6 +179,7 @@ struct PbpSettings
     PbpBotDungeonSettings dungeons;
     PbpGroupQuestSettings groupQuests;
     PbpCraftSettings      crafting;
+    PbpRollSettings       rolls;
     PbpSkillSettings      skills;
     PbpReportSettings     report;
 };

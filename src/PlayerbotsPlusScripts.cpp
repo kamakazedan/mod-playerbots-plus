@@ -18,6 +18,7 @@
 #include "PlayerbotsPlusPets.h"
 #include "PlayerbotsPlusReport.h"
 #include "PlayerbotsPlusRevive.h"
+#include "PlayerbotsPlusRolls.h"
 #include "PlayerbotsPlusSkills.h"
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusStuck.h"
@@ -70,6 +71,8 @@ namespace
             PbpLooted_Load();
             // What each bot has earned of its professions.
             PbpSkills_Load();
+            // What disenchanting, milling and prospecting give, from the loot tables.
+            PbpCrafting_Load();
         }
 
         void OnUpdate(uint32 diff) override
@@ -81,6 +84,9 @@ namespace
             // What each bot looted or made itself, the only things it sells:
             // kept with the module switched off too, for Trade chat's sake.
             PbpLooted_Update(diff);
+            // A Disenchant vote for an enchanter, cast before its own AI
+            // gets round to rolling Greed: every tick, and early in it.
+            PbpRolls_Update();
             // Professions: switched off, nothing is held and what they
             // earned is kept; those at a craft finish it and are let go.
             PbpSkills_Update(diff);
@@ -314,9 +320,11 @@ namespace
         static bool HandleProfessions(ChatHandler* handler)
         {
             PbpBrief b = PbpCrafting_Brief(true);
-            PbpBrief const skills = PbpSkills_Brief(true);
-            b.lines.insert(b.lines.end(), skills.lines.begin(), skills.lines.end());
-            b.issues.insert(b.issues.end(), skills.issues.begin(), skills.issues.end());
+            for (PbpBrief const& more : { PbpRolls_Brief(true), PbpSkills_Brief(true) })
+            {
+                b.lines.insert(b.lines.end(), more.lines.begin(), more.lines.end());
+                b.issues.insert(b.issues.end(), more.issues.begin(), more.issues.end());
+            }
             Brief(handler, b, "Every count");
             return true;
         }
@@ -488,6 +496,7 @@ void Addmod_playerbots_plusScripts()
     new PbpLedgerPlayerScript();
     new PbpLootedPlayerScript();
     new PbpSkillsPlayerScript();
+    new PbpRollsPacketScript();
     new PbpStuckScript();
     new PbpFireScript();
     new PbpMuteScript();

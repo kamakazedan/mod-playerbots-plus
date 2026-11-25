@@ -460,6 +460,10 @@ PlayerbotsPlus.Skills.BotsPerInterval = 100
 #       point it can expect first: the grind of a profession, as a player
 #       does it (a recipe whose chance of a point is under MinChance is not
 #       worth its materials);
+#     - else what a recipe that would raise its skill is short of, when it
+#       can make that, or get it by breaking something down: bars for the
+#       smith, ink for the scribe, a rod and dust for the enchanter -- the
+#       step before the point, or the one before that;
 #     - else what is worth well more than what goes into it (SellMarginPct),
 #       to sell.
 #
@@ -486,7 +490,37 @@ PlayerbotsPlus.Skills.BotsPerInterval = 100
 #       never below ReservePerLevel copper a level, kept for repairs and
 #       training.
 #
-#   Enchanting gear, disenchanting, prospecting and milling are not done yet.
+#   Breaking things down is a craft like any other, chosen the same way --
+#   for a point, for what a point is short of, or because what it gives is
+#   worth more than what goes in -- and the game's own: the spell cast on the
+#   piece or the stack, and what it gives taken out of the game's own loot
+#   window, so it is the bot's own to sell (dust, essences and shards no
+#   vendor buys are worth a quarter of what one costs at a vendor, till the
+#   auction house says otherwise).
+#
+#     - An enchanter disenchants spare gear in its bags (Disenchant): only
+#       its own -- looted, won on a roll or made, never what playerbots hands
+#       out, nor anything bought, given or a quest's -- green to
+#       DisenchantMaxQuality, that it has the skill for and that playerbots
+#       would only sell. Up to BreakdownMaxCasts pieces at one go.
+#     - A scribe mills its herbs (Milling) and a jewelcrafter prospects its
+#       ore (Prospecting), five at a time, up to BreakdownMaxCasts lots at one
+#       go. The game gives no skill for either unless SkillChance.Milling and
+#       SkillChance.Prospecting are set in worldserver.conf (both 0 as it
+#       ships): without them it is done for the pigment and the gems only.
+#     - Playerbots gives a bot a skill without the spells that come with it:
+#       one whose skill says it should know Disenchant, Milling or
+#       Prospecting is taught it.
+#     - Nothing is broken down with fewer than four bag slots free.
+#
+#   Enchants are an enchanter's own grind (EnchantOwnGear): one that would
+#   give it a point goes on a piece of its own gear, as a player levels
+#   Enchanting with nobody to enchant for -- a piece it wears with nothing on
+#   it yet (below Playerbots.MinEnchantingBotLevel, where playerbots puts no
+#   enchants on a bot's gear itself, over its own earlier work too; never over
+#   anything better), else a spare piece in its bags, before that is broken
+#   down.
+#
 #   .pbp craft [name] shows what a bot (or the one selected) would make now,
 #   and why, and starts it; .pbp professions shows how it goes.
 #
@@ -546,6 +580,35 @@ PlayerbotsPlus.Crafting.BuyFromVendors = 1
 PlayerbotsPlus.Crafting.SpendSharePct = 20
 PlayerbotsPlus.Crafting.ReservePerLevel = 2000
 
+#    PlayerbotsPlus.Crafting.Disenchant
+#    PlayerbotsPlus.Crafting.DisenchantMaxQuality
+#        An enchanter disenchants spare gear of its own, of at most this
+#        quality (2 uncommon, 3 rare, 4 epic). Rolling Disenchant in a group
+#        is another setting (Rolls.Disenchant, below).
+#        Default: 1, 3
+PlayerbotsPlus.Crafting.Disenchant = 1
+PlayerbotsPlus.Crafting.DisenchantMaxQuality = 3
+
+#    PlayerbotsPlus.Crafting.Milling
+#    PlayerbotsPlus.Crafting.Prospecting
+#        A scribe mills its herbs; a jewelcrafter prospects its ore.
+#        Default: 1, 1
+PlayerbotsPlus.Crafting.Milling = 1
+PlayerbotsPlus.Crafting.Prospecting = 1
+
+#    PlayerbotsPlus.Crafting.BreakdownMaxCasts
+#        Pieces of gear, or lots of five herbs or ore, broken down at one go
+#        (1-50).
+#        Default: 5
+PlayerbotsPlus.Crafting.BreakdownMaxCasts = 5
+
+#    PlayerbotsPlus.Crafting.EnchantOwnGear
+#        An enchanter puts the enchants that would give it a point on its own
+#        gear: what it wears with nothing on it yet, or a spare piece in its
+#        bags.
+#        Default: 1
+PlayerbotsPlus.Crafting.EnchantOwnGear = 1
+
 #    PlayerbotsPlus.Crafting.StationVisits
 #        In a city or at an inn, with nobody about to see, a bot is put by a
 #        forge, an anvil or a fire of the town (within 300 yards) to use it,
@@ -571,6 +634,44 @@ PlayerbotsPlus.Crafting.UsageChecks = 10
 #        (module.playerbotsplus, INFO).
 #        Default: 0
 PlayerbotsPlus.Crafting.LogCrafts = 0
+
+###############################################################################
+#
+#   ENCHANTERS ROLL DISENCHANT
+#
+#   In a group, playerbots has a bot that is an enchanter roll Disenchant
+#   (its Playerbots.LootRollDisenchant) only on gear that binds when picked
+#   up. For gear that binds when equipped -- nearly everything the trash of a
+#   dungeon drops -- its judgement is "sell it", and it rolls Greed.
+#
+#   With this on, when a roll starts that offers Disenchant, a bot that is an
+#   enchanter with the skill for the piece, which playerbots would only sell,
+#   rolls Disenchant instead, as an enchanter in a group does. It is the
+#   game's own vote, in the same draw as Greed: the piece is no likelier to
+#   be the bot's, it is dust when it is. A piece it would wear is left to
+#   playerbots to roll for, and nothing changes for anyone else's roll.
+#
+#   Only where playerbots would roll for loot at all: its LootRollDisenchant
+#   and LootGreedRollLevel both on (.pbp professions says when they are not),
+#   and never with a master looter or free for all.
+#
+#   The dust a Disenchant roll gives is its winner's own, to sell like
+#   anything it looted. A piece a bot wins by Greed all the same (playerbots'
+#   vote got there first) it breaks down itself later (BOTS CRAFT, above).
+#
+###############################################################################
+
+#    PlayerbotsPlus.Rolls.Disenchant
+#        Default: 1
+PlayerbotsPlus.Rolls.Disenchant = 1
+
+#    PlayerbotsPlus.Rolls.DisenchantBoEMaxQuality
+#        Gear that binds when equipped is rolled Disenchant for up to this
+#        quality (2 uncommon, 3 rare, 4 epic; 0: never, only what binds when
+#        picked up): above it the piece is worth more whole, and the bot
+#        rolls Greed as before.
+#        Default: 2
+PlayerbotsPlus.Rolls.DisenchantBoEMaxQuality = 2
 
 ###############################################################################
 #

@@ -5,6 +5,7 @@
 #include "PlayerbotsPlusCraftText.h"
 
 #include <cstdio>
+#include <unordered_map>
 
 namespace
 {
@@ -124,6 +125,85 @@ int main()
         Check("nothing worth doing", Choose(o, s).why == Why::None);
     }
     Check("nothing at all", Choose({}, s).why == Why::None);
+    {
+        // Nothing gives a point now; smelting would get the smith its bars
+        // (one step from a point), and something else sells well.
+        std::vector<Option> o(3);
+        o[0] = { 1, 0, 6, 100, 400, false, true };          // grey, sells well
+        o[1] = { 2, 0, 4, 50, 60, false, true, 1 };         // bars: a step from a point
+        o[2] = { 3, 0, 4, 20, 30, false, true, 2 };         // ...two steps from one
+        const Choice c = Choose(o, s);
+        Check("materials before selling, the nearest to the point", c.why == Why::Materials && c.index == 1 &&
+                                                                         c.casts == 4);
+        o[1].steps = 2;   // as far off as the other: the cheaper
+        Check("...and the cheaper of two as near", Choose(o, s).index == 2);
+        o.push_back({ 4, 100, 2, 900, 0, false, true });
+        Check("a point now comes first", Choose(o, s).why == Why::Skill);
+    }
+
+    // ---- on the way to a point -----------------------------------------------------------
+    {
+        // A scribe: a glyph (a point) takes ink and parchment; ink is made of
+        // pigment; pigment comes of milling.
+        const uint32_t ink = 10, parchment = 11, pigment = 12, glyph = 13;
+        std::vector<Known> known;
+        known.push_back({ 100, glyph, { { ink, 1 }, { parchment, 1 } } });
+        known.push_back({ 0, ink, { { pigment, 2 } } });
+        std::unordered_map<uint32_t, uint32_t> have{ { parchment, 5 } };
+        auto w = Wanted(known, have, 25);
+        Check("ink is one step from a point", w.count(ink) && w[ink] == 1);
+        Check("pigment two", w.count(pigment) && w[pigment] == 2);
+        Check("parchment it has is not wanted", !w.count(parchment));
+        have[ink] = 1;
+        w = Wanted(known, have, 25);
+        Check("with ink, nothing is wanted", w.empty());
+        have.clear();
+        have[pigment] = 1;   // one, and ink takes two
+        w = Wanted(known, have, 25);
+        Check("too few is short", w.count(pigment) && w[pigment] == 2 && w[parchment] == 1);
+        known[0].pointChance = 10;   // a point too unlikely to be worth it
+        Check("nothing wanted for a point not worth asking", Wanted(known, {}, 25).empty());
+        Check("no further than asked", !Wanted({ { 100, glyph, { { ink, 1 } } }, { 0, ink, { { pigment, 2 } } } },
+                                              {}, 25, 1).count(pigment));
+    }
+
+    // ---- breaking things down ------------------------------------------------------------
+    {
+        // Disenchanting a low green (disenchant_loot_template 1): dust four
+        // times in five, one or two; else an essence, one or two.
+        LootTable de = { { 10938, 0, 0.0f, 1, 1, 2 }, { 10940, 0, 80.0f, 1, 1, 2 } };
+        const Yields y = Expected(de, {});
+        Check("dust: 0.8 x 1.5", y.count(10940) && y.at(10940) > 1.19 && y.at(10940) < 1.21);
+        Check("essence: the rest, 0.2 x 1.5", y.count(10938) && y.at(10938) > 0.29 && y.at(10938) < 0.31);
+    }
+    {
+        // Milling Silverleaf: its table is another one, rolled whole
+        // (reference 11900: pigment, two to four, always).
+        LootTables refs;
+        refs[11900] = { { 39151, 0, 100.0f, 0, 2, 4 } };
+        LootTable mill = { { 11900, 11900, 100.0f, 0, 1, 1 } };
+        const Yields y = Expected(mill, refs);
+        Check("milling: three pigment a go", y.size() == 1 && y.at(39151) > 2.99 && y.at(39151) < 3.01);
+        Check("a table that is not there gives nothing", Expected(mill, {}).empty());
+    }
+    {
+        // Prospecting copper: malachite or tigerseye, one of the two, and a
+        // shadowgem one time in ten besides.
+        LootTable ore = { { 774, 0, 0.0f, 1, 1, 1 }, { 818, 0, 0.0f, 1, 1, 1 }, { 1210, 0, 10.0f, 0, 1, 1 } };
+        const Yields y = Expected(ore, {});
+        Check("one of two alike: half each", y.at(774) > 0.49 && y.at(774) < 0.51 && y.at(818) > 0.49);
+        Check("and the odd one by itself", y.at(1210) > 0.09 && y.at(1210) < 0.11);
+    }
+    {
+        // A table that refers to itself does not go round for ever.
+        LootTables refs;
+        refs[5] = { { 5, 5, 100.0f, 0, 1, 1 }, { 77, 0, 100.0f, 0, 1, 1 } };
+        const Yields y = Expected(refs[5], refs);
+        Check("round and round ends", y.count(77) && y.at(77) < 10.0);
+    }
+    Check("milling within 25: certain", GatherChance(1, 1) == 100 && GatherChance(25, 1) == 100);
+    Check("...75 within 50, 25 within 100, none after",
+          GatherChance(26, 1) == 75 && GatherChance(51, 1) == 25 && GatherChance(101, 1) == 0);
 
     std::printf("craft: %d checks, %d failed\n", g_checks, g_fails);
     return g_fails ? 1 : 0;

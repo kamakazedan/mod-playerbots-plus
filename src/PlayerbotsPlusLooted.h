@@ -20,8 +20,10 @@
 // while nothing but more of its own joins it -- used up, sold from, put up for
 // auction and back, it still is; topped up by playerbots, joined by a
 // vendor's, a trade's or the post's, it is not any more. Only what could ever
-// be sold to someone is kept: of common quality or better, worth something to
-// a vendor, and able to change hands.
+// be sold to someone is kept -- of common quality or better, worth something,
+// and able to change hands -- and gear an enchanter could break down, bound
+// or not: it disenchants only its own (PlayerbotsPlusCrafting). What a
+// Disenchant roll gives its winner is loot too.
 //
 // The hooks only note what happened, under a mutex: most run on map threads.
 // The world tick sorts the notes out (and so does a question, first), looks
@@ -64,6 +66,11 @@ bool PbpLooted_IsOwn(Player* bot, Item* item, bool* made = nullptr);
 // its bags, or away -- up for auction, in the post. By the item's guid
 // (its low part). World thread.
 bool PbpLooted_KnownMade(uint32_t itemGuidLow);
+
+// `player` has just won a Disenchant roll, on this thread: what the game
+// stores for it straight after is loot (it is given with no loot hook). From
+// the packet hook that sees the win (PlayerbotsPlusRolls); notes only.
+void PbpLooted_DisenchantWon(Player const* player);
 
 void PbpLooted_Load();                  // startup: the stacks known, the gone ones forgotten
 void PbpLooted_Update(uint32_t diff);   // world tick

@@ -5,8 +5,9 @@
 // Professions' sums, with no game types in them so they can be tested
 // without a server (tests/craft_test.cpp): how likely a craft is to raise a
 // bot's skill, which rank of a profession a bot of a level and a skill has
-// trained, which profession pairs suit a class, and what a bot crafts from
-// what it has.
+// trained, which profession pairs suit a class, what a bot crafts from what
+// it has, what breaking something down gives (disenchanting, milling,
+// prospecting), and what it is short of on its way to a point.
 //
 // The game side is PlayerbotsPlusCrafting (the crafting) and
 // PlayerbotsPlusSkills (skill earned, never handed out).
@@ -15,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -129,14 +131,17 @@ namespace PbpCraft
         uint64_t worthEach   = 0;      // copper: what one craft makes is worth
         bool     upgrade     = false;  // what it makes is better than what it wears
         bool     sellable    = true;   // what it makes could go on the market at all
+        uint32_t steps       = 0;      // what it gives is wanted for a craft that would give a point, this many
+                                       // steps on (Wanted); 0: not
     };
 
     enum class Why : uint8_t
     {
         None,
-        Use,     // an upgrade for itself
-        Skill,   // a chance at a point
-        Sell     // worth more than what goes into it
+        Use,        // an upgrade for itself
+        Skill,      // a chance at a point
+        Materials,  // what a craft that would give a point is short of
+        Sell        // worth more than what goes into it
     };
 
     struct Choice
@@ -155,12 +160,64 @@ namespace PbpCraft
 
     // What it crafts: an upgrade for itself first, one craft; else the
     // cheapest chance at a point (the least copper of materials for each
-    // point it can expect), as many as it can up to maxCasts; else what
-    // makes it the most over its materials, the same. Nothing worth doing:
-    // Why::None.
+    // point it can expect), as many as it can up to maxCasts; else what a
+    // craft that would give a point is short of (`steps`: the nearest to the
+    // point first, the cheaper then) -- bars for the smith, ink for the
+    // scribe, dust for the enchanter; else what makes it the most over its
+    // materials. Nothing worth doing: Why::None.
     Choice Choose(std::vector<Option> const& options, ChoiceSettings const& s);
 
-    char const* WhyName(Why why);   // "use", "skill", "sell", "none"
+    char const* WhyName(Why why);   // "use", "skill", "materials", "sell", "none"
+
+    // ---- on the way to a point -------------------------------------------------
+
+    // A craft a bot knows, as it stands: what a point from it is worth
+    // asking, what it makes, and what one takes.
+    struct Known
+    {
+        uint32_t pointChance = 0;   // percent
+        uint32_t product     = 0;   // 0: nothing to carry (an enchant on its gear)
+        std::vector<std::pair<uint32_t, uint32_t>> needs;   // item, how many for one: reagents, a tool
+    };
+
+    // What it is short of on its way to a point, each thing with how many
+    // steps from the point it is: 1 for what a craft with `minChance` or
+    // more at a point takes and it has too few of, 2 for what a craft that
+    // makes one of those takes, and so on to `maxSteps`. `have`: what it
+    // carries, by item.
+    std::unordered_map<uint32_t, uint32_t> Wanted(std::vector<Known> const& known,
+                                                  std::unordered_map<uint32_t, uint32_t> const& have,
+                                                  uint32_t minChance, uint32_t maxSteps = 3);
+
+    // ---- breaking things down ---------------------------------------------------
+
+    // A row of a loot table (disenchant_, milling_, prospecting_ and
+    // reference_loot_template), as the core reads it.
+    struct LootRow
+    {
+        uint32_t item      = 0;
+        uint32_t reference = 0;      // another table rolled instead, 0 for none
+        float    chance    = 0.0f;   // percent; 0 in a group: one of the rest of it, all alike
+        uint8_t  group     = 0;      // 0: rolled by itself
+        uint8_t  minCount  = 1;
+        uint8_t  maxCount  = 1;      // a reference: how many times its table is rolled
+    };
+    using LootTable  = std::vector<LootRow>;
+    using LootTables = std::unordered_map<uint32_t, LootTable>;   // by entry
+    using Yields     = std::unordered_map<uint32_t, double>;      // item -> how many, on average
+
+    // What one go at a table gives on average, the way the core rolls it: a
+    // row outside any group by itself at its chance; a group once, its rows
+    // with a chance first, in order, then one of the rest alike; a reference
+    // its whole table, `maxCount` times.
+    Yields Expected(LootTable const& table, LootTables const& references, uint32_t depth = 0);
+
+    // In percent, the chance milling or prospecting something that asks for
+    // `required` skill raises a skill of `skill`, the way this core works it
+    // out where it is switched on (UpdateGatherSkill, with the stock
+    // SkillChance.*): certain within 25 of it, 75 within 50, 25 within 100,
+    // none from there.
+    uint32_t GatherChance(uint32_t skill, uint32_t required);
 }
 
 #endif // PLAYERBOTS_PLUS_CRAFT_TEXT_H

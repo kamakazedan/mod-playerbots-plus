@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <map>
 
 namespace PbpCraft
 {
@@ -219,6 +220,28 @@ namespace PbpCraft
             return c;
         }
 
+        // What a craft that would give a point is short of: the nearest to
+        // that point first, the cheaper then.
+        for (size_t i = 0; i < options.size(); ++i)
+        {
+            Option const& o = options[i];
+            if (!o.canMake || !o.steps)
+                continue;
+            if (c.why == Why::Materials)
+            {
+                Option const& best = options[c.index];
+                if (o.steps > best.steps || (o.steps == best.steps && o.costEach >= best.costEach))
+                    continue;
+            }
+            c.index = i;
+            c.why   = Why::Materials;
+        }
+        if (c.why == Why::Materials)
+        {
+            c.casts = std::min(options[c.index].canMake, maxCasts);
+            return c;
+        }
+
         // Worth more than what goes into it: the most over its materials.
         uint64_t bestGain = 0;
         for (size_t i = 0; i < options.size(); ++i)
@@ -244,10 +267,110 @@ namespace PbpCraft
     {
         switch (why)
         {
-            case Why::Use:   return "use";
-            case Why::Skill: return "skill";
-            case Why::Sell:  return "sell";
-            default:         return "none";
+            case Why::Use:       return "use";
+            case Why::Skill:     return "skill";
+            case Why::Materials: return "materials";
+            case Why::Sell:      return "sell";
+            default:             return "none";
         }
+    }
+
+    std::unordered_map<uint32_t, uint32_t> Wanted(std::vector<Known> const& known,
+                                                  std::unordered_map<uint32_t, uint32_t> const& have,
+                                                  uint32_t minChance, uint32_t maxSteps)
+    {
+        std::unordered_map<uint32_t, uint32_t> wanted;
+        auto shortOf = [&](Known const& k, uint32_t step)
+        {
+            bool added = false;
+            for (auto const& [item, need] : k.needs)
+            {
+                auto h = have.find(item);
+                if (h != have.end() && h->second >= need)
+                    continue;
+                if (wanted.emplace(item, step).second)
+                    added = true;
+            }
+            return added;
+        };
+        for (Known const& k : known)
+            if (k.pointChance && k.pointChance >= minChance)
+                shortOf(k, 1);
+        for (uint32_t step = 2; step <= maxSteps; ++step)
+        {
+            bool any = false;
+            for (Known const& k : known)
+            {
+                auto w = wanted.find(k.product);
+                if (!k.product || w == wanted.end() || w->second != step - 1)
+                    continue;
+                any = shortOf(k, step) || any;
+            }
+            if (!any)
+                break;
+        }
+        return wanted;
+    }
+
+    Yields Expected(LootTable const& table, LootTables const& references, uint32_t depth)
+    {
+        Yields out;
+        if (depth > 4)
+            return out;   // a table that refers back to itself gives nothing more
+        auto give = [&](LootRow const& r, double chance)
+        {
+            if (chance <= 0.0)
+                return;
+            if (r.reference)
+            {
+                auto ref = references.find(r.reference);
+                if (ref == references.end())
+                    return;
+                const double times = std::max<uint32_t>(1, r.maxCount);
+                for (auto const& [item, many] : Expected(ref->second, references, depth + 1))
+                    out[item] += chance * times * many;
+                return;
+            }
+            const double low = r.minCount, high = std::max(r.minCount, r.maxCount);
+            out[r.item] += chance * (low + high) / 2.0;
+        };
+
+        std::map<uint8_t, std::vector<LootRow const*>> groups;
+        for (LootRow const& r : table)
+            if (r.group)
+                groups[r.group].push_back(&r);
+            else
+                give(r, std::clamp(double(r.chance) / 100.0, 0.0, 1.0));
+        for (auto const& [id, rows] : groups)
+        {
+            double left = 1.0;
+            std::vector<LootRow const*> alike;
+            for (LootRow const* r : rows)
+            {
+                if (r->chance <= 0.0f)
+                {
+                    alike.push_back(r);
+                    continue;
+                }
+                const double chance = std::min(left, double(r->chance) / 100.0);
+                give(*r, chance);
+                left -= chance;
+            }
+            if (!alike.empty() && left > 0.0)
+                for (LootRow const* r : alike)
+                    give(*r, left / double(alike.size()));
+        }
+        return out;
+    }
+
+    uint32_t GatherChance(uint32_t skill, uint32_t required)
+    {
+        if (skill >= required + 100)
+            return 0;
+        if (skill >= required + 50)
+            return 25;
+        if (skill >= required + 25)
+            return 75;
+        return 100;
     }
 }

@@ -41,7 +41,8 @@ class Player;
 // 10: group quests talked into (GroupQuestFor, GroupQuestTogether).
 // 11: what a bot made itself with its professions is its own to sell too
 //     (LootedByBot).
-#define PLAYERBOTS_PLUS_API_VERSION 11
+// 12: disenchanting (CanDisenchant, DisenchantWorth, BoughtToDisenchant).
+#define PLAYERBOTS_PLUS_API_VERSION 12
 
 namespace PlayerbotsPlus
 {
@@ -113,6 +114,24 @@ namespace PlayerbotsPlus
     // reagents, stones and oils), nor anything it bought, was given or got
     // from a quest. `item` is one in its bags.
     bool LootedByBot(Player* bot, Item* item);
+
+    // ---- Disenchanting (PlayerbotsPlusCrafting), from API 12
+
+    // Could `bot` disenchant one of these: an enchanter with the skill for
+    // it, where the game's own loot tables say what it would give?
+    bool CanDisenchant(Player* bot, uint32_t itemId);
+
+    // What disenchanting one gives is worth on average, in copper, by
+    // ItemWorth's own sums over what the loot tables say comes out. 0:
+    // nothing known.
+    uint64_t DisenchantWorth(uint32_t itemId);
+
+    // `item`, now in `bot`'s bags, was bought to be disenchanted (a deal in
+    // Trade chat): it may be, for the next few hours, though the bot neither
+    // looted nor made it -- it breaks down only its own otherwise, never
+    // what playerbots hands it -- and the bot gets to it as soon as it is
+    // free. What comes out is its own, like anything it breaks down.
+    void BoughtToDisenchant(Player* bot, Item* item);
 
     // ---- City hangouts (PlayerbotsPlus.Hangout.*)
 

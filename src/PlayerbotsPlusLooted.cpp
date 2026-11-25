@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -81,6 +82,19 @@ namespace
     };
     thread_local Pending t_pending;
 
+    // A Disenchant roll just won, on this thread (PbpLooted_DisenchantWon):
+    // what the game stores for it straight after is loot, though no loot
+    // hook follows (Group::CountTheRoll gives it with AutoStoreLoot).
+    struct Won
+    {
+        Player const*                         player = nullptr;
+        std::chrono::steady_clock::time_point at{};
+    };
+    thread_local Won t_won;
+    // The store comes straight after the win on the same thread, a few
+    // hundred microseconds on; the rest is room for a thread set aside.
+    constexpr auto kWonWithin = std::chrono::milliseconds(25);
+
     // `kind`: Looted or Made.
     void Took(Player* player, Item* item, Kind kind)
     {
@@ -111,14 +125,24 @@ namespace
     bool                                           g_loaded     = false;
     PbpLootedStats                                 g_stats;
 
-    // Could ever be sold to someone: common or better, worth something to a
-    // vendor, able to change hands. Nothing else is kept.
-    bool Sellable(uint32_t entry)
+    // What is kept: what could ever be sold to someone -- common or better,
+    // worth something, able to change hands -- and gear an enchanter could
+    // break down, bound when picked up or not (it disenchants only its own:
+    // PlayerbotsPlusCrafting). Worth something: to a vendor, or, for what no
+    // vendor takes at all (dust, essences, shards), to buy from one.
+    bool Kept(uint32_t entry)
     {
         ItemTemplate const* p = sObjectMgr->GetItemTemplate(entry);
-        return p && p->Quality >= ITEM_QUALITY_NORMAL && p->SellPrice && p->Class != ITEM_CLASS_QUEST &&
-               p->Bonding != BIND_WHEN_PICKED_UP && p->Bonding != BIND_QUEST_ITEM && p->Bonding != BIND_QUEST_ITEM1 &&
-               !p->HasFlag(ITEM_FLAG_IS_BOUND_TO_ACCOUNT) && !p->HasFlag(ITEM_FLAG_CONJURED);
+        if (!p || p->Quality < ITEM_QUALITY_NORMAL || p->Class == ITEM_CLASS_QUEST ||
+            p->Bonding == BIND_QUEST_ITEM || p->Bonding == BIND_QUEST_ITEM1 ||
+            p->HasFlag(ITEM_FLAG_IS_BOUND_TO_ACCOUNT) || p->HasFlag(ITEM_FLAG_CONJURED))
+            return false;
+        if ((p->Class == ITEM_CLASS_WEAPON || p->Class == ITEM_CLASS_ARMOR) && p->DisenchantID &&
+            p->Quality >= ITEM_QUALITY_UNCOMMON)
+            return true;
+        if (p->Bonding == BIND_WHEN_PICKED_UP)
+            return false;
+        return p->SellPrice || (p->Class == ITEM_CLASS_TRADE_GOODS && p->BuyPrice);
     }
 
     PbpLooted::Stack const* Find(uint32_t stack)
@@ -199,7 +223,7 @@ namespace
                         from = PbpLooted::From::Made;
                         ++g_stats.made;
                     }
-                    if (!found && (from == PbpLooted::From::Other || !Sellable(n.entry)))
+                    if (!found && (from == PbpLooted::From::Other || !Kept(n.entry)))
                         break;   // nothing it knew, and nothing to know
                     const PbpLooted::After after = PbpLooted::Stored(found, n.owner, n.count, n.after, from);
                     if (!found && after.known)
@@ -352,6 +376,24 @@ void PbpLootedPlayerScript::OnPlayerStoreNewItem(Player* player, Item* item, uin
     n.after = item->GetCount();
     t_pending = { player, item, n.id };
     Push(n);
+    // The dust of a Disenchant roll it just won: looted, as a roll's win is.
+    if (t_won.player)
+    {
+        if (t_won.player == player && std::chrono::steady_clock::now() - t_won.at <= kWonWithin)
+        {
+            Note looted;
+            looted.kind = Kind::Looted;
+            looted.id   = n.id;
+            Push(looted);
+        }
+        else if (std::chrono::steady_clock::now() - t_won.at > kWonWithin)
+            t_won = {};
+    }
+}
+
+void PbpLooted_DisenchantWon(Player const* player)
+{
+    t_won = { player, std::chrono::steady_clock::now() };
 }
 
 void PbpLootedPlayerScript::OnPlayerLootItem(Player* player, Item* item, uint32 /*count*/, ObjectGuid /*lootguid*/)

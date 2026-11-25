@@ -1,4 +1,5 @@
 #include "PlayerbotsPlus.h"
+#include "PlayerbotsPlusCrafting.h"
 #include "PlayerbotsPlusDrops.h"
 #include "PlayerbotsPlusDuels.h"
 #include "PlayerbotsPlusGroupQuests.h"
@@ -82,6 +83,21 @@ namespace PlayerbotsPlus
     bool LootedByBot(Player* bot, Item* item)
     {
         return PbpLooted_IsOwn(bot, item);
+    }
+
+    bool CanDisenchant(Player* bot, uint32_t itemId)
+    {
+        return PbpCrafting_CanDisenchant(bot, itemId);
+    }
+
+    uint64_t DisenchantWorth(uint32_t itemId)
+    {
+        return PbpCrafting_DisenchantWorth(itemId);
+    }
+
+    void BoughtToDisenchant(Player* bot, Item* item)
+    {
+        PbpCrafting_BoughtToBreak(bot, item);
     }
 
     bool DropSourcesOf(uint32_t itemId, DropSources& out)

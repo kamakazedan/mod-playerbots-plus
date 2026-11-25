@@ -18,6 +18,7 @@
 #include "PlayerbotsPlusMute.h"
 #include "PlayerbotsPlusPets.h"
 #include "PlayerbotsPlusRevive.h"
+#include "PlayerbotsPlusRolls.h"
 #include "PlayerbotsPlusSkills.h"
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusStuck.h"
@@ -269,6 +270,8 @@ namespace
         section("Bot dungeons: every queue and run", dungeons);
         section("Group quests: every party", PbpGroupQuests_Status());
         std::vector<std::string> professions = PbpCrafting_Brief(true).lines;
+        for (std::string& line : PbpRolls_Brief(true).lines)
+            professions.push_back(std::move(line));
         for (std::string& line : PbpSkills_Brief(true).lines)
             professions.push_back(std::move(line));
         section("Professions: crafting, and skill earned", professions);
@@ -354,6 +357,7 @@ std::vector<std::string> PbpReport_Overview()
     take(PbpDungeons_Brief(false), 1);
     take(PbpGroupQuests_Brief(false), 1);
     take(PbpCrafting_Brief(false), 1);
+    take(PbpRolls_Brief(false), 0);
     take(PbpSkills_Brief(false), 1);
     lines.push_back(FixesLine());
     if (PbpLedgerStats const lg = PbpLedger_GetStats(); g_Pbp.ledger.enable && lg.dropped)

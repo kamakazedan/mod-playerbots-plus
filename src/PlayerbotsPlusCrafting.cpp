@@ -8,12 +8,15 @@
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusInactive.h"
 #include "PlayerbotsPlusLedger.h"
+#include "PlayerbotsPlusLooted.h"
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusUtil.h"
 
 #include "Bag.h"
 #include "CellImpl.h"
+#include "DatabaseEnv.h"
 #include "DBCStores.h"
+#include "Field.h"
 #include "GameObject.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
@@ -24,16 +27,24 @@
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "ObjectMgr.h"
+#include "Opcodes.h"
 #include "PathGenerator.h"
 #include "Player.h"
+#include "QueryResult.h"
 #include "SharedDefines.h"
+#include "Spell.h"
 #include "SpellAuraDefines.h"
 #include "SpellInfo.h"
 #include "SpellMgr.h"
+#include "Timer.h"
+#include "World.h"
+#include "WorldPacket.h"
+#include "WorldSession.h"
 
 #include "Event.h"
 #include "ItemUsageValue.h"
 #include "PlayerbotAI.h"
+#include "PlayerbotAIConfig.h"
 #include "RandomPlayerbotMgr.h"
 
 #include <fmt/core.h>
@@ -55,6 +66,12 @@ namespace
 
     constexpr uint32_t kHoldMs        = 5000;     // its AI held this long, again every tick at it
     constexpr uint32_t kCampfireSpell = 818;      // Basic Campfire
+    constexpr uint32_t kDisenchantSpell = 13262;
+    constexpr uint32_t kProspectSpell   = 31252;
+    constexpr uint32_t kMillSpell       = 51005;
+    constexpr uint32_t kBreakRoom     = 4;        // free bag slots before it breaks anything down
+    constexpr auto     kToBreakFor    = std::chrono::hours(6);
+    constexpr auto     kSkipFor       = std::chrono::hours(6);
     constexpr uint32_t kCookingFire   = 4;        // SpellFocusObject.dbc: Cooking Fire
     constexpr float    kShopYards     = 300.0f;   // a vendor this near, in a town, is the town's
     constexpr float    kStationYards  = 300.0f;   // ...and a forge or an anvil
@@ -80,9 +97,34 @@ namespace
 
     // ---- the recipes, once --------------------------------------------------------------------
 
-    // A craft: reagents in, a thing out. Read from the skill lines' spells.
+    // What a go at a profession is.
+    enum class Kind : uint8_t
+    {
+        Make,         // reagents in, a thing out
+        Enchant,      // reagents in, an enchantment on a piece of its own gear
+        Disenchant,   // a piece of gear into dust, essences, shards
+        Mill,         // five herbs into pigment
+        Prospect      // five ore into gems
+    };
+
+    char const* KindName(Kind kind)
+    {
+        switch (kind)
+        {
+            case Kind::Enchant:    return "enchants";
+            case Kind::Disenchant: return "disenchants";
+            case Kind::Mill:       return "mills";
+            case Kind::Prospect:   return "prospects";
+            default:               return "makes";
+        }
+    }
+
+    // A craft: reagents in, a thing out -- or, for an enchanter, onto its
+    // gear. Read from the skill lines' spells.
     struct Recipe
     {
+        Kind     kind    = Kind::Make;
+        uint32_t enchant = 0;   // Kind::Enchant: the enchantment (SpellItemEnchantment.dbc)
         uint32_t spell   = 0;
         uint32_t skill   = 0;
         uint32_t learnAt = 0;   // MinSkillLineRank: made from this skill on
@@ -108,6 +150,29 @@ namespace
     std::unordered_map<uint32_t, std::vector<uint32_t>> g_toolsOfKind;  // TotemCategory -> items that are one
     bool                                                g_recipesRead = false;
 
+    // Disenchant, Prospecting and Milling as their professions list them:
+    // from what skill, and how likely a point (Disenchant: as any craft).
+    struct BreakAbility
+    {
+        uint32_t skill   = 0;
+        uint32_t learnAt = 0;
+        uint32_t yellow  = 0;
+        uint32_t grey    = 0;
+    };
+    std::unordered_map<uint32_t, BreakAbility> g_breakAbility;   // by spell
+    std::unordered_map<uint32_t, uint32_t>     g_enchantRank;    // an enchantment -> the skill its recipe is learnt at
+
+    // What breaking something down gives, on average, from the world's own
+    // loot tables (PbpCrafting_Load): item, how many.
+    using YieldList = std::vector<std::pair<uint32_t, double>>;
+    std::unordered_map<uint32_t, YieldList> g_disenchantYields;   // by an item's DisenchantID
+    std::unordered_map<uint32_t, YieldList> g_millYields;         // by herb
+    std::unordered_map<uint32_t, YieldList> g_prospectYields;     // by ore
+
+    // Gear bought to be disenchanted (a deal in Trade chat): its item guid,
+    // and until when it may be. World thread.
+    std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> g_toBreak;
+
     void ReadRecipes()
     {
         if (g_recipesRead)
@@ -123,6 +188,12 @@ namespace
             SkillLineAbilityEntry const* a = sSkillLineAbilityStore.LookupEntry(i);
             if (!a || std::find(kCraftSkills.begin(), kCraftSkills.end(), a->SkillLine) == kCraftSkills.end())
                 continue;
+            if (a->Spell == kDisenchantSpell || a->Spell == kProspectSpell || a->Spell == kMillSpell)
+            {
+                g_breakAbility[a->Spell] = { a->SkillLine, a->MinSkillLineRank, a->TrivialSkillLineRankLow,
+                                             a->TrivialSkillLineRankHigh };
+                continue;
+            }
             if (!seen.insert(a->Spell).second)
                 continue;
             SpellInfo const* info = sSpellMgr->GetSpellInfo(a->Spell);
@@ -140,7 +211,17 @@ namespace
                     r.makes = uint32_t(std::max<int32>(1, (low + high) / 2));
                     break;
                 }
-            if (!r.product || !sObjectMgr->GetItemTemplate(r.product))
+            // An enchanter's own grind: an enchantment put on a piece of gear.
+            if (!r.product && a->SkillLine == PbpCraft::Skill::Enchanting)
+                for (uint8 e = 0; e < MAX_SPELL_EFFECTS; ++e)
+                    if (info->Effects[e].Effect == SPELL_EFFECT_ENCHANT_ITEM && info->Effects[e].MiscValue > 0 &&
+                        sSpellItemEnchantmentStore.LookupEntry(uint32(info->Effects[e].MiscValue)))
+                    {
+                        r.kind    = Kind::Enchant;
+                        r.enchant = uint32_t(info->Effects[e].MiscValue);
+                        break;
+                    }
+            if (r.kind == Kind::Make && (!r.product || !sObjectMgr->GetItemTemplate(r.product)))
                 continue;
             for (uint8 k = 0; k < MAX_SPELL_REAGENTS; ++k)
                 if (info->Reagent[k] > 0 && info->ReagentCount[k] > 0)
@@ -160,6 +241,12 @@ namespace
             r.grey    = a->TrivialSkillLineRankHigh;
             r.focus   = info->RequiresSpellFocus;
             r.gapMs   = std::max(info->CalcCastTime(), info->StartRecoveryTime) + 300;
+            if (r.kind == Kind::Enchant)
+            {
+                auto [known, fresh] = g_enchantRank.emplace(r.enchant, r.learnAt);
+                if (!fresh)
+                    known->second = std::min(known->second, r.learnAt);
+            }
             g_recipes[r.skill].push_back(std::move(r));
             ++count;
         }
@@ -168,8 +255,9 @@ namespace
             if (proto.TotemCategory)
                 g_toolsOfKind[proto.TotemCategory].push_back(entry);
         g_stats.recipes = count;
-        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Crafting: {} recipes read from {} professions.", count,
-                 g_recipes.size());
+        LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Crafting: {} recipes read from {} professions ({} of "
+                 "them an enchanter's, onto gear); disenchanting, prospecting and milling {} listed by theirs.",
+                 count, g_recipes.size(), g_enchantRank.size(), g_breakAbility.size() == 3 ? "all" : "not all");
     }
 
     // ---- vendors, and where people work, by map, once ----------------------------------------
@@ -507,10 +595,18 @@ namespace
 
     struct Plan
     {
-        Recipe const*  recipe = nullptr;
+        Kind           kind      = Kind::Make;
+        Recipe const*  recipe    = nullptr;   // Make, Enchant: the craft
+        uint32_t       spell     = 0;
+        uint32_t       skillLine = 0;
+        uint32_t       gapMs     = 0;
+        uint32_t       focus     = 0;
+        uint32_t       entry     = 0;         // Mill, Prospect: the herb or the ore
+        std::vector<ObjectGuid> targets;      // Enchant: the piece it goes on; Disenchant: each piece in turn
+        std::string    name;                  // what it makes, or works on
         PbpCraft::Why  why    = PbpCraft::Why::None;
         uint32_t       casts  = 0;
-        uint32_t       skill  = 0;    // its skill in the recipe's profession
+        uint32_t       skill  = 0;    // its skill in the profession
         uint32_t       chance = 0;    // percent: a point from one
         std::vector<std::pair<uint32_t, uint32_t>> buy;   // item, how many
         uint64_t       buyCopper = 0;
@@ -606,6 +702,198 @@ namespace
         return std::min<uint64_t>(money - reserve, money * Cfg().spendSharePct / 100);
     }
 
+    // ---- breaking things down, and enchanting -------------------------------------------------
+
+    uint32_t FreeSlots(Player* bot)
+    {
+        uint32_t free = 0;
+        for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+            if (!bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+                ++free;
+        for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
+            if (Bag* bag = bot->GetBagByPos(bagSlot))
+                free += bag->GetFreeSlots();
+        return free;
+    }
+
+    // Has it the skill for Disenchant, Prospecting or Milling, and the spell?
+    // Playerbots sets a bot's skill without what comes with it, so one whose
+    // skill says it should know the spell is taught it. `skill`: its skill
+    // there, as the game checks it.
+    bool KnowsBreak(Player* bot, uint32_t spell, uint32_t& skill)
+    {
+        auto ability = g_breakAbility.find(spell);
+        if (ability == g_breakAbility.end())
+            return false;
+        skill = bot->GetSkillValue(ability->second.skill);
+        if (!skill || bot->GetPureSkillValue(ability->second.skill) < ability->second.learnAt)
+            return false;
+        if (!bot->HasSpell(spell))
+        {
+            bot->learnSpell(spell);
+            if (!bot->HasSpell(spell))
+                return false;
+            ++g_stats.taught;
+        }
+        return true;
+    }
+
+    // What a piece is worth to it kept whole: on the market if it could go
+    // there, else what a vendor gives.
+    uint64_t KeepWorth(Item* item, ItemTemplate const* p)
+    {
+        if (CouldSell(p) && !item->IsSoulBound())
+            return PlayerbotsPlus::ItemWorth(p->ItemId);
+        return p->SellPrice;
+    }
+
+    uint64_t WorthOf(YieldList const& yields)
+    {
+        double sum = 0.0;
+        for (auto const& [item, many] : yields)
+            sum += many * double(PlayerbotsPlus::ItemWorth(item));
+        return uint64_t(sum);
+    }
+
+    struct Piece
+    {
+        Item*            item   = nullptr;
+        uint64_t         keep   = 0;   // worth kept whole
+        uint64_t         broken = 0;   // worth of what it gives
+        uint32_t         need   = 0;   // the Enchanting it takes to break down
+        YieldList const* yields = nullptr;
+    };
+
+    // An enchanter's spare gear, in its bags: its own -- looted, won on a
+    // roll or made, never what playerbots hands out -- or bought to be broken
+    // down (a deal in Trade chat), and no use to it. What it might
+    // disenchant, with the skill for it, and practise an enchant on first.
+    // The least worth keeping first.
+    std::vector<Piece> SpareGear(Player* bot, PlayerbotAI* ai)
+    {
+        PbpCraftSettings const& c = Cfg();
+        const auto now = Clock::now();
+        std::vector<Item*> carried;
+        ForEachBagItem(bot, [&carried](Item* item) { carried.push_back(item); });
+
+        uint32_t usageChecks = 0;   // its own allowance: what it makes is asked of the other
+        std::vector<Piece> out;
+        for (Item* item : carried)
+        {
+            ItemTemplate const* p = item->GetTemplate();
+            if (!p || (p->Class != ITEM_CLASS_WEAPON && p->Class != ITEM_CLASS_ARMOR) || !p->DisenchantID ||
+                p->Quality < ITEM_QUALITY_UNCOMMON ||
+                p->Quality > std::min<uint32_t>(c.disenchantMaxQuality, ITEM_QUALITY_EPIC) || item->IsInTrade() ||
+                item->IsEquipped())
+                continue;
+            auto yields = g_disenchantYields.find(p->DisenchantID);
+            if (yields == g_disenchantYields.end())
+                continue;
+            auto bought = g_toBreak.find(item->GetGUID().GetCounter());
+            const bool toBreak = bought != g_toBreak.end() && bought->second > now;
+            if (!toBreak)
+            {
+                if (!PbpLooted_IsOwn(bot, item) || usageChecks >= c.usageChecks)
+                    continue;
+                ++usageChecks;
+                // Playerbots would sell it, or break it down itself: anything
+                // else -- to wear, for a quest, to keep -- is not spare.
+                const ItemUsage u = UsageOf(ai, p->ItemId);
+                if (u != ITEM_USAGE_AH && u != ITEM_USAGE_VENDOR && u != ITEM_USAGE_DISENCHANT &&
+                    u != ITEM_USAGE_NONE)
+                    continue;
+            }
+            out.push_back({ item, toBreak ? 0 : KeepWorth(item, p), WorthOf(yields->second),
+                            p->RequiredDisenchantSkill, &yields->second });
+        }
+        std::sort(out.begin(), out.end(), [](Piece const& a, Piece const& b) { return a.keep < b.keep; });
+        return out;
+    }
+
+    // A piece of gear an enchant could go on, for the point. One it wears
+    // with nothing on it yet -- and, below the level playerbots enchants a
+    // bot's gear from itself (Playerbots.MinEnchantingBotLevel: what it chose
+    // is left alone, and it puts its own back at every refresh), over what
+    // an enchanter's recipe no better than this one left there; never over
+    // anything better. Else a spare piece in its bags, whatever is on it:
+    // the junk an enchanter practises on before it breaks it down.
+    Item* PieceToEnchant(Player* bot, Recipe const& r, SpellInfo const* info, std::vector<Piece> const& spare)
+    {
+        if (!info)
+            return nullptr;
+        if (SpellItemEnchantmentEntry const* e = sSpellItemEnchantmentStore.LookupEntry(r.enchant))
+            if (e->requiredLevel > bot->GetLevel() ||
+                (e->requiredSkill && bot->GetSkillValue(e->requiredSkill) < e->requiredSkillValue))
+                return nullptr;
+        auto takes = [info](Item* item)
+        {
+            if (!item || item->IsInTrade() || !item->IsFitToSpellRequirements(info))
+                return false;
+            if (info->HasAttribute(SPELL_ATTR2_ALLOW_LOW_LEVEL_BUFF))
+                return true;
+            // As the game asks it (Spell::CheckItems).
+            ItemTemplate const* p = item->GetTemplate();
+            return (p->RequiredLevel ? p->RequiredLevel : p->ItemLevel) >= info->BaseLevel;
+        };
+        const bool itsOwnWork = bot->GetLevel() < sPlayerbotAIConfig.MinEnchantingBotLevel;
+        for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+        {
+            Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (!takes(item))
+                continue;
+            if (const uint32_t on = item->GetEnchantmentId(PERM_ENCHANTMENT_SLOT))
+            {
+                auto rank = g_enchantRank.find(on);
+                if (!itsOwnWork || rank == g_enchantRank.end() || rank->second > r.learnAt)
+                    continue;
+            }
+            return item;
+        }
+        for (Piece const& piece : spare)
+            if (takes(piece.item))
+                return piece.item;
+        return nullptr;
+    }
+
+    // An empty place in its bags that takes `item` (a herb bag takes no ore).
+    bool EmptyPlaceFor(Player* bot, Item* item, uint16& pos)
+    {
+        auto takes = [&](uint8 bag, uint8 slot)
+        {
+            if (bot->GetItemByPos(bag, slot))
+                return false;
+            ItemPosCountVec dest;
+            if (bot->CanStoreItem(bag, slot, dest, item, false) != EQUIP_ERR_OK)
+                return false;
+            pos = uint16((uint16(bag) << 8) | slot);
+            return true;
+        };
+        for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
+            if (takes(INVENTORY_SLOT_BAG_0, slot))
+                return true;
+        for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
+            if (Bag* bag = bot->GetBagByPos(bagSlot))
+                for (uint32 i = 0; i < bag->GetBagSize(); ++i)
+                    if (takes(bagSlot, uint8(i)))
+                        return true;
+        return false;
+    }
+
+    uint64_t SkipKey(uint32_t spell, uint32_t entry)
+    {
+        return (uint64_t(spell) << 32) | entry;
+    }
+
+    struct Due
+    {
+        bool              scheduled = false;
+        Clock::time_point next{};
+        Clock::time_point townUntil{};   // waits for its next time in town, till then: a forge or an anvil wanted
+        std::unordered_map<uint64_t, Clock::time_point> skip;   // a craft the game turned down: not again till then
+    };
+    std::unordered_map<uint64_t, Due> g_bots;
+    uint32_t g_timer = 0;
+
     // `walk`: for city life, a forge or an anvil is one it walks over to
     // within this far (it is seen), never one it is put by; 0 for its own.
     bool MakePlan(Player* bot, PlayerbotAI* ai, Plan& plan, float walk = 0.0f)
@@ -616,12 +904,46 @@ namespace
         const std::unordered_map<uint32_t, uint32_t> have = Carried(bot);
         const Shop shop = ShopFor(bot);
         const uint64_t allowance = Allowance(bot);
+        const auto now = Clock::now();
 
+        // What the game turned down for it lately is left alone a while.
+        auto due = g_bots.find(bot->GetGUID().GetRawValue());
+        auto skipped = [&](uint32_t spell, uint32_t entry)
+        {
+            if (due == g_bots.end())
+                return false;
+            auto s = due->second.skip.find(SkipKey(spell, entry));
+            return s != due->second.skip.end() && s->second > now;
+        };
+
+        struct Cand
+        {
+            Kind             kind      = Kind::Make;
+            Recipe const*    recipe    = nullptr;
+            Access           access;
+            uint32_t         spell     = 0;
+            uint32_t         skillLine = 0;
+            uint32_t         skill     = 0;
+            uint32_t         entry     = 0;
+            uint32_t         gapMs     = 0;
+            ObjectGuid       target;
+            YieldList const* yields    = nullptr;
+            std::string      name;
+        };
         std::vector<PbpCraft::Option> options;
-        std::vector<Recipe const*>    recipes;
-        std::vector<Access>           access;
+        std::vector<Cand>             cands;
+        std::vector<PbpCraft::Known>  known;            // every craft it knows, for what a point is short of
         std::unordered_map<uint32_t, Access> byFocus;   // worked out once each
         uint32_t usageChecks = 0;
+
+        // An enchanter's spare gear: what it might break down, and practise
+        // an enchant on first.
+        const bool room = FreeSlots(bot) >= kBreakRoom;
+        uint32_t skillNow = 0;
+        const bool breaks = c.disenchant && room && KnowsBreak(bot, kDisenchantSpell, skillNow);
+        std::vector<Piece> spare;
+        if (breaks || (c.enchantOwnGear && bot->GetPureSkillValue(PbpCraft::Skill::Enchanting)))
+            spare = SpareGear(bot, ai);
 
         for (uint32_t skill : kCraftSkills)
         {
@@ -633,15 +955,43 @@ namespace
                 continue;
             for (Recipe const& r : list->second)
             {
-                if (r.learnAt > value || !bot->HasSpell(r.spell))
+                if (r.learnAt > value || !bot->HasSpell(r.spell) || skipped(r.spell, 0))
                     continue;
+                const uint32_t chance = PbpCraft::PointChance(value, r.yellow, r.grey);
+
+                // An enchant goes on a piece of its own gear, and only ever for a point.
+                Item* piece = nullptr;
+                if (r.kind == Kind::Enchant)
+                {
+                    if (!c.enchantOwnGear || chance < c.minChance)
+                        continue;
+                    piece = PieceToEnchant(bot, r, sSpellMgr->GetSpellInfo(r.spell), spare);
+                    if (!piece)
+                        continue;
+                }
+
+                // What one takes, for what it is short of on its way to a point.
+                {
+                    PbpCraft::Known k;
+                    k.pointChance = chance;
+                    k.product     = r.product;
+                    k.needs       = r.reagents;
+                    for (uint32_t tool : r.tools)
+                        k.needs.emplace_back(tool, 1);
+                    for (uint32_t kind : r.toolKinds)
+                        if (!bot->HasItemTotemCategory(kind))
+                            if (auto kinds = g_toolsOfKind.find(kind); kinds != g_toolsOfKind.end())
+                                for (uint32_t tool : kinds->second)
+                                    k.needs.emplace_back(tool, 1);
+                    known.push_back(std::move(k));
+                }
 
                 // Where it can make it.
                 Access a;
                 if (r.focus)
                 {
-                    auto known = byFocus.find(r.focus);
-                    if (known == byFocus.end())
+                    auto found = byFocus.find(r.focus);
+                    if (found == byFocus.end())
                     {
                         Access fresh;
                         fresh.inReach = FocusInReach(bot, r.focus);
@@ -651,9 +1001,9 @@ namespace
                             fresh.putBy = StationToPutBy(bot, r.focus);
                         if (!fresh.inReach && !fresh.putBy && !fresh.walkTo && r.focus == kCookingFire)
                             fresh.fire = CanMakeFire(bot);
-                        known = byFocus.emplace(r.focus, fresh).first;
+                        found = byFocus.emplace(r.focus, fresh).first;
                     }
-                    a = known->second;
+                    a = found->second;
                     if (!a.inReach && !a.putBy && !a.walkTo && !a.fire)
                     {
                         if (!InTown(bot) && CarriesOne(r, have))
@@ -680,7 +1030,7 @@ namespace
 
                 PbpCraft::Option o;
                 o.spell       = r.spell;
-                o.pointChance = PbpCraft::PointChance(value, r.yellow, r.grey);
+                o.pointChance = chance;
                 o.canMake     = most;
                 for (auto const& [item, need] : r.reagents)
                 {
@@ -690,48 +1040,214 @@ namespace
                         offer != shop.end() ? UnitPrice(offer->second) : PlayerbotsPlus::ItemWorth(item);
                     o.costEach += each * need;
                 }
-                ItemTemplate const* proto = sObjectMgr->GetItemTemplate(r.product);
-                o.sellable  = CouldSell(proto);
-                o.worthEach = o.sellable ? PlayerbotsPlus::ItemWorth(r.product) * r.makes : 0;
-                if (Wearable(proto) && proto->RequiredLevel <= bot->GetLevel() && usageChecks < c.usageChecks)
+                Cand cd;
+                cd.kind      = r.kind;
+                cd.recipe    = &r;
+                cd.access    = a;
+                cd.spell     = r.spell;
+                cd.skillLine = r.skill;
+                cd.skill     = value;
+                cd.gapMs     = r.gapMs;
+                if (r.kind == Kind::Enchant)
                 {
-                    ++usageChecks;
-                    const ItemUsage u = UsageOf(ai, r.product);
-                    o.upgrade = u == ITEM_USAGE_EQUIP || u == ITEM_USAGE_REPLACE;
+                    o.sellable = false;
+                    cd.target  = piece->GetGUID();
+                    SpellInfo const* info = sSpellMgr->GetSpellInfo(r.spell);
+                    cd.name = fmt::format("{} on {} {}", info && info->SpellName[0] ? info->SpellName[0] : "an enchant",
+                                          piece->IsEquipped() ? "its" : "a spare", piece->GetTemplate()->Name1);
+                }
+                else
+                {
+                    ItemTemplate const* proto = sObjectMgr->GetItemTemplate(r.product);
+                    o.sellable  = CouldSell(proto);
+                    o.worthEach = o.sellable ? PlayerbotsPlus::ItemWorth(r.product) * r.makes : 0;
+                    if (Wearable(proto) && proto->RequiredLevel <= bot->GetLevel() && usageChecks < c.usageChecks)
+                    {
+                        ++usageChecks;
+                        const ItemUsage u = UsageOf(ai, r.product);
+                        o.upgrade = u == ITEM_USAGE_EQUIP || u == ITEM_USAGE_REPLACE;
+                    }
+                    cd.name = proto ? proto->Name1 : std::to_string(r.product);
                 }
                 options.push_back(o);
-                recipes.push_back(&r);
-                access.push_back(a);
+                cands.push_back(std::move(cd));
             }
         }
+
+        // Breaking things down: an enchanter its spare gear, a scribe its
+        // herbs, a jewelcrafter its ore. Each by the game's own spell.
+        if (breaks)
+        {
+            BreakAbility const& ab = g_breakAbility[kDisenchantSpell];
+            const uint32_t pure   = bot->GetPureSkillValue(ab.skill);
+            const uint32_t chance = PbpCraft::PointChance(pure, ab.yellow, ab.grey);
+            SpellInfo const* info = sSpellMgr->GetSpellInfo(kDisenchantSpell);
+            for (Piece const& piece : spare)
+            {
+                if (piece.need > skillNow || skipped(kDisenchantSpell, piece.item->GetEntry()))
+                    continue;
+                PbpCraft::Option o;
+                o.spell       = kDisenchantSpell;
+                o.pointChance = chance;
+                o.canMake     = 1;
+                o.costEach    = piece.keep;
+                o.worthEach   = piece.broken;
+                options.push_back(o);
+                Cand cd;
+                cd.kind      = Kind::Disenchant;
+                cd.spell     = kDisenchantSpell;
+                cd.skillLine = ab.skill;
+                cd.skill     = pure;
+                cd.entry     = piece.item->GetEntry();
+                cd.gapMs     = info ? std::max(info->CalcCastTime(), info->StartRecoveryTime) + 300 : 3500;
+                cd.target    = piece.item->GetGUID();
+                cd.yields    = piece.yields;
+                cd.name      = piece.item->GetTemplate()->Name1;
+                cands.push_back(std::move(cd));
+            }
+        }
+        auto stacks = [&](Kind kind, uint32_t spell, ItemFlags flag, bool on, bool points,
+                          std::unordered_map<uint32_t, YieldList> const& table)
+        {
+            if (!on || !room || table.empty() || !KnowsBreak(bot, spell, skillNow))
+                return;
+            BreakAbility const& ab = g_breakAbility[spell];
+            const uint32_t pure = bot->GetPureSkillValue(ab.skill);
+            SpellInfo const* info = sSpellMgr->GetSpellInfo(spell);
+            // Each herb or ore it has a stack of five or more of: how many goes.
+            std::map<uint32_t, uint32_t> goes;
+            ForEachBagItem(bot, [&](Item* item)
+                           {
+                               ItemTemplate const* p = item->GetTemplate();
+                               if (p && p->HasFlag(flag) && !item->IsInTrade() && item->GetCount() >= 5 &&
+                                   p->RequiredSkillRank <= skillNow && table.contains(p->ItemId))
+                                   goes[p->ItemId] += item->GetCount() / 5;
+                           });
+            for (auto const& [entry, many] : goes)
+            {
+                if (skipped(spell, entry))
+                    continue;
+                ItemTemplate const* p = sObjectMgr->GetItemTemplate(entry);
+                YieldList const& yields = table.at(entry);
+                PbpCraft::Option o;
+                o.spell       = spell;
+                o.pointChance = points ? PbpCraft::GatherChance(pure, p->RequiredSkillRank) : 0;
+                o.canMake     = std::min<uint32_t>(many, c.breakdownMaxCasts);
+                o.costEach    = PlayerbotsPlus::ItemWorth(entry) * 5;
+                o.worthEach   = WorthOf(yields);
+                options.push_back(o);
+                Cand cd;
+                cd.kind      = kind;
+                cd.spell     = spell;
+                cd.skillLine = ab.skill;
+                cd.skill     = pure;
+                cd.entry     = entry;
+                cd.gapMs     = info ? std::max(info->CalcCastTime(), info->StartRecoveryTime) + 300 : 1500;
+                cd.yields    = &yields;
+                cd.name      = p->Name1;
+                cands.push_back(std::move(cd));
+            }
+        };
+        stacks(Kind::Mill, kMillSpell, ITEM_FLAG_IS_MILLABLE, c.milling, sWorld->getBoolConfig(CONFIG_SKILL_MILLING),
+               g_millYields);
+        stacks(Kind::Prospect, kProspectSpell, ITEM_FLAG_IS_PROSPECTABLE, c.prospecting,
+               sWorld->getBoolConfig(CONFIG_SKILL_PROSPECTING), g_prospectYields);
+
+        // What a craft that would give it a point is short of, and how far
+        // from that point: a thing that gets it there is worth doing for that.
+        const std::unordered_map<uint32_t, uint32_t> wanted = PbpCraft::Wanted(known, have, c.minChance);
+        if (!wanted.empty())
+            for (size_t i = 0; i < options.size(); ++i)
+            {
+                Cand const& cd = cands[i];
+                uint32_t steps = 0;
+                auto nearer = [&](uint32_t item)
+                {
+                    auto w = wanted.find(item);
+                    if (w != wanted.end() && (!steps || w->second < steps))
+                        steps = w->second;
+                };
+                if (cd.kind == Kind::Make && cd.recipe)
+                    nearer(cd.recipe->product);
+                else if (cd.yields)
+                    for (auto const& [item, many] : *cd.yields)
+                        if (many >= 0.05)
+                            nearer(item);
+                options[i].steps = steps;
+            }
 
         PbpCraft::ChoiceSettings cs;
         cs.maxCasts      = c.maxCasts;
         cs.minChance     = c.minChance;
         cs.sellMarginPct = c.sellMarginPct;
         const PbpCraft::Choice choice = PbpCraft::Choose(options, cs);
-        plan.note = fmt::format("{} recipe{} it could make here and now{}", options.size(),
+        plan.note = fmt::format("{} thing{} it could make or break down here and now{}", options.size(),
                                 options.size() == 1 ? "" : "s",
                                 plan.wantsTown ? "; more with a forge or an anvil, in town" : "");
         if (choice.why == PbpCraft::Why::None)
             return false;
 
-        plan.recipe = recipes[choice.index];
-        plan.why    = choice.why;
-        plan.casts  = choice.casts;
-        plan.access = access[choice.index];
-        plan.skill  = bot->GetPureSkillValue(plan.recipe->skill);
-        plan.chance = options[choice.index].pointChance;
-        ToBuy(bot, *plan.recipe, plan.casts, have, shop, plan.buy, plan.buyCopper);
+        Cand const& cd = cands[choice.index];
+        plan.kind      = cd.kind;
+        plan.recipe    = cd.recipe;
+        plan.spell     = cd.spell;
+        plan.skillLine = cd.skillLine;
+        plan.gapMs     = cd.gapMs;
+        plan.focus     = cd.recipe ? cd.recipe->focus : 0;
+        plan.entry     = cd.entry;
+        plan.name      = cd.name;
+        plan.why       = choice.why;
+        plan.casts     = choice.casts;
+        plan.access    = cd.access;
+        plan.skill     = cd.skill;
+        plan.chance    = options[choice.index].pointChance;
+        if (cd.kind == Kind::Enchant)
+            plan.targets = { cd.target };
+        else if (cd.kind == Kind::Disenchant)
+        {
+            // This piece, and the others worth breaking down just as much, up
+            // to as many as it does at one go: to sell, only those whose dust
+            // is worth more than they are; for a point or for materials, the
+            // ones worth no more kept than this one.
+            plan.targets.push_back(cd.target);
+            const uint64_t margin = std::max<uint32_t>(c.sellMarginPct, 100);
+            for (size_t i = 0; i < cands.size() && plan.targets.size() < c.breakdownMaxCasts; ++i)
+            {
+                if (i == choice.index || cands[i].kind != Kind::Disenchant)
+                    continue;
+                PbpCraft::Option const& o = options[i];
+                if (o.worthEach * 100 >= o.costEach * margin ||
+                    (choice.why != PbpCraft::Why::Sell && o.costEach <= options[choice.index].costEach))
+                    plan.targets.push_back(cands[i].target);
+            }
+            plan.casts = uint32_t(plan.targets.size());
+            if (plan.casts > 1)
+                plan.name += fmt::format(" and {} more", plan.casts - 1);
+        }
+        if (cd.recipe)
+            ToBuy(bot, *cd.recipe, plan.casts, have, shop, plan.buy, plan.buyCopper);
         return true;
     }
 
-    // Room in its bags for what one craft makes (the game turns the craft
-    // down without it).
-    bool RoomFor(Player* bot, Recipe const& r)
+    // Room in its bags for what a go gives (the game turns a craft down
+    // without it; what will not fit of a breakdown goes in the post).
+    bool RoomFor(Player* bot, Plan const& plan)
     {
-        ItemPosCountVec dest;
-        return bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, r.product, r.makes) == EQUIP_ERR_OK;
+        switch (plan.kind)
+        {
+            case Kind::Make:
+            {
+                if (!plan.recipe)
+                    return false;
+                ItemPosCountVec dest;
+                return bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, plan.recipe->product, plan.recipe->makes) ==
+                       EQUIP_ERR_OK;
+            }
+            case Kind::Enchant:
+                return true;
+            default:
+                return FreeSlots(bot) >= kBreakRoom;
+        }
     }
 
     // ---- at it --------------------------------------------------------------------------------------
@@ -745,10 +1261,15 @@ namespace
 
     struct Session
     {
+        Kind              kind  = Kind::Make;
         uint32_t          spell = 0;
         uint32_t          left  = 0;
         uint32_t          gapMs = 0;
         uint32_t          focus = 0;
+        uint32_t          entry = 0;              // Mill, Prospect: the herb or the ore
+        std::vector<ObjectGuid> targets;          // Enchant: the piece; Disenchant: each in turn
+        size_t            nextTarget = 0;
+        bool              looting = false;        // broke something down: what it gave is to be taken
         PbpCraft::Why     why   = PbpCraft::Why::None;
         Step              step  = Step::Working;
         Clock::time_point started{};
@@ -773,15 +1294,6 @@ namespace
     };
     std::unordered_map<uint64_t, CityPlan> g_cityPlans;
     constexpr auto kCityWalkWithin = std::chrono::minutes(2);
-
-    struct Due
-    {
-        bool              scheduled = false;
-        Clock::time_point next{};
-        Clock::time_point townUntil{};   // waits for its next time in town, till then: a forge or an anvil wanted
-    };
-    std::unordered_map<uint64_t, Due> g_bots;
-    uint32_t g_timer = 0;
 
     // Off its mount, out of a form it cannot craft in, on its feet, still:
     // as anyone settles down to craft.
@@ -846,12 +1358,35 @@ namespace
         return false;
     }
 
+    // Everything out of the loot window breaking something down opened, and
+    // the window shut -- the game's own handlers, as a player's client asks
+    // them: what it gives is looted (and so its own), what will not fit goes
+    // in the post, and the piece, or five of the stack, goes as it shuts.
+    void TakeLoot(Player* bot)
+    {
+        const ObjectGuid from = bot->GetLootGUID();
+        if (!from.IsItem())
+            return;   // the cast came to nothing
+        Item* item = bot->GetItemByGuid(from);
+        const uint32_t slots = item ? uint32_t(item->loot.items.size()) : 0;
+        for (uint32_t slot = 0; slot < slots && bot->GetLootGUID() == from; ++slot)
+        {
+            WorldPacket take(CMSG_AUTOSTORE_LOOT_ITEM, 1);
+            take << uint8(slot);
+            bot->GetSession()->HandleAutostoreLootItemOpcode(take);
+        }
+        if (bot->GetLootGUID() == from)
+            bot->GetSession()->DoLootRelease(from);
+    }
+
     void Release(Player* bot, PlayerbotAI* ai, Session const& s)
     {
         if (ai && !s.cityLife)
             ai->SetNextCheckDelay(0);
         if (!bot->IsInWorld())
             return;
+        if (s.looting)
+            TakeLoot(bot);   // cut short with the window open
         // Put there with nobody about: back where it was, nobody about still.
         if (s.moved && bot->IsAlive() && !bot->IsInCombat() && bot->GetMapId() == s.map &&
             PbpUnseen(bot, s.ox, s.oy, s.oz))
@@ -871,15 +1406,14 @@ namespace
                 *report = why;
             return false;
         };
-        Recipe const& r = *plan.recipe;
-        if (!RoomFor(bot, r))
+        if (!RoomFor(bot, plan))
         {
             ++g_stats.noRoom;
-            return fail("has no room in its bags for what it would make");
+            return fail("has no room in its bags for what it would get");
         }
 
         // Where it works first: nothing is bought for a station it cannot stand at.
-        Station const* putBy = r.focus && !plan.access.inReach ? plan.access.putBy : nullptr;
+        Station const* putBy = plan.focus && !plan.access.inReach ? plan.access.putBy : nullptr;
         float x = 0.0f, y = 0.0f, z = 0.0f;
         if (putBy && !SpotBy(bot, *putBy, x, y, z))
             return fail("found nowhere to stand at the station");
@@ -893,15 +1427,18 @@ namespace
         }
 
         Session s;
-        s.spell    = r.spell;
+        s.kind     = plan.kind;
+        s.spell    = plan.spell;
         s.left     = plan.casts;
-        s.gapMs    = r.gapMs;
-        s.focus    = r.focus;
+        s.gapMs    = plan.gapMs;
+        s.focus    = plan.focus;
+        s.entry    = plan.entry;
+        s.targets  = plan.targets;
         s.why      = plan.why;
         s.started  = Clock::now();
         s.cityLife = cityLife;
 
-        ReadyToWork(bot, r.spell);
+        ReadyToWork(bot, plan.spell);
         if (putBy)
         {
             s.moved = true;
@@ -925,9 +1462,9 @@ namespace
             s.ax = bot->GetPositionX();
             s.ay = bot->GetPositionY();
             s.az = bot->GetPositionZ();
-            if (r.focus && plan.access.fire && !plan.access.inReach)
+            if (plan.focus && plan.access.fire && !plan.access.inReach)
                 s.step = Step::Fire;
-            else if (r.focus)
+            else if (plan.focus)
                 ++g_stats.atStation;
         }
         s.nextCast = Clock::now();
@@ -940,24 +1477,23 @@ namespace
             ++g_stats.cityLife;
         switch (plan.why)
         {
-            case PbpCraft::Why::Use:   ++g_stats.forUse;   break;
-            case PbpCraft::Why::Skill: ++g_stats.forSkill; break;
-            case PbpCraft::Why::Sell:  ++g_stats.forSale;  break;
+            case PbpCraft::Why::Use:       ++g_stats.forUse;       break;
+            case PbpCraft::Why::Skill:     ++g_stats.forSkill;     break;
+            case PbpCraft::Why::Materials: ++g_stats.forMaterials; break;
+            case PbpCraft::Why::Sell:      ++g_stats.forSale;      break;
             default: break;
         }
-        ItemTemplate const* proto = sObjectMgr->GetItemTemplate(r.product);
-        const std::string what = fmt::format("{} x{} ({} {}, {}% a point, {})",
-                                             proto ? proto->Name1 : std::to_string(r.product), plan.casts,
-                                             PbpCraft::Name(r.skill), plan.skill, plan.chance,
+        const std::string what = fmt::format("{} {} x{} ({} {}, {}% a point, {})", KindName(plan.kind), plan.name,
+                                             plan.casts, PbpCraft::Name(plan.skillLine), plan.skill, plan.chance,
                                              PbpCraft::WhyName(plan.why));
         if (report)
-            *report = "makes " + what +
+            *report = what +
                       (plan.buyCopper ? fmt::format(", having bought {}c of what it was short of", plan.buyCopper)
                                       : std::string()) +
                       (s.moved ? ", put by a station" : std::string()) +
                       (s.step == Step::Fire ? ", at a campfire it makes" : std::string());
         if (Cfg().logCrafts)
-            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Crafting: {} makes {}{}.", bot->GetName(), what,
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] Crafting: {} {}{}.", bot->GetName(), what,
                      s.moved ? ", put by a station" : "");
         return true;
     }
@@ -981,6 +1517,15 @@ namespace
             case SPELL_FAILED_NOT_STANDING:           return "not standing";
             case SPELL_FAILED_NOT_HERE:               return "not here";
             case SPELL_FAILED_CANT_DO_THAT_RIGHT_NOW: return "not right now";
+            case SPELL_FAILED_CANT_BE_DISENCHANTED:   return "cannot be disenchanted";
+            case SPELL_FAILED_CANT_BE_PROSPECTED:     return "cannot be prospected";
+            case SPELL_FAILED_CANT_BE_MILLED:         return "cannot be milled";
+            case SPELL_FAILED_NEED_MORE_ITEMS:        return "fewer than five in the stack";
+            case SPELL_FAILED_LOW_CASTLEVEL:          return "skill too low for it";
+            case SPELL_FAILED_LOWLEVEL:               return "the piece is too low for the enchant";
+            case SPELL_FAILED_HIGHLEVEL:              return "the piece is too high for the enchant";
+            case SPELL_FAILED_EQUIPPED_ITEM_CLASS:    return "the enchant does not go on that";
+            case SPELL_FAILED_ITEM_NOT_FOUND:         return "the piece is gone";
             default:                                  return fmt::format("SpellCastResult {}", uint32(r));
         }
     }
@@ -989,6 +1534,63 @@ namespace
     {
         ++g_stats.failed;
         ++g_failReasons[std::string(what) + CastFailText(r)];
+    }
+
+    // The game's own cast of a spell on one of its items.
+    SpellCastResult CastOnItem(Player* bot, uint32_t spell, Item* item)
+    {
+        SpellInfo const* info = sSpellMgr->GetSpellInfo(spell);
+        if (!info)
+            return SPELL_FAILED_SPELL_UNAVAILABLE;
+        SpellCastTargets targets;
+        targets.SetItemTarget(item);
+        return bot->CastSpell(targets, info, nullptr);
+    }
+
+    // What the next go works on: nullptr when there is nothing left.
+    Item* NextTarget(Player* bot, Session& s)
+    {
+        switch (s.kind)
+        {
+            case Kind::Enchant:
+                return s.targets.empty() ? nullptr : bot->GetItemByGuid(s.targets.front());
+            case Kind::Disenchant:
+                while (s.nextTarget < s.targets.size())
+                    if (Item* item = bot->GetItemByGuid(s.targets[s.nextTarget++]))
+                        if (!item->IsInTrade() && !item->IsEquipped())
+                            return item;
+                return nullptr;
+            default:
+            {
+                // A stack of exactly five, split off a bigger one first as a
+                // player might. Playerbots handles the loot window a breakdown
+                // opens too, once its AI is back: it asks for what is no longer
+                // in it and shuts it again, and for a herb or an ore the game
+                // takes five off the stack whenever its window is shut
+                // (WorldSession::DoLootRelease) -- for nothing, the second
+                // time. With the five gone there is no stack left to take from.
+                Item* five = nullptr;
+                Item* more = nullptr;
+                ForEachBagItem(bot, [&](Item* item)
+                               {
+                                   if (item->GetEntry() != s.entry || item->IsInTrade())
+                                       return;
+                                   if (item->GetCount() == 5 && !five)
+                                       five = item;
+                                   else if (item->GetCount() > 5 && !more)
+                                       more = item;
+                               });
+                if (five || !more)
+                    return five;
+                uint16 to = 0;
+                if (!EmptyPlaceFor(bot, more, to))
+                    return nullptr;   // nowhere to put five by themselves
+                bot->SplitItem(more->GetPos(), to, 5);
+                Item* split = bot->GetItemByPos(to);
+                return split && split != more && split->GetEntry() == s.entry && split->GetCount() == 5 ? split
+                                                                                                    : nullptr;
+            }
+        }
     }
 
     // A tick at it. False: done (let go).
@@ -1026,6 +1628,12 @@ namespace
         }
         if (bot->IsNonMeleeSpellCast(false))
             return true;   // at it
+        // What it broke down gave something: taken, and the window shut.
+        if (s.looting)
+        {
+            s.looting = false;
+            TakeLoot(bot);
+        }
         // Moved off what it was doing: something else wants it.
         if (bot->GetExactDist(s.ax, s.ay, s.az) > 5.0f)
             return stop(true);
@@ -1053,14 +1661,39 @@ namespace
             return stop(false);
         if (now < s.nextCast)
             return true;
-        const SpellCastResult res = bot->CastSpell(bot, s.spell, false);
+
+        SpellCastResult res = SPELL_CAST_OK;
+        uint32_t        on  = 0;   // the thing it was cast on, for what is left alone after a no
+        if (s.kind == Kind::Make)
+            res = bot->CastSpell(bot, s.spell, false);
+        else
+        {
+            Item* target = NextTarget(bot, s);
+            if (!target)
+                return stop(false);   // nothing left to work on
+            if (s.kind != Kind::Enchant)
+                on = target->GetEntry();
+            res = CastOnItem(bot, s.spell, target);
+            if (res == SPELL_CAST_OK && s.kind != Kind::Enchant)
+                s.looting = true;
+        }
         if (res != SPELL_CAST_OK)
         {
-            Failed("", res);
+            Failed(s.kind == Kind::Make ? "" : s.kind == Kind::Enchant ? "enchant: " : "breakdown: ", res);
+            // Not again for a while: asked every time, it is turned down every time.
+            g_bots[bot->GetGUID().GetRawValue()].skip[SkipKey(s.spell, on)] = now + kSkipFor;
             return stop(false);
         }
         --s.left;
         ++g_stats.casts;
+        switch (s.kind)
+        {
+            case Kind::Enchant:    ++g_stats.enchants;    break;
+            case Kind::Disenchant: ++g_stats.disenchants; break;
+            case Kind::Mill:       ++g_stats.millings;    break;
+            case Kind::Prospect:   ++g_stats.prospects;   break;
+            default: break;
+        }
         s.nextCast = now + std::chrono::milliseconds(s.gapMs);
         return true;
     }
@@ -1085,9 +1718,11 @@ void PbpCrafting_Update(uint32_t diff)
             ++it;
     }
 
-    // City life's plans it never got round to.
+    // City life's plans it never got round to; gear bought to break down that never was.
     for (auto it = g_cityPlans.begin(); it != g_cityPlans.end();)
         it = now > it->second.until ? g_cityPlans.erase(it) : std::next(it);
+    for (auto it = g_toBreak.begin(); it != g_toBreak.end();)
+        it = now > it->second ? g_toBreak.erase(it) : std::next(it);
 
     PbpCraftSettings const& c = Cfg();
     if (!g_Pbp.enable || !c.enable)
@@ -1179,13 +1814,12 @@ bool PbpCrafting_CityPlan(Player* bot, float walk, float& x, float& y, float& z,
         ++g_stats.nothing;
         return false;
     }
-    Recipe const& r = *cp.plan.recipe;
-    if (!RoomFor(bot, r))
+    if (!RoomFor(bot, cp.plan))
     {
         ++g_stats.noRoom;
         return false;
     }
-    if (r.focus && !cp.plan.access.inReach)
+    if (cp.plan.focus && !cp.plan.access.inReach)
     {
         Station const* st = cp.plan.access.walkTo;
         if (!st || !SpotBy(bot, *st, cp.x, cp.y, cp.z))
@@ -1225,7 +1859,7 @@ bool PbpCrafting_CityBegin(Player* bot)
     if (cp.station)
     {
         // Walked over: the forge or the anvil is in reach now, as the game looks for it.
-        if (!FocusInReach(bot, cp.plan.recipe->focus))
+        if (!FocusInReach(bot, cp.plan.focus))
         {
             Failed("", SPELL_FAILED_REQUIRES_SPELL_FOCUS);
             return false;
@@ -1246,6 +1880,8 @@ void PbpCrafting_CityCancel(Player* bot)
         return;
     if (bot->IsNonMeleeSpellCast(false))
         bot->InterruptNonMeleeSpells(false);
+    if (it->second.looting && bot->IsInWorld())
+        TakeLoot(bot);   // broke something down, and had not taken what it gave
     ++g_stats.cutShort;
     g_sessions.erase(it);
 }
@@ -1274,7 +1910,7 @@ bool PbpCrafting_Now(Player* bot, std::string& report)
     if (!MakePlan(bot, ai, plan))
     {
         ++g_stats.nothing;
-        report = fmt::format("{}: nothing worth making ({}).", bot->GetName(), plan.note);
+        report = fmt::format("{}: nothing worth doing ({}).", bot->GetName(), plan.note);
         return false;
     }
     std::string done;
@@ -1296,12 +1932,19 @@ PbpBrief PbpCrafting_Brief(bool full)
     PbpCraftingStats const s = PbpCrafting_GetStats();
     const bool on = g_Pbp.enable && g_Pbp.crafting.enable;
     b.lines.push_back(fmt::format("Crafting: {} -- {} at it now; {} went to work ({} hanging out in a city; {} for an "
-                                  "upgrade, {} for skill, {} to sell), {} crafts; {} looked at with nothing worth "
-                                  "making.",
+                                  "upgrade, {} for skill, {} for materials, {} to sell), {} crafts; {} looked at "
+                                  "with nothing worth doing.",
                                   on ? "on" : "OFF", s.working, s.sessions, s.cityLife, s.forUse, s.forSkill,
-                                  s.forSale, s.casts, s.nothing));
+                                  s.forMaterials, s.forSale, s.casts, s.nothing));
     if (full)
     {
+        b.lines.push_back(fmt::format("Of the crafts: {} pieces of gear disenchanted, {} lots of herbs milled, {} of "
+                                      "ore prospected, {} enchants put on their own gear; {} bots taught Disenchant, "
+                                      "Milling or Prospecting their skill said they should know; {} pieces bought "
+                                      "to disenchant waiting. The game lists what {} kinds of gear disenchant "
+                                      "into, {} herbs mill into and {} ores prospect into.",
+                                      s.disenchants, s.millings, s.prospects, s.enchants, s.taught, g_toBreak.size(),
+                                      g_disenchantYields.size(), g_millYields.size(), g_prospectYields.size()));
         b.lines.push_back(fmt::format("{} recipes known to it. At a forge, an anvil or a fire {} times ({} put by one "
                                       "with nobody about, {} of them put back after); {} campfires made; bought {} "
                                       "things from vendors for it ({}c); {} with no room in their bags; {} left for "
@@ -1322,4 +1965,124 @@ PbpBrief PbpCrafting_Brief(bool full)
         b.issues.push_back(fmt::format("Crafting: the game turned down {} of {} crafts begun (.pbp report says why).",
                                        s.failed, s.casts + s.failed));
     return b;
+}
+
+void PbpCrafting_Load()
+{
+    const uint32 start = getMSTime();
+    g_disenchantYields.clear();
+    g_millYields.clear();
+    g_prospectYields.clear();
+
+    // A loot table's rows as the core reads them (LootStore::LoadLootTable),
+    // leaving out what only someone on a quest gets and what only a hard
+    // mode gives. `where`: "" for all of it.
+    auto read = [](char const* table, std::string const& where)
+    {
+        PbpCraft::LootTables out;
+        QueryResult result = WorldDatabase.Query(
+            "SELECT Entry, Item, Reference, Chance, QuestRequired, LootMode, GroupId, MinCount, MaxCount FROM {}{} "
+            "ORDER BY Entry, Item",
+            table, where);
+        if (!result)
+            return out;
+        do
+        {
+            Field* f = result->Fetch();
+            if (f[4].Get<bool>() || !(f[5].Get<uint16>() & LOOT_MODE_DEFAULT))
+                continue;
+            PbpCraft::LootRow row;
+            row.item      = f[1].Get<uint32>();
+            row.reference = uint32(std::abs(f[2].Get<int32>()));
+            row.chance    = f[3].Get<float>();
+            row.group     = f[6].Get<uint8>();
+            row.minCount  = f[7].Get<uint8>();
+            row.maxCount  = f[8].Get<uint8>();
+            out[f[0].Get<uint32>()].push_back(row);
+        } while (result->NextRow());
+        return out;
+    };
+    const PbpCraft::LootTables disenchant = read("disenchant_loot_template", "");
+    const PbpCraft::LootTables milling    = read("milling_loot_template", "");
+    const PbpCraft::LootTables prospect   = read("prospecting_loot_template", "");
+
+    // The tables those refer to, and the ones those refer to in turn: only
+    // these few of the many there are.
+    PbpCraft::LootTables references;
+    std::unordered_set<uint32_t> wanted;
+    auto refer = [&](PbpCraft::LootTables const& tables)
+    {
+        for (auto const& [entry, rows] : tables)
+            for (PbpCraft::LootRow const& row : rows)
+                if (row.reference && !references.contains(row.reference))
+                    wanted.insert(row.reference);
+    };
+    refer(disenchant);
+    refer(milling);
+    refer(prospect);
+    for (int round = 0; round < 4 && !wanted.empty(); ++round)
+    {
+        std::string in;
+        for (uint32_t entry : wanted)
+            in += (in.empty() ? "" : ",") + std::to_string(entry);
+        const PbpCraft::LootTables more = read("reference_loot_template", " WHERE Entry IN (" + in + ")");
+        wanted.clear();
+        for (auto const& [entry, rows] : more)
+            references[entry] = rows;
+        refer(more);
+    }
+
+    auto yields = [&](PbpCraft::LootTables const& tables, std::unordered_map<uint32_t, YieldList>& into)
+    {
+        for (auto const& [entry, rows] : tables)
+        {
+            YieldList list;
+            for (auto const& [item, many] : PbpCraft::Expected(rows, references))
+                if (many > 0.0 && sObjectMgr->GetItemTemplate(item))
+                    list.emplace_back(item, many);
+            std::sort(list.begin(), list.end());
+            if (!list.empty())
+                into[entry] = std::move(list);
+        }
+    };
+    yields(disenchant, g_disenchantYields);
+    yields(milling, g_millYields);
+    yields(prospect, g_prospectYields);
+    LOG_INFO("server.loading", ">> Playerbots Plus: what {} kinds of gear disenchant into, {} herbs mill into and {} "
+             "ores prospect into, in {} ms",
+             g_disenchantYields.size(), g_millYields.size(), g_prospectYields.size(), GetMSTimeDiffToNow(start));
+}
+
+bool PbpCrafting_CanDisenchant(Player* bot, uint32_t itemEntry)
+{
+    ItemTemplate const* p = sObjectMgr->GetItemTemplate(itemEntry);
+    if (!bot || !p || !g_Pbp.enable || !Cfg().enable || !Cfg().disenchant ||
+        (p->Class != ITEM_CLASS_WEAPON && p->Class != ITEM_CLASS_ARMOR) || !p->DisenchantID ||
+        p->Quality < ITEM_QUALITY_UNCOMMON ||
+        p->Quality > std::min<uint32_t>(Cfg().disenchantMaxQuality, ITEM_QUALITY_EPIC) ||
+        !g_disenchantYields.contains(p->DisenchantID))
+        return false;
+    ReadRecipes();
+    uint32_t skill = 0;
+    return KnowsBreak(bot, kDisenchantSpell, skill) && p->RequiredDisenchantSkill <= skill;
+}
+
+uint64_t PbpCrafting_DisenchantWorth(uint32_t itemEntry)
+{
+    ItemTemplate const* p = sObjectMgr->GetItemTemplate(itemEntry);
+    if (!p || !p->DisenchantID)
+        return 0;
+    auto yields = g_disenchantYields.find(p->DisenchantID);
+    return yields == g_disenchantYields.end() ? 0 : WorthOf(yields->second);
+}
+
+void PbpCrafting_BoughtToBreak(Player* bot, Item* item)
+{
+    if (!bot || !item)
+        return;
+    g_toBreak[item->GetGUID().GetCounter()] = Clock::now() + kToBreakFor;
+    // Looked at as soon as it is free, not when its turn comes round.
+    Due& due = g_bots[bot->GetGUID().GetRawValue()];
+    due.scheduled = true;
+    due.next      = Clock::now();
 }

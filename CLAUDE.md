@@ -57,6 +57,12 @@ These hooks are the exception, and they touch nothing of the world:
   They note the guid, skill and values under a mutex; whether it is a random
   bot is the world tick's to say. The module's own `SetSkill` is no news
   (`t_ours`, thread_local).
+- `PbpRollsPacketScript::OnPacketSent` runs on whatever thread sends the
+  packet (a roll starts where the corpse is looted). It reads the packet and
+  who it went to: a roll offering Disenchant sent to a bot is noted under a
+  mutex for the world tick, and a Disenchant roll's win, sent to its winner,
+  sets a thread-local (`PbpLooted_DisenchantWon`) for the store that follows
+  on that thread.
 
 ## An Item* in a hook may already be freed
 
@@ -240,6 +246,17 @@ was not away), or more in it than last seen -- it is not, however little that
 was; up for auction or in the post (`away`) and back whole, it still is. The
 sums are `PbpLooted` (`PlayerbotsPlusLootedRules`, pure, tested). It can only
 err the safe way: some of its own no longer counted, never a free thing sold.
+
+What breaking something down gives is loot (`PlayerbotsPlusCrafting` takes it
+out of the game's own loot window, so the loot hook follows the store), and
+so is what a Disenchant roll gives its winner: the game stores that with no
+loot hook at all (`Group::CountTheRoll`: `AutoStoreLoot`), so the win's own
+packet marks the store that comes straight after it on the same thread
+(`PbpLooted_DisenchantWon`, from `PlayerbotsPlusRolls`). Taken for a
+hand-out, dust won on a roll spoiled the stack of its own it joined. The
+record keeps gear an enchanter could break down even when it binds on pickup
+(`Kept`): it disenchants only its own.
+
 Anything new that sells asks `PbpLooted_IsOwn` (another module,
 `PlayerbotsPlus::LootedByBot`, API 9; made too from API 11) of the very stack
 it sells, last, and sells nothing when it says no. `SoldByVendors` stays a
@@ -288,6 +305,66 @@ makes a bot say anything about it.
   lets it go (`Session::cityLife`), and `PbpCrafting_Busy` says no of it
   (the hangout would let its own crowd go); `PbpCrafting_AtIt` says yes of
   every craft (the market).
+- Breaking things down is a craft like any other (`Kind::Disenchant`, `Mill`,
+  `Prospect`): one more `PbpCraft::Option` for `Choose`, its cost what goes
+  in and its worth what comes out on average -- read once from the world's
+  disenchant, milling and prospecting loot tables (`PbpCrafting_Load`, the
+  sums `PbpCraft::Expected`, pure and tested). The game's own cast on the
+  item (`CastOnItem`), and the game's own loot window emptied the way a
+  client asks (`TakeLoot`: `HandleAutostoreLootItemOpcode` slot by slot; what
+  will not fit is posted by the core).
+  - An enchanter disenchants only its own (`SpareGear`: `PbpLooted_IsOwn`, or
+    a piece bought to be, `PbpCrafting_BoughtToBreak`, API 12) that
+    playerbots would only sell. Playerbots hands gear out for nothing: a
+    list of kinds would not have kept that out of the dust.
+  - Herbs and ore go from a stack of exactly five, split off a bigger one
+    first (`NextTarget`). Playerbots answers the loot window too
+    (`StoreLootAction`, from the SMSG_LOOT_RESPONSE it queued while its AI
+    was held): it asks for what is gone and shuts the window again, and for
+    a herb or an ore the game takes five off the stack every time its window
+    is shut (`WorldSession::DoLootRelease`). With the five gone there is
+    nothing left to take from. Never mill or prospect a stack that outlives
+    the cast.
+  - Playerbots sets a skill without its spells: one whose skill says it
+    should know Disenchant, Milling or Prospecting is taught it
+    (`KnowsBreak`).
+  - Milling and prospecting give no skill unless the core's
+    `SkillChance.Milling` / `SkillChance.Prospecting` are set
+    (`CONFIG_SKILL_MILLING`, `_PROSPECTING`): their point chance is 0 without.
+- An enchanter's points come from enchants, which need something to go on
+  (`Kind::Enchant`, `PieceToEnchant`): a piece it wears with nothing on it,
+  below `Playerbots.MinEnchantingBotLevel` over its own earlier work too
+  (from that level the enchants on a bot's gear are playerbots' choice for
+  its spec, put back at every refresh: left alone), else a spare piece in
+  its bags, the junk it will break down. Never over anything better.
+- With nothing that gives a point, it makes what such a craft is short of
+  (`Why::Materials`, `PbpCraft::Wanted`: up to three steps back -- bars for
+  the smith, pigment then ink for the scribe, dust and a rod for the
+  enchanter). Without it an enchanter with a bag of greens and no rod never
+  got started.
+- Dust, essences and shards have no vendor price in the world database; a
+  quarter of what one costs to buy stands in (`VendorWorth`, the market's),
+  or nothing about them could be worth anything.
+
+## Enchanters roll Disenchant
+
+Playerbots' `LootRollAction` has an enchanter roll Disenchant only where its
+item judgement says `ITEM_USAGE_DISENCHANT`: gear that binds when picked up
+(or is already soulbound). What binds when equipped -- nearly all a dungeon's
+trash drops -- it judges "sell it" and rolls Greed: with the realm's
+`Playerbots.LootRollDisenchant = 1`, an enchanter in a dungeon group still
+rolled Greed on nearly everything.
+
+`PlayerbotsPlusRolls` casts the vote for it (`Group::CountRollVote`, the
+game's own) in the world tick after the roll's packet went to the bot, for
+an enchanter with the skill for the piece which playerbots would only sell
+(`ITEM_USAGE_AH`, `VENDOR`, `DISENCHANT`: never one it would wear or keep),
+on gear that binds when equipped only up to `Rolls.DisenchantBoEMaxQuality`.
+Only where playerbots rolls at all (`LootRollDisenchant` and
+`LootGreedRollLevel` on; not master loot or free for all). The bot's own AI
+votes from a map thread a moment later and a vote is never changed: where it
+got there first its Greed stands, and the piece it wins is one it breaks
+down itself later. Do not try to out-wait or undo playerbots' vote.
 
 ## Playerbots' judgement, not ours
 

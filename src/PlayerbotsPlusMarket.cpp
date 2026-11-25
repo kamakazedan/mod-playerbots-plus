@@ -244,10 +244,21 @@ namespace
         return e != idx.byEntry.end() ? e->second : PriceRef{};
     }
 
+    // What a vendor gives for one; for the few things no vendor takes at all
+    // but people trade all the time (an enchanter's dust, essences and
+    // shards), a quarter of what one costs to buy, as a vendor's price is of
+    // most things.
+    uint32_t VendorWorth(ItemTemplate const* proto)
+    {
+        if (proto->SellPrice)
+            return proto->SellPrice;
+        return proto->Class == ITEM_CLASS_TRADE_GOODS ? uint32_t(std::max<int32>(proto->BuyPrice, 0)) / 4 : 0;
+    }
+
     PbpPrice::ItemFacts FactsOf(ItemTemplate const* proto)
     {
         PbpPrice::ItemFacts f;
-        f.vendor        = proto->SellPrice;
+        f.vendor        = VendorWorth(proto);
         f.quality       = proto->Quality;
         f.itemLevel     = proto->ItemLevel;
         f.requiredLevel = proto->RequiredLevel;
@@ -448,7 +459,7 @@ namespace
         // thread for its profession...).
         if (SoldByVendors(proto->ItemId))
             return false;
-        if (!proto->SellPrice)
+        if (!VendorWorth(proto))
             return false;   // worthless to anyone
         // Only what could change hands: never a thing bound when picked up, a
         // quest's, or bound to an account, nor one now bound to the bot.

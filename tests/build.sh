@@ -8,7 +8,8 @@
 # ground's sums (playerbots' grind grid, falls), what a bot looted or made
 # itself, the only things it sells, a city's hangout zones (shares that drift
 # and add up, places, moves) with what the conf ships, and professions' sums
-# (skill-up chances, ranks, pairs for a class, what to craft). Needs only g++:
+# (skill-up chances, ranks, pairs for a class, what to craft, what a point is
+# short of, what a loot table gives on average). Needs only g++:
 # none of them has game types in it. Run from anywhere: bash tests/build.sh
 # (OUT=<dir> puts the binaries elsewhere).
 set -e
