@@ -2,6 +2,7 @@
 #define PLAYERBOTS_PLUS_CONFIG_H
 
 #include "PlayerbotsPlusCityLifeText.h"
+#include "PlayerbotsPlusCraftText.h"
 #include "PlayerbotsPlusDungeonsText.h"
 #include "PlayerbotsPlusMarketPrice.h"
 
@@ -159,8 +160,11 @@ struct PbpSkillSettings
 {
     bool     enable          = true;    // profession skill only from gathering and crafting
     bool     classPairs      = true;    // a bot whose pair does not suit its class gets one that does
+    bool     leanings        = true;    // ...or the kind of person it is, as a chat module says
+    bool     changeExisting  = false;   // every bot takes its leaning's own pick, not only new ones
     uint32_t intervalMs      = 1000;    // how often bots are looked over...
     uint32_t botsPerInterval = 100;     // ...this many at a time
+    std::unordered_map<std::string, PbpCraft::Leaning> leaningsByName;   // by PbpCraft::LeaningKey
 };
 
 // The full report (PlayerbotsPlusReport): every counter, spot, run and party,

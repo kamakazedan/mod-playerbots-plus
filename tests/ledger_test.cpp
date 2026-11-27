@@ -264,6 +264,44 @@ int main()
                                                              "(5g)."));
     }
 
+    // By leaning and by profession pair: the most an hour of play first.
+    {
+        std::map<std::string, int64_t> f = {
+            { "time.lean.Profit", 600 },        { "time.active.lean.Profit", 120 },   // 2 hours playing
+            { "gold.in.lean.Profit", 240000 },                                         // 24g: 12g an hour
+            { "time.lean.Maker", 1200 },        { "time.active.lean.Maker", 240 },    // 4 hours playing
+            { "gold.in.lean.Maker", 200000 },                                          // 20g: 5g an hour
+            { "time.lean.Newbie", 60 },                                                // never playing
+            { "time.pair.Herbalism+Mining", 60 }, { "time.active.pair.Herbalism+Mining", 60 },
+            { "gold.in.pair.Herbalism+Mining", 30000 },
+            { "time.levels", 5 },                                                      // not one of them
+        };
+        const std::vector<std::string> lean = ByKind(f, "lean");
+        True("by leaning: the three with time", lean.size() == 3);
+        True("by leaning: the most first", lean.size() == 3 && lean[0].rfind("Profit: 10 bot-hours online, 2 with "
+                                                                              "their AI running -- an hour of play, "
+                                                                              "got 12g.", 0) == 0);
+        True("by leaning: then the next", lean.size() == 3 && lean[1].rfind("Maker: 20 bot-hours", 0) == 0);
+        True("by leaning: none to go by last", lean.size() == 3 && lean[2] == "Newbie: 1 bot-hours online, 0 with "
+                                                                              "their AI running -- an hour of play, "
+                                                                              "got -.");
+        const std::vector<std::string> pair = ByKind(f, "pair");
+        True("by pair", pair.size() == 1 && pair[0].find("Herbalism+Mining: 1 bot-hours") == 0 &&
+                            pair[0].find("got 3g.") != std::string::npos);
+        True("by nothing", ByKind({}, "lean").empty());
+        const std::vector<std::string> report = Report("t", f, {}, 1);
+        True("report: by leaning", Has(report, "By leaning, the kind of person a bot is (every level together, the "
+                                               "most an hour of play first):") &&
+                                       Has(report, "  Profit: 10 bot-hours"));
+        True("report: by pair", Has(report, "By profession pair (every level together, the most an hour of play "
+                                            "first):"));
+        True("brief: by leaning", Has(Brief(f, {}, 1), "Got an hour of play, by leaning (every level together): "
+                                                       "Profit 12g, Maker 5g."));
+        True("a figure's name", KeyPart("Old Ways!") == "OldWays" &&
+                                    KeyPart("Herbalism+Mining") == "Herbalism+Mining" &&
+                                    KeyPart(std::string(40, 'a')).size() == 24);
+    }
+
     std::printf("%d/%d passed\n", g_checks - g_fails, g_checks);
     return g_fails ? 1 : 0;
 }

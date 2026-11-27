@@ -25,7 +25,17 @@
 //     (Skills.ClassPairs: playerbots gave most bots made before mid-November
 //     2026 any two) gets one that does, keeping whichever of its two fits,
 //     the new one starting at the skill of the one it replaces; playerbots
-//     is told the new pair (firstSkill, secondSkill), so it keeps it.
+//     is told the new pair (firstSkill, secondSkill), so it keeps it;
+//   * with a chat module that gives bots personalities, the kind of person
+//     a bot is leans it to some professions (Skills.Leanings, a leaning
+//     each: Skills.Leaning.<Name>): a greedy one to what makes gold, a pet
+//     lover away from skinning. A pair that suits its leaning suits it as
+//     well as its class's do; one with a profession its leaning will never
+//     have is changed; and a new bot -- or, with
+//     Skills.LeaningsChangeExisting, every bot -- whose pair is only its
+//     class's takes its leaning's own pick for it, rolled the same for it
+//     every time, so it changes once. Only pairs that can make their way on
+//     their own (PbpCraft::FeedsItself): crafting buys only what vendors sell.
 //
 // Fishing is left as playerbots has it: nothing is made with it, and city
 // life's fishing needs it.
@@ -35,10 +45,12 @@
 // happened under a mutex; the world tick does the rest.
 // --------------------------------------------------------------------------
 
+#include "PlayerbotsPlusCraftText.h"
 #include "PlayerbotsPlusReport.h"
 #include "ScriptMgr.h"
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <string>
 
@@ -66,13 +78,39 @@ struct PbpSkillsStats
     uint64_t points     = 0;   // points the game gave them since startup
     uint64_t putBack    = 0;   // times playerbots set one and it was put back
     uint64_t takenBack  = 0;   // ...points it had handed out, taken back
-    uint64_t switched   = 0;   // pairs that did not suit the class, changed
+    uint64_t switched   = 0;   // pairs that suited neither the class nor the bot's leaning, changed
+    uint64_t leaned     = 0;   // pairs of its class's changed for its leaning's own pick
+    uint64_t refused    = 0;   // pairs with one its leaning will never have, changed
     uint64_t dropped    = 0;   // notes dropped, too many at once
     uint64_t writes     = 0;   // times written to the database
     std::map<std::string, uint64_t> pointsBySkill;   // "Mining" -> points since startup
     std::map<std::string, uint64_t> switchedTo;      // "Mining and Blacksmithing" -> bots given it
+    std::map<std::string, uint64_t> leanedTo;        // "Profit: Herbalism and Mining" -> bots given it
+    // The last full round over the bots online: leaning -> where their pairs
+    // stand with it (PbpCraft::MatchName) -> how many.
+    std::map<std::string, std::map<std::string, uint64_t>> byLeaning;
 };
 PbpSkillsStats PbpSkills_GetStats();
+
+// ---- leanings (world thread) ----------------------------------------------
+
+// Who leans which way: a chat module's answer for a bot, a leaning's name
+// (PlayerbotsPlus::SetLeaningProvider).
+void PbpSkills_SetLeaningProvider(std::function<std::string(Player*)> provider);
+
+// The leaning `bot` is (Skills.Leaning.<Name>), as the chat module says:
+// null for none, without one, or with Skills.Leanings off.
+PbpCraft::Leaning const* PbpSkills_LeaningOf(Player* bot);
+
+// How its two professions stand with its leaning: PbpCraft::MatchName's
+// "own", "armour", "race", "rare" or "class"; empty with no leaning, not two
+// professions, or a pair that suits neither it nor its class, or has one it
+// will never have.
+std::string PbpSkills_LeaningMatch(Player* bot);
+
+// Its two professions as one name, the gathering one first:
+// "Herbalism+Mining". Empty without two.
+std::string PbpSkills_PairKey(Player* bot);
 
 // .pbp status and the report.
 PbpBrief PbpSkills_Brief(bool full);

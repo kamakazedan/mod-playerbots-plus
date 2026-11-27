@@ -6,6 +6,7 @@
 #include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusLooted.h"
 #include "PlayerbotsPlusMarketPrice.h"
+#include "PlayerbotsPlusSkills.h"
 
 #include "AuctionHouseMgr.h"
 #include "Bag.h"
@@ -721,10 +722,17 @@ namespace
         auto const& m = Cfg();
         const uint64_t self = bot->GetGUID().GetRawValue();
 
+        // The kind of person it is may put up more at a time, or fewer (its
+        // leaning's list:N, a share of what the settings allow).
+        PbpCraft::Leaning const* leaning = PbpSkills_LeaningOf(bot);
+        const uint64_t listPct     = leaning ? leaning->listPct : 100;
+        const uint32_t maxAuctions = uint32_t(uint64_t(m.maxAuctionsPerBot) * listPct / 100);
+        const uint32_t perVisit    = uint32_t(uint64_t(m.maxListingsPerVisit) * listPct / 100);
+
         const uint32_t up = idx.perOwner.contains(self) ? idx.perOwner[self] : 0;
-        if (up >= m.maxAuctionsPerBot)
+        if (up >= maxAuctions)
         {
-            r.notes.push_back(fmt::format("has {} auctions up already", up));
+            r.notes.push_back(fmt::format("has {} auctions up already (at most {})", up, maxAuctions));
             return;
         }
         if (idx.botAuctions >= m.maxBotAuctionsPerHouse)
@@ -732,7 +740,7 @@ namespace
             r.notes.push_back("the bots have Market.Sell.MaxBotAuctionsPerHouse up already");
             return;
         }
-        const uint32_t room = std::min(m.maxListingsPerVisit, m.maxAuctionsPerBot - up);
+        const uint32_t room = std::min(perVisit, maxAuctions - up);
         if (!room)
             return;
 

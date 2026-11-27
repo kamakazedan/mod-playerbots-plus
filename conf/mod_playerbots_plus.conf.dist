@@ -433,6 +433,93 @@ PlayerbotsPlus.Skills.Enable = 1
 #        Default: 1
 PlayerbotsPlus.Skills.ClassPairs = 1
 
+#    PlayerbotsPlus.Skills.Leanings
+#    PlayerbotsPlus.Skills.LeaningsChangeExisting
+#        With a chat module that gives bots personalities (mod-ollama-chat:
+#        OllamaChat.Professions.Leanings), the kind of person a bot is leans
+#        it to some professions: a greedy one to what makes gold, a pet lover
+#        away from skinning, a gnome who plays the part to engineering. Each
+#        personality is one of the leanings below, or none.
+#          - A pair its leaning takes suits a bot as well as its class's
+#            pairs do: ClassPairs leaves it alone.
+#          - A pair with a profession its leaning will never have is changed,
+#            keeping the other where it can.
+#          - A bot whose pair is only one of its class's takes its leaning's
+#            own pick for it -- the same pick for it every time, so it
+#            changes once -- when playerbots has just given it its pair (a
+#            new bot), or, with LeaningsChangeExisting 1, whichever bot it
+#            is. With 0 the bots there are keep their pairs. Either way
+#            nothing earned is lost: a new profession starts at the skill of
+#            the one it replaces.
+#        Only pairs that make their way on their own: crafting buys only
+#        what vendors sell, so a smith has mining beside it, an alchemist
+#        herbalism, a leatherworker skinning. A leaning's "sell" has it craft
+#        to sell before it crafts for a point, and its "list" puts more up on
+#        the auction house at a time. Without a chat module, or with
+#        Leanings 0, none of this changes anything. .pbp professions shows
+#        how the bots online stand with their leanings, and .pbp economy
+#        what a leaning's bots get an hour.
+#        Default: 1, 0
+PlayerbotsPlus.Skills.Leanings = 1
+PlayerbotsPlus.Skills.LeaningsChangeExisting = 0
+
+#    PlayerbotsPlus.Skills.Leaning.<Name>
+#        A leaning: the professions a kind of person goes for. Words between
+#        spaces, in any order:
+#          Herbalism+Mining:60   a pair it takes, and how often: a share
+#                                against the others', not a percent
+#          class:30              its class's own pairs between them
+#          armour:30             the pair that makes the armour it wears:
+#                                mining and blacksmithing for plate, skinning
+#                                and leatherworking for mail and leather,
+#                                tailoring and enchanting for cloth
+#          race:30               its race's knack, by its racial: a gnome's
+#                                engineering (with mining), a tauren's
+#                                herbalism (with alchemy), a blood elf's
+#                                enchanting (with tailoring), a draenei's
+#                                jewelcrafting (with mining); any other race
+#                                takes its class's pairs
+#          rare:30               the pair the fewest of its class take
+#          never:Skinning,...    professions it will not have
+#          sell                  it crafts to sell before it crafts for a
+#                                point
+#          list:200              percent of what the market lets a bot put
+#                                up (Market.Sell.MaxPerVisit and
+#                                MaxAuctionsPerBot)
+#        The names are the chat module's to give, matched whatever the case.
+#        With none of these lines these are the leanings; with any, only
+#        those there are. A pair that cannot make its way on its own, or has
+#        a profession the leaning will never have, is left out, and the log
+#        says so at startup.
+#          Profit    out for gold: herbs and ore sell as they are
+#          Power     every edge for its gear: armour it makes, gems it cuts
+#          PvP       engineering's gadgets, for fights with other players
+#          Maker     likes making things
+#          Style     makes things to wear: clothes, jewellery
+#          Tinker    gadgets and things that go bang
+#          Pets      engineering's mechanical pets; never skins a beast
+#          Outdoors  out in the world gathering, no crafting
+#          Scholar   the learned trades: inscription, enchanting
+#          OldWays   nothing that came in later: no inscription, no
+#                    jewelcrafting
+#          Heritage  its race's knack
+#          Contrary  what the fewest of its class take
+#          Newbie    looks it up: a pair that suits its class
+#        Default: (below)
+PlayerbotsPlus.Skills.Leaning.Profit = "Herbalism+Mining:70 class:30 sell list:200"
+PlayerbotsPlus.Skills.Leaning.Power = "armour:70 Mining+Jewelcrafting:30"
+PlayerbotsPlus.Skills.Leaning.PvP = "Mining+Engineering:70 armour:30"
+PlayerbotsPlus.Skills.Leaning.Maker = "Tailoring+Enchanting:50 Herbalism+Alchemy:50"
+PlayerbotsPlus.Skills.Leaning.Style = "Tailoring+Enchanting:50 Mining+Jewelcrafting:50"
+PlayerbotsPlus.Skills.Leaning.Tinker = "Mining+Engineering:80 class:20"
+PlayerbotsPlus.Skills.Leaning.Pets = "Mining+Engineering:70 class:30 never:Skinning"
+PlayerbotsPlus.Skills.Leaning.Outdoors = "Herbalism+Mining:40 Herbalism+Skinning:30 Mining+Skinning:30"
+PlayerbotsPlus.Skills.Leaning.Scholar = "Herbalism+Inscription:50 Tailoring+Enchanting:50"
+PlayerbotsPlus.Skills.Leaning.OldWays = "class:100 never:Inscription,Jewelcrafting"
+PlayerbotsPlus.Skills.Leaning.Heritage = "race:100"
+PlayerbotsPlus.Skills.Leaning.Contrary = "rare:100"
+PlayerbotsPlus.Skills.Leaning.Newbie = "class:100"
+
 #    PlayerbotsPlus.Skills.IntervalMs
 #    PlayerbotsPlus.Skills.BotsPerInterval
 #        Every IntervalMs (250-60000), this many random bots (1-5000) are

@@ -1,6 +1,7 @@
 #include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusConfig.h"
 #include "PlayerbotsPlusLedgerText.h"
+#include "PlayerbotsPlusSkills.h"
 
 #include "AuctionHouseMgr.h"
 #include "Bag.h"
@@ -293,6 +294,7 @@ namespace
     std::unordered_map<uint64_t, Origin>  g_origin;          // a piece of gear's guid -> where it came from
     std::unordered_set<uint64_t>          g_counted;         // gear already counted as put on
     std::unordered_map<uint64_t, int64_t> g_paid;            // bot -> what the game paid it since the last look
+    std::unordered_map<uint64_t, int64_t> g_gotten;          // bot -> ...of it, what came in (not what went out)
     std::unordered_map<uint64_t, int64_t> g_had;             // bot -> its gold at the last look
     std::map<std::string, int64_t>        g_pending;         // figures not written yet, for g_day
     std::map<std::string, int64_t>        g_now;             // the latest look at the bots
@@ -460,6 +462,8 @@ namespace
                 Add(key, std::llabs(n.amount));
                 Add(key + BandKey(n.level), std::llabs(n.amount));
                 g_paid[n.guid] += n.amount;
+                if (n.amount > 0)
+                    g_gotten[n.guid] += n.amount;
                 return;
             }
             case NoteKind::LootMoney:
@@ -597,9 +601,35 @@ namespace
         // counts it fairly over a day. A look stands for the minutes since the
         // one before.
         const int64_t minutes = Cfg().censusMinutes;
+        PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot);
+        const bool active = ai && ai->IsActivityAllowedCached();
         Add("time.b" + b, minutes);
-        if (PlayerbotAI* ai = PlayerbotsMgr::instance().GetPlayerbotAI(bot); ai && ai->IsActivityAllowedCached())
+        if (active)
             Add("time.active.b" + b, minutes);
+
+        // ...and by the kind of person it is and by its professions, with what
+        // came in since the last look: whether the greedy earn more, and
+        // which pairs pay.
+        int64_t gotten = 0;
+        if (auto it = g_gotten.find(raw); it != g_gotten.end())
+        {
+            gotten = it->second;
+            g_gotten.erase(it);
+        }
+        std::vector<std::string> kinds;
+        if (PbpCraft::Leaning const* leaning = PbpSkills_LeaningOf(bot))
+            if (const std::string name = PbpLedger::KeyPart(leaning->name); !name.empty())
+                kinds.push_back("lean." + name);
+        if (const std::string pair = PbpSkills_PairKey(bot); !pair.empty())
+            kinds.push_back("pair." + PbpLedger::KeyPart(pair));
+        for (std::string const& kind : kinds)
+        {
+            Add("time." + kind, minutes);
+            if (active)
+                Add("time.active." + kind, minutes);
+            if (gotten)
+                Add("gold.in." + kind, gotten);
+        }
 
         v["now.bots"] += 1;
         v["now.bots.b" + b] += 1;

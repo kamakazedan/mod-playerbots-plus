@@ -1356,6 +1356,33 @@ void PlayerbotsPlus_LoadConfig(bool reload)
     PbpSkillSettings& sk = s.skills;
     sk.enable          = B("PlayerbotsPlus.Skills.Enable", true);
     sk.classPairs      = B("PlayerbotsPlus.Skills.ClassPairs", true);
+    sk.leanings        = B("PlayerbotsPlus.Skills.Leanings", true);
+    sk.changeExisting  = B("PlayerbotsPlus.Skills.LeaningsChangeExisting", false);
+    sk.leaningsByName.clear();
+    {
+        std::string bad;
+        auto addLeaning = [&](std::string const& name, std::string const& text)
+        {
+            std::string wrong;
+            PbpCraft::Leaning l = PbpCraft::ParseLeaning(text, wrong);
+            l.name = name;
+            sk.leaningsByName[PbpCraft::LeaningKey(name)] = std::move(l);
+            if (!wrong.empty())
+                bad += (bad.empty() ? "" : "; ") + name + ": " + wrong;
+        };
+        const std::string prefix = "PlayerbotsPlus.Skills.Leaning.";
+        const std::vector<std::string> keys = sConfigMgr->GetKeysByString(prefix);
+        if (keys.empty())
+            for (auto const& [name, text] : PbpCraft::DefaultLeanings())
+                addLeaning(name, text);
+        for (std::string const& key : keys)
+            addLeaning(key.substr(prefix.size()), sConfigMgr->GetOption<std::string>(key, ""));
+        if (!bad.empty())
+            LOG_ERROR("server.loading", "[Playerbots Plus] PlayerbotsPlus.Skills.Leaning: could not read {} (want "
+                      "pairs like \"Herbalism+Mining:60\" that feed themselves, class:N, armour:N, race:N, rare:N, "
+                      "never:<professions>, keep, sell, list:N).",
+                      bad);
+    }
     sk.intervalMs      = std::clamp<uint32_t>(U("PlayerbotsPlus.Skills.IntervalMs", 1000), 250, 60000);
     sk.botsPerInterval = std::clamp<uint32_t>(U("PlayerbotsPlus.Skills.BotsPerInterval", 100), 1, 5000);
 

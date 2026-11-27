@@ -114,6 +114,17 @@ namespace PbpLedger
     // no band has time yet.
     std::vector<std::string> ByBand(std::map<std::string, int64_t> const& flows);
 
+    // By leaning, the kind of person a bot is (`kind` "lean": "time.lean.<name>",
+    // "time.active.lean.<name>", "gold.in.lean.<name>"), or by profession pair
+    // ("pair": "time.pair.Herbalism+Mining", ...), a line for each with time
+    // counted, the most a bot got an hour of play first (none to go by last):
+    // its bot-hours, and what the game paid a bot an hour of play.
+    std::vector<std::string> ByKind(std::map<std::string, int64_t> const& flows, std::string const& kind);
+
+    // A name as a figure's name may have it: letters, digits and '+' only,
+    // at most 24 of them. "Old Ways!" -> "OldWays".
+    std::string KeyPart(std::string const& name);
+
     // What .pbp economy prints, after a `title` line of the caller's.
     // `flows`: everything taken over the days asked for, summed ("gold.in",
     // "loot.herb", "gear.looted", ...), over `withData` days that have

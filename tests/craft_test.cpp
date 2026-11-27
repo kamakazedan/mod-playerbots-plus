@@ -5,6 +5,9 @@
 #include "PlayerbotsPlusCraftText.h"
 
 #include <cstdio>
+#include <fstream>
+#include <sstream>
+#include <string>
 #include <unordered_map>
 
 namespace
@@ -23,9 +26,10 @@ namespace
     }
 }
 
-int main()
+int main(int argc, char** argv)
 {
     using namespace PbpCraft;
+    const std::string root = argc > 1 ? argv[1] : ".";
 
     // ---- skill-ups: as the core works them out --------------------------------
     // Copper Bar: yellow at 25, grey at 75 (its TrivialSkillLineRank).
@@ -78,6 +82,161 @@ int main()
     Check("apprentice spells", ApprenticeSpell(Skill::Blacksmithing) == 2018 && ApprenticeSpell(Skill::Mining) == 2575 &&
                                    ApprenticeSpell(42) == 0);
 
+    // ---- leanings ------------------------------------------------------------------------
+    Check("professions by name, any case", PrimaryByName("mining") == Skill::Mining &&
+                                               PrimaryByName("JEWELCRAFTING") == Skill::Jewelcrafting);
+    Check("...primary ones only", PrimaryByName("First Aid") == 0 && PrimaryByName("Cooking") == 0 &&
+                                      PrimaryByName("") == 0 && PrimaryByName("Mine") == 0);
+    Check("a smith with a miner feeds itself", FeedsItself(Skill::Mining, Skill::Blacksmithing) &&
+                                                   FeedsItself(Skill::Blacksmithing, Skill::Mining));
+    Check("two that both want ore do not", !FeedsItself(Skill::Blacksmithing, Skill::Engineering));
+    Check("alchemy without herbalism does not", !FeedsItself(Skill::Alchemy, Skill::Tailoring) &&
+                                                     !FeedsItself(Skill::Alchemy, Skill::Mining));
+    Check("leatherworking wants skinning", FeedsItself(Skill::Skinning, Skill::Leatherworking) &&
+                                               !FeedsItself(Skill::Mining, Skill::Leatherworking));
+    Check("tailoring and enchanting want only loot", FeedsItself(Skill::Tailoring, Skill::Enchanting) &&
+                                                         FeedsItself(Skill::Tailoring, Skill::Herbalism));
+    Check("two gathering ones feed themselves", FeedsItself(Skill::Herbalism, Skill::Mining) &&
+                                                    FeedsItself(Skill::Mining, Skill::Skinning));
+    Check("not one profession twice", !FeedsItself(Skill::Mining, Skill::Mining) &&
+                                          !FeedsItself(Skill::Mining, Skill::Cooking));
+    Check("plate is the smith's", ArmourPair(Class::Paladin).second == Skill::Blacksmithing &&
+                                      ArmourPair(Class::DeathKnight).first == Skill::Mining);
+    Check("mail and leather the leatherworker's", ArmourPair(Class::Shaman).second == Skill::Leatherworking &&
+                                                      ArmourPair(Class::Rogue).first == Skill::Skinning);
+    Check("cloth the tailor's", ArmourPair(Class::Warlock).first == Skill::Tailoring);
+    Check("racial knacks", RaceKnack(Race::Gnome) == Skill::Engineering &&
+                               RaceKnack(Race::Tauren) == Skill::Herbalism &&
+                               RaceKnack(Race::BloodElf) == Skill::Enchanting &&
+                               RaceKnack(Race::Draenei) == Skill::Jewelcrafting);
+    Check("...and none for the rest", RaceKnack(Race::Human) == 0 && RaceKnack(Race::Orc) == 0 &&
+                                          KnackPair(Race::Troll).first == 0);
+    {
+        std::string bad;
+        const Leaning l = ParseLeaning("Herbalism+Mining:70  class:30 sell list:200", bad);
+        Check("a leaning reads", bad.empty() && l.pairs.size() == 1 && l.pairs[0].weight == 70 &&
+                                     l.classShare == 30 && l.sellFirst && l.listPct == 200);
+        Check("...as written", l.pairs[0].first == Skill::Herbalism && l.pairs[0].second == Skill::Mining);
+        const Leaning m = ParseLeaning("Enchanting+Tailoring:5 Blacksmithing+Mining:5", bad);
+        Check("the gathering one first", m.pairs.size() == 2 && m.pairs[1].first == Skill::Mining &&
+                                             m.pairs[0].first == Skill::Enchanting);
+    }
+    {
+        std::string bad;
+        const Leaning l = ParseLeaning("Blacksmithing+Alchemy:20 Mining+Tailoring:10 frob class:x never:Fishing "
+                                       "Mining+Skinning:50 never:Skinning list:5000 rare:12",
+                                       bad);
+        Check("what does not read is left out", l.pairs.size() == 1 && l.pairs[0].second == Skill::Tailoring &&
+                                                    l.classShare == 0 && l.listPct == 100 && l.rareShare == 12);
+        Check("...and named", bad.find("Blacksmithing+Alchemy:20") != std::string::npos &&
+                                  bad.find("frob") != std::string::npos && bad.find("class:x") != std::string::npos &&
+                                  bad.find("never:Fishing") != std::string::npos &&
+                                  bad.find("list:5000") != std::string::npos);
+        Check("a pair with what it will never have is not taken",
+              l.never.size() == 1 && bad.find("Mining+Skinning (never)") != std::string::npos);
+    }
+    {
+        std::string bad;
+        const Leaning profit = ParseLeaning("Herbalism+Mining:70 class:30", bad);
+        const std::vector<Pick> picks = Picks(profit, Class::Warrior, Race::Orc);
+        Check("profit warrior: its own pair and the class's", picks.size() == 5 && picks[0].from == Match::Own &&
+                                                                  picks[1].from == Match::Class);
+        Check("...70 to 30", PicksWeight(picks, 0) == 10000 && picks[0].weight == 7000 && picks[1].weight == 1350);
+        Check("roll 7000: its own", PickOne(picks, 0, 7000).second == Skill::Mining);
+        Check("roll 7001: the class's first", PickOne(picks, 0, 7001).second == Skill::Blacksmithing);
+        Check("keeping alchemy: herbalism and alchemy",
+              PicksWeight(picks, Skill::Alchemy) == 300 && PickOne(picks, Skill::Alchemy, 1).first == Skill::Herbalism);
+        Check("herbalism and mining is its own", MatchOf(profit, Class::Warrior, 0, Skill::Mining, Skill::Herbalism) ==
+                                                     Match::Own);
+        Check("mining and blacksmithing its class's",
+              MatchOf(profit, Class::Warrior, 0, Skill::Blacksmithing, Skill::Mining) == Match::Class);
+        Check("tailoring and alchemy neither",
+              MatchOf(profit, Class::Warrior, 0, Skill::Tailoring, Skill::Alchemy) == Match::None);
+    }
+    {
+        std::string bad;
+        const Leaning pets = ParseLeaning("Mining+Engineering:70 class:30 never:Skinning", bad);
+        const std::vector<Pick> picks = Picks(pets, Class::Hunter, Race::Orc);
+        bool skins = false;
+        for (Pick const& p : picks)
+            skins = skins || p.first == Skill::Skinning || p.second == Skill::Skinning;
+        Check("a pet lover hunter never skins", !skins && bad.empty());
+        Check("...and has the hunter's engineering once, added up",
+              picks[0].from == Match::Own && picks[0].weight == 70 * 100 + 35 * 30);
+        Check("skinning is never", MatchOf(pets, Class::Hunter, 0, Skill::Skinning, Skill::Leatherworking) ==
+                                       Match::Never);
+    }
+    {
+        std::string bad;
+        const Leaning power = ParseLeaning("armour:70 Mining+Jewelcrafting:30", bad);
+        Check("a priest's armour is tailoring", MatchOf(power, Class::Priest, 0, Skill::Tailoring, Skill::Enchanting) ==
+                                                    Match::Armour);
+        Check("...gems its own", MatchOf(power, Class::Priest, 0, Skill::Jewelcrafting, Skill::Mining) == Match::Own);
+        Check("...and its class's pairs still suit it",
+              MatchOf(power, Class::Priest, 0, Skill::Herbalism, Skill::Inscription) == Match::Class);
+        const Leaning both = ParseLeaning("armour:50 Mining+Blacksmithing:50", bad);
+        const std::vector<Pick> picks = Picks(both, Class::Warrior, 0);
+        Check("a pair named twice is one, as it came first",
+              picks.size() == 1 && picks[0].from == Match::Own && picks[0].weight == 10000);
+    }
+    {
+        std::string bad;
+        const Leaning heritage = ParseLeaning("race:100", bad);
+        Check("a gnome's knack", MatchOf(heritage, Class::Mage, Race::Gnome, Skill::Mining, Skill::Engineering) ==
+                                     Match::Race);
+        const std::vector<Pick> human = Picks(heritage, Class::Mage, Race::Human);
+        Check("a human has none: the class's pairs", human.size() == 3 && human[0].from == Match::Class &&
+                                                         PicksWeight(human, 0) == 10000);
+        const Leaning contrary = ParseLeaning("rare:100", bad);
+        const std::vector<Pick> rogue = Picks(contrary, Class::Rogue, 0);
+        Check("the rogue the fewest take: inscription", rogue.size() == 1 && rogue[0].second == Skill::Inscription &&
+                                                            rogue[0].from == Match::Rare);
+        const std::vector<Pick> mage = Picks(contrary, Class::Mage, 0);
+        Check("a mage's two least alike: half each", mage.size() == 2 && mage[0].weight == 5000 &&
+                                                         mage[1].weight == 5000);
+        // A newbie looks it up: a pair that suits its class, and an odd one is none of its.
+        const Leaning newbie = ParseLeaning("class:100", bad);
+        Check("a newbie's odd pair is put right",
+              MatchOf(newbie, Class::Mage, 0, Skill::Blacksmithing, Skill::Alchemy) == Match::None);
+        Check("...and its class's suits it",
+              MatchOf(newbie, Class::Mage, 0, Skill::Enchanting, Skill::Tailoring) == Match::Class);
+        Check("nothing to take: the class's", Picks(Leaning{}, Class::Priest, 0).size() == 3);
+        Check("the same profession twice is no pair",
+              MatchOf(newbie, Class::Mage, 0, Skill::Tailoring, Skill::Tailoring) == Match::None);
+        Check("...and nothing written read", bad.empty());
+    }
+    {
+        // The leanings the module ships read, and every pair they name feeds itself.
+        bool clean = true;
+        for (auto const& [name, text] : DefaultLeanings())
+        {
+            std::string bad;
+            ParseLeaning(text, bad);
+            if (!bad.empty())
+            {
+                clean = false;
+                std::printf("  %s: %s\n", name.c_str(), bad.c_str());
+            }
+        }
+        Check("the shipped leanings read", clean && DefaultLeanings().size() == 13);
+        Check("a leaning's name, looked up", LeaningKey(" Profit ") == "profit" && LeaningKey("  ").empty() &&
+                                                 LeaningKey("OldWays") == "oldways");
+    }
+    {
+        bool same = true, spread = true;
+        std::vector<int> seen(11, 0);
+        for (uint64_t guid = 1; guid <= 1000; ++guid)
+        {
+            const uint32_t r = StableRoll(guid, 10);
+            same = same && r == StableRoll(guid, 10) && r >= 1 && r <= 10;
+            ++seen[r];
+        }
+        for (int i = 1; i <= 10; ++i)
+            spread = spread && seen[i] > 50;
+        Check("a stable roll is the same each time", same);
+        Check("...and spread", spread && StableRoll(7, 0) == 0);
+    }
+
     // ---- what to craft --------------------------------------------------------------------
     ChoiceSettings s;
     s.maxCasts      = 10;
@@ -104,6 +263,20 @@ int main()
         o[1] = { 2, 0, 2, 2000, 1000, true, false };   // an upgrade for itself
         const Choice c = Choose(o, s);
         Check("an upgrade first, once", c.why == Why::Use && c.index == 1 && c.casts == 1);
+    }
+    {
+        std::vector<Option> o(2);
+        o[0] = { 1, 100, 20, 200, 150, false, true };   // orange, 2s a go, worth 1s 50c: not to sell
+        o[1] = { 2, 0, 5, 100, 900, false, true };      // grey, but sells well
+        ChoiceSettings greedy = s;
+        greedy.sellFirst = true;
+        Check("a point before a sale", Choose(o, s).why == Why::Skill);
+        const Choice c = Choose(o, greedy);
+        Check("selling first: the sale", c.why == Why::Sell && c.index == 1 && c.casts == 5);
+        o[1].worthEach = 120;
+        Check("...nothing worth selling: the point", Choose(o, greedy).why == Why::Skill);
+        o.push_back({ 3, 0, 1, 2000, 1000, true, false });
+        Check("...an upgrade still first", Choose(o, greedy).why == Why::Use);
     }
     {
         std::vector<Option> o(3);
@@ -204,6 +377,33 @@ int main()
     Check("milling within 25: certain", GatherChance(1, 1) == 100 && GatherChance(25, 1) == 100);
     Check("...75 within 50, 25 within 100, none after",
           GatherChance(26, 1) == 75 && GatherChance(51, 1) == 25 && GatherChance(101, 1) == 0);
+
+    {
+        // What the conf ships is the code's own leanings, word for word, and
+        // each is there.
+        std::ifstream in(root + "/conf/mod_playerbots_plus.conf.dist");
+        std::string line;
+        const std::string prefix = "PlayerbotsPlus.Skills.Leaning.";
+        size_t lines = 0, same = 0;
+        while (std::getline(in, line))
+        {
+            if (line.rfind(prefix, 0) != 0)
+                continue;
+            ++lines;
+            const std::string name = line.substr(prefix.size(), line.find(' ') - prefix.size());
+            const size_t q1 = line.find('"'), q2 = line.rfind('"');
+            const std::string value = q2 > q1 ? line.substr(q1 + 1, q2 - q1 - 1) : std::string();
+            bool found = false;
+            for (auto const& [n, text] : DefaultLeanings())
+                if (n == name && text == value)
+                    found = true;
+            if (found)
+                ++same;
+            else
+                std::printf("  conf leaning %s is not the code's\n", name.c_str());
+        }
+        Check("the conf's leanings are the code's", lines == DefaultLeanings().size() && same == lines);
+    }
 
     std::printf("craft: %d checks, %d failed\n", g_checks, g_fails);
     return g_fails ? 1 : 0;

@@ -284,6 +284,23 @@ makes a bot say anything about it.
   call: "only those that don't fit"), the new one at the old one's skill,
   with `InitAvailableSpells` for its recipes, and playerbots told the pair
   (`firstSkill`, `secondSkill`, `professionRollType`) so it keeps it.
+- The kind of person a bot is leans its pair (`Skills.Leaning.<Name>`, a
+  `PbpCraft::Leaning`: pairs and shares, `class`, `armour`, `race`, `rare`,
+  `never`, `sell`, `list`; parsed and picked in the pure file): which leaning
+  a bot is, is a chat module's to say (`SetLeaningProvider`, API 13), and
+  without one nothing changes. A pair its leaning takes suits it as well as
+  its class's (personality over class fit, the user's call); one with what
+  its leaning will never have is changed; and a bot whose pair is only its
+  class's takes its leaning's own pick -- a `StableRoll` by its guid, so it
+  changes once -- only when playerbots has just given it its pair (a
+  profession given from nothing, never taken away first: `g_newPair`) or
+  with `Skills.LeaningsChangeExisting`, off by default (the user's call: the
+  bots there are keep theirs). Every pair a leaning names feeds itself
+  (`FeedsItself`): crafting buys only what vendors sell. The newbie looks it
+  up and takes its class's (the user's call). A leaning's `sell` puts Sell
+  straight after Use in `Choose`; its `list` scales the market's
+  `MaxPerVisit` and `MaxAuctionsPerBot`; the ledger counts time and what
+  came in by leaning and by pair (`lean.<name>`, `pair.<pair>`).
 - `PlayerbotsPlusCrafting` has a few free random bots at a time make what
   `PbpCraft::Choose` picks (pure, tested): an upgrade for itself first, else
   the cheapest copper a point, else what sells well over its materials. Every

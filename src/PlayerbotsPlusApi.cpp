@@ -6,6 +6,7 @@
 #include "PlayerbotsPlusHangout.h"
 #include "PlayerbotsPlusLooted.h"
 #include "PlayerbotsPlusMute.h"
+#include "PlayerbotsPlusSkills.h"
 #include "PlayerbotsPlusUtil.h"
 
 #include "Player.h"
@@ -98,6 +99,21 @@ namespace PlayerbotsPlus
     void BoughtToDisenchant(Player* bot, Item* item)
     {
         PbpCrafting_BoughtToBreak(bot, item);
+    }
+
+    void SetLeaningProvider(LeaningProvider provider)
+    {
+        PbpSkills_SetLeaningProvider(std::move(provider));
+    }
+
+    std::string LeaningMatch(Player* bot)
+    {
+        return bot ? PbpSkills_LeaningMatch(bot) : std::string();
+    }
+
+    std::string RaceKnack(uint8_t race)
+    {
+        return PbpCraft::Name(PbpCraft::RaceKnack(race));
     }
 
     bool DropSourcesOf(uint32_t itemId, DropSources& out)

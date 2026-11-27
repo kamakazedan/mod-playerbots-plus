@@ -17,8 +17,9 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <functional>
+#include <map>
 #include <mutex>
-#include <random>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -40,6 +41,11 @@ namespace
                       Class::DeathKnight == CLASS_DEATH_KNIGHT && Class::Shaman == CLASS_SHAMAN &&
                       Class::Mage == CLASS_MAGE && Class::Warlock == CLASS_WARLOCK && Class::Druid == CLASS_DRUID,
                   "PbpCraft's classes are the game's");
+    static_assert(Race::Human == RACE_HUMAN && Race::Orc == RACE_ORC && Race::Dwarf == RACE_DWARF &&
+                      Race::NightElf == RACE_NIGHTELF && Race::Undead == RACE_UNDEAD_PLAYER &&
+                      Race::Tauren == RACE_TAUREN && Race::Gnome == RACE_GNOME && Race::Troll == RACE_TROLL &&
+                      Race::BloodElf == RACE_BLOODELF && Race::Draenei == RACE_DRAENEI,
+                  "PbpCraft's races are the game's");
 
     // What is held: the two professions, and the secondary skills something
     // is made with. Not fishing (see the header).
@@ -110,6 +116,9 @@ namespace
     std::unordered_set<uint64_t>           g_changed;    // written next time; gone ones deleted
     std::unordered_set<uint32_t>           g_putRight;   // bots playerbots set a skill of
     std::unordered_set<uint64_t>           g_fresh;      // Keys taken away: given again, they are as given
+    std::unordered_set<uint32_t>           g_newPair;    // bots playerbots gave a profession they never had
+    std::function<std::string(Player*)>    g_leaningProvider;   // PlayerbotsPlus::SetLeaningProvider
+    std::map<std::string, std::map<std::string, uint64_t>> g_roundLeanings;   // this round's, as they stand
     std::vector<uint32_t>                  g_round;      // the bots being looked over
     size_t                                 g_roundAt    = 0;
     uint32_t                               g_timer      = 0;
@@ -131,12 +140,6 @@ namespace
     {
         if (g_earned.erase(key))
             g_changed.insert(key);
-    }
-
-    std::mt19937& Rng()
-    {
-        static std::mt19937 rng{ std::random_device{}() };
-        return rng;
     }
 
     // One of playerbots' random bots, about (world thread).
@@ -178,6 +181,9 @@ namespace
                 g_fresh.insert(key);
                 continue;
             }
+            if (!n.from && !g_fresh.contains(key) && IsPrimary(n.skill) &&
+                IsRandomBot(ObjectAccessor::FindPlayerByLowGUID(n.guid)))
+                g_newPair.insert(n.guid);   // one it never had: a new bot's pair, playerbots' roll
             if (!n.from || g_fresh.contains(key))
                 continue;   // given from nothing, or again: taken as it stands when it is seen
             if (it == g_earned.end())
@@ -233,43 +239,100 @@ namespace
         }
     }
 
-    // How much of a class's pairs have `skill` in them.
-    uint32_t WeightWith(uint8_t cls, uint32_t skill)
+    // The kind of person it is, as the chat module says (Skills.Leanings):
+    // null for none.
+    Leaning const* LeaningOf(Player* bot)
     {
-        uint32_t w = 0;
-        for (Pair const& p : ClassPairs(cls))
-            if (p.first == skill || p.second == skill)
-                w += p.weight;
-        return w;
+        PbpSkillSettings const& s = g_Pbp.skills;
+        if (!s.leanings || !g_leaningProvider || !bot)
+            return nullptr;
+        auto it = s.leaningsByName.find(LeaningKey(g_leaningProvider(bot)));
+        return it == s.leaningsByName.end() ? nullptr : &it->second;
     }
 
-    // Its two professions a pair that suits its class, or made one: the one
-    // of its two that fits kept, the other (or both) changed for what the
-    // pair wants, each new one at the skill of the one it replaces.
-    bool SuitClass(Player* bot)
+    // Its two professions, or fewer: playerbots tops one up, or has it as it wants.
+    std::vector<uint32_t> PairOf(Player* bot)
     {
         std::vector<uint32_t> mine;
         for (uint32_t skill : kHeld)
             if (IsPrimary(skill) && bot->HasSkill(skill))
                 mine.push_back(skill);
-        if (mine.size() != 2)
-            return false;   // playerbots tops one up, or has it as it wants
-        const uint8_t cls = bot->getClass();
-        const uint32_t a = mine[0], b = mine[1];
-        if (PairFits(cls, a, b) || ClassPairs(cls).empty())
-            return false;
+        return mine;
+    }
 
+    // A bot without a leaning goes by its class's pairs alone.
+    Leaning const& ClassOnly()
+    {
+        static const Leaning l = []
+        {
+            Leaning c;
+            c.classShare = 100;
+            return c;
+        }();
+        return l;
+    }
+
+    // Its two professions a pair that suits it, or made one. Changed: a pair
+    // that suits neither its class nor its leaning (Skills.ClassPairs), or
+    // has a profession its leaning will never have; and a pair of its
+    // class's where its leaning's own pick for it -- rolled the same for it
+    // every time -- is one of the leaning's, for a bot playerbots has just
+    // given its pair (a new bot) or with Skills.LeaningsChangeExisting. Of
+    // its two, the one that fits is kept where it can be, and each new one
+    // starts at the skill of the one it replaces.
+    bool Suit(Player* bot, bool newPair)
+    {
+        const std::vector<uint32_t> mine = PairOf(bot);
+        if (mine.size() != 2)
+            return false;
+        PbpSkillSettings const& s = g_Pbp.skills;
+        const uint8_t cls = bot->getClass(), race = bot->getRace();
+        if (ClassPairs(cls).empty())
+            return false;
+        const uint32_t a = mine[0], b = mine[1];
+        Leaning const* leaning = LeaningOf(bot);
+        Leaning const& l = leaning ? *leaning : ClassOnly();
+        const Match match = MatchOf(l, cls, race, a, b);
+        const std::vector<Pick> picks = Picks(l, cls, race);
+        // Its own roll, not the temperament's (city life rolls by the guid too).
+        const uint64_t seed = bot->GetGUID().GetRawValue() ^ 0x50524F46u;
         const uint32_t va = bot->GetPureSkillValue(a), vb = bot->GetPureSkillValue(b);
-        const uint32_t wa = WeightWith(cls, a), wb = WeightWith(cls, b);
+
+        Pick to;
         uint32_t keep = 0;
-        if (wa || wb)
-            keep = wa > wb || (wa == wb && va >= vb) ? a : b;
-        const uint32_t total = WeightOf(cls, keep);
-        if (!total)
+        if (match == Match::None || match == Match::Never)
+        {
+            if (match == Match::None && !s.classPairs)
+                return false;
+            // The one of its two its picks want the more -- none want one it
+            // will never have -- the higher skill when that is the same.
+            auto weightWith = [&picks](uint32_t skill)
+            {
+                uint32_t w = 0;
+                for (Pick const& p : picks)
+                    if (p.first == skill || p.second == skill)
+                        w += p.weight;
+                return w;
+            };
+            const uint32_t wa = weightWith(a), wb = weightWith(b);
+            if (wa || wb)
+                keep = wa > wb || (wa == wb && va >= vb) ? a : b;
+            to = PickOne(picks, keep, StableRoll(seed, PicksWeight(picks, keep)));
+        }
+        else if (leaning && match == Match::Class && (newPair || s.changeExisting))
+        {
+            to = PickOne(picks, 0, StableRoll(seed, PicksWeight(picks, 0)));
+            if (to.from == Match::Class)
+                return false;   // its own pick is its class's: the class's pair it has will do
+            keep = to.first == a || to.second == a ? a : to.first == b || to.second == b ? b : 0;
+        }
+        else
             return false;
-        const auto [first, second] = PickPair(cls, keep, std::uniform_int_distribution<uint32_t>(1, total)(Rng()));
-        if (!first || !second)
+        const uint32_t first = to.first, second = to.second;
+        if (!first || !second || (first == a && second == b) || (first == b && second == a))
             return false;
+        if (keep && first != keep && second != keep)
+            keep = 0;   // its picks had none with it after all
 
         // Which old one each new one takes the place of: the one kept stays;
         // a gathering trade gives way to a gathering trade.
@@ -331,12 +394,35 @@ namespace
         sRandomPlayerbotMgr.SetValue(bot, "firstSkill", first);
         sRandomPlayerbotMgr.SetValue(bot, "secondSkill", second);
         sRandomPlayerbotMgr.SetValue(bot, "professionRollType", 2);   // PlayerbotFactory's Class
-        ++g_stats.switched;
-        ++g_stats.switchedTo[Name(first) + " and " + Name(second)];
+        const std::string pair = Name(first) + " and " + Name(second);
+        if (match == Match::None)
+        {
+            ++g_stats.switched;
+            ++g_stats.switchedTo[pair];
+        }
+        else
+        {
+            // For its leaning: its own pick, or none it would never have.
+            ++(match == Match::Never ? g_stats.refused : g_stats.leaned);
+            ++g_stats.leanedTo[(leaning ? leaning->name : std::string("none")) + ": " + pair];
+        }
         if (pbp::g_PbpDebug)
-            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} ({}) changed {} and {} for {} and {}.",
-                     bot->GetName(), uint32(cls), Name(a), Name(b), Name(first), Name(second));
+            LOG_INFO("module.playerbotsplus", "[Playerbots Plus] {} ({}, {}) changed {} and {} for {} and {} ({}).",
+                     bot->GetName(), uint32(cls), leaning ? leaning->name : std::string("no leaning"), Name(a),
+                     Name(b), Name(first), Name(second), MatchName(match));
         return true;
+    }
+
+    // How it stands with its leaning, for this round's counts: the leaning,
+    // and where its pair stands with it.
+    void Count(Player* bot)
+    {
+        Leaning const* leaning = LeaningOf(bot);
+        const std::vector<uint32_t> mine = PairOf(bot);
+        if (!leaning || mine.size() != 2)
+            return;
+        const Match m = MatchOf(*leaning, bot->getClass(), bot->getRace(), mine[0], mine[1]);
+        ++g_roundLeanings[leaning->name][MatchName(m)];
     }
 
     // A few bots a look: what they have first seen, a pair for their class,
@@ -345,6 +431,10 @@ namespace
     {
         if (g_roundAt >= g_round.size())
         {
+            // The round just done: how the bots stood with their leanings.
+            if (!g_round.empty())
+                g_stats.byLeaning = std::move(g_roundLeanings);
+            g_roundLeanings.clear();
             g_round.clear();
             g_roundAt = 0;
             for (auto it = sRandomPlayerbotMgr.GetPlayerBotsBegin(); it != sRandomPlayerbotMgr.GetPlayerBotsEnd(); ++it)
@@ -356,11 +446,14 @@ namespace
         uint32_t switches = 0;
         for (; g_roundAt < end; ++g_roundAt)
         {
-            Player* bot = ObjectAccessor::FindPlayerByLowGUID(g_round[g_roundAt]);
+            const uint32_t guid = g_round[g_roundAt];
+            Player* bot = ObjectAccessor::FindPlayerByLowGUID(guid);
             if (!IsRandomBot(bot))
                 continue;
-            if (s.classPairs && switches < kSwitchesAtOnce && SuitClass(bot))
+            // A new bot's pair waits for a look with a change to spare.
+            if ((s.classPairs || s.leanings) && switches < kSwitchesAtOnce && Suit(bot, g_newPair.erase(guid) > 0))
                 ++switches;
+            Count(bot);
             Hold(bot);
         }
     }
@@ -528,16 +621,55 @@ PbpSkillsStats PbpSkills_GetStats()
     return s;
 }
 
+void PbpSkills_SetLeaningProvider(std::function<std::string(Player*)> provider)
+{
+    g_leaningProvider = std::move(provider);
+}
+
+PbpCraft::Leaning const* PbpSkills_LeaningOf(Player* bot)
+{
+    return LeaningOf(bot);
+}
+
+std::string PbpSkills_LeaningMatch(Player* bot)
+{
+    Leaning const* leaning = LeaningOf(bot);
+    if (!leaning)
+        return {};
+    const std::vector<uint32_t> mine = PairOf(bot);
+    if (mine.size() != 2)
+        return {};
+    const Match m = MatchOf(*leaning, bot->getClass(), bot->getRace(), mine[0], mine[1]);
+    return m == Match::None || m == Match::Never ? std::string() : std::string(MatchName(m));
+}
+
+std::string PbpSkills_PairKey(Player* bot)
+{
+    std::vector<uint32_t> mine = PairOf(bot);
+    if (mine.size() != 2)
+        return {};
+    if (Gathering(mine[1]) && !Gathering(mine[0]))
+        std::swap(mine[0], mine[1]);   // the gathering one first, as the class pairs are
+    return Name(mine[0]) + "+" + Name(mine[1]);
+}
+
 PbpBrief PbpSkills_Brief(bool full)
 {
     PbpBrief b;
     PbpSkillsStats const s = PbpSkills_GetStats();
-    const bool on = g_Pbp.enable && g_Pbp.skills.enable;
+    PbpSkillSettings const& set = g_Pbp.skills;
+    const bool on = g_Pbp.enable && set.enable;
+    const char* leanings = !set.leanings ? "off" : !g_leaningProvider ? "no chat module to say who leans which way"
+                                                 : set.changeExisting ? "every bot" : "new bots";
     b.lines.push_back(fmt::format("Professions: {} -- earned, not handed out: {} kept ({} first seen since "
                                   "startup); {} points the game gave since startup; playerbots' hand-outs put back {} "
-                                  "times ({} points); {} pairs changed to suit their class.",
+                                  "times ({} points); {} pairs changed that suited neither their class nor their "
+                                  "leaning.",
                                   on ? "on" : "OFF", s.kept, s.firstSeen, s.points, s.putBack, s.takenBack,
                                   s.switched));
+    b.lines.push_back(fmt::format("Leanings ({}): {} pairs changed to the kind of person a bot is, {} for one it would "
+                                  "never have.",
+                                  leanings, s.leaned, s.refused));
     if (full)
     {
         std::string by;
@@ -549,7 +681,26 @@ PbpBrief PbpSkills_Brief(bool full)
         for (auto const& [pair, n] : s.switchedTo)
             to += fmt::format("{}{} {}", to.empty() ? "" : ", ", pair, n);
         if (!to.empty())
-            b.lines.push_back("Pairs given to suit the class: " + to + ".");
+            b.lines.push_back("Pairs given for one that suited neither: " + to + ".");
+        std::string leaned;
+        for (auto const& [pair, n] : s.leanedTo)
+            leaned += fmt::format("{}{} {}", leaned.empty() ? "" : ", ", pair, n);
+        if (!leaned.empty())
+            b.lines.push_back("Pairs given for a leaning: " + leaned + ".");
+        // The last full round over the bots online: each leaning, and where
+        // its bots' pairs stand with it (own: one it names; armour, race,
+        // rare: what those stand for; class: its class's; none; never).
+        for (auto const& [name, matches] : s.byLeaning)
+        {
+            uint64_t all = 0;
+            std::string how;
+            for (auto const& [match, n] : matches)
+            {
+                all += n;
+                how += fmt::format("{}{} {}", how.empty() ? "" : ", ", match, n);
+            }
+            b.lines.push_back(fmt::format("Leaning {}: {} bots online ({}).", name, all, how));
+        }
         b.lines.push_back(fmt::format("Written to the database {} times; {} notes dropped.", s.writes, s.dropped));
     }
     if (on && s.dropped)

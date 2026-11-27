@@ -214,6 +214,55 @@ namespace PbpLedger
         return out;
     }
 
+    namespace
+    {
+        // A leaning's or a pair's time and gold, the most an hour of play
+        // first, none to go by last.
+        struct KindRow
+        {
+            std::string name;
+            int64_t     online  = 0;
+            int64_t     playing = 0;
+            int64_t     got     = 0;
+        };
+
+        std::vector<KindRow> KindRows(std::map<std::string, int64_t> const& flows, std::string const& kind)
+        {
+            std::vector<KindRow> rows;
+            const std::string prefix = "time." + kind + ".";
+            for (auto it = flows.lower_bound(prefix); it != flows.end() && it->first.rfind(prefix, 0) == 0; ++it)
+            {
+                const std::string name = it->first.substr(prefix.size());
+                if (it->second > 0 && !name.empty())
+                    rows.push_back({ name, it->second, Get(flows, "time.active." + kind + "." + name),
+                                     Get(flows, "gold.in." + kind + "." + name) });
+            }
+            auto rate = [](KindRow const& r) { return r.playing > 0 ? r.got * 60 / r.playing : int64_t(-1); };
+            std::stable_sort(rows.begin(), rows.end(),
+                             [&rate](KindRow const& a, KindRow const& b) { return rate(a) > rate(b); });
+            return rows;
+        }
+    }
+
+    std::vector<std::string> ByKind(std::map<std::string, int64_t> const& flows, std::string const& kind)
+    {
+        std::vector<std::string> out;
+        for (KindRow const& r : KindRows(flows, kind))
+            out.push_back(r.name + ": " + Count(r.online / 60) + " bot-hours online, " + Count(r.playing / 60) +
+                          " with their AI running -- an hour of play, got " + AnHour(r.got, r.playing) + ".");
+        return out;
+    }
+
+    std::string KeyPart(std::string const& name)
+    {
+        std::string out;
+        for (char c : name)
+            if (std::isalnum(static_cast<unsigned char>(c)) || c == '+')
+                if (out.size() < 24)
+                    out += c;
+        return out;
+    }
+
     std::vector<std::string> NowKeys()
     {
         std::vector<std::string> keys = { "now.time", "now.bots", "now.gold", "now.prof.gatherers",
@@ -257,6 +306,13 @@ namespace PbpLedger
         }
         if (!hour.empty())
             out.push_back("Got an hour of play (looted), by level: " + hour + ".");
+        // ...and by the kind of person a bot is: whether the greedy earn more.
+        std::string leanings;
+        for (KindRow const& r : KindRows(flows, "lean"))
+            if (r.playing > 0)
+                leanings += (leanings.empty() ? "" : ", ") + r.name + " " + AnHour(r.got, r.playing);
+        if (!leanings.empty())
+            out.push_back("Got an hour of play, by leaning (every level together): " + leanings + ".");
         if (now.empty())
             out.push_back("No look at the bots yet since the server started.");
         else
@@ -358,6 +414,25 @@ namespace PbpLedger
         {
             out.push_back("By level (a bot's time counted at each look at them):");
             for (std::string const& line : bands)
+                out.push_back("  " + line);
+        }
+
+        // ---- by the kind of person a bot is, and by its professions ----
+        // Every level together: a leaning's bots are of every level, as
+        // anyone's are, so a level band's worth is in all of them alike.
+        const std::vector<std::string> leanings = ByKind(flows, "lean");
+        if (!leanings.empty())
+        {
+            out.push_back("By leaning, the kind of person a bot is (every level together, the most an hour of play "
+                          "first):");
+            for (std::string const& line : leanings)
+                out.push_back("  " + line);
+        }
+        const std::vector<std::string> pairs = ByKind(flows, "pair");
+        if (!pairs.empty())
+        {
+            out.push_back("By profession pair (every level together, the most an hour of play first):");
+            for (std::string const& line : pairs)
                 out.push_back("  " + line);
         }
 

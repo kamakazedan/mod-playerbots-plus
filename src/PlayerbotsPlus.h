@@ -42,7 +42,9 @@ class Player;
 // 11: what a bot made itself with its professions is its own to sell too
 //     (LootedByBot).
 // 12: disenchanting (CanDisenchant, DisenchantWorth, BoughtToDisenchant).
-#define PLAYERBOTS_PLUS_API_VERSION 12
+// 13: professions by the kind of person a bot is (SetLeaningProvider,
+//     LeaningMatch, RaceKnack).
+#define PLAYERBOTS_PLUS_API_VERSION 13
 
 namespace PlayerbotsPlus
 {
@@ -132,6 +134,33 @@ namespace PlayerbotsPlus
     // what playerbots hands it -- and the bot gets to it as soon as it is
     // free. What comes out is its own, like anything it breaks down.
     void BoughtToDisenchant(Player* bot, Item* item);
+
+    // ---- Professions by leaning (PlayerbotsPlus.Skills.Leaning.*), from API 13
+
+    // The professions a bot goes for, by the kind of person it is: a chat
+    // module that gives its bots personalities says which leaning
+    // (PlayerbotsPlus.Skills.Leaning.<Name>, matched without regard to case)
+    // a bot is. Asked on the world thread whenever its professions are
+    // looked over, when it crafts or puts things up for auction, and at the
+    // economy ledger's looks at the bots. An
+    // empty answer, or one that names no leaning, is none: its class's pairs
+    // alone, as without a provider.
+    using LeaningProvider = std::function<std::string(Player*)>;
+    void SetLeaningProvider(LeaningProvider provider);
+
+    // How `bot`'s two professions stand with its leaning, for a prompt to say
+    // why it has them: "own" (a pair the leaning names), "armour" (the pair
+    // that makes the armour it wears), "race" (its race's knack, RaceKnack),
+    // "rare" (the pair the fewest of its class take), "class" (one of its
+    // class's pairs). Empty: no leaning, not two professions, or a pair that
+    // suits neither its leaning nor its class, or has one the leaning will
+    // never have. World thread.
+    std::string LeaningMatch(Player* bot);
+
+    // The profession a race is better at than the rest, by its racial:
+    // "Engineering" for a gnome, "Herbalism" for a tauren, "Enchanting" for a
+    // blood elf, "Jewelcrafting" for a draenei. Empty for the rest.
+    std::string RaceKnack(uint8_t race);
 
     // ---- City hangouts (PlayerbotsPlus.Hangout.*)
 

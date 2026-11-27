@@ -9,6 +9,7 @@
 #include "PlayerbotsPlusInactive.h"
 #include "PlayerbotsPlusLedger.h"
 #include "PlayerbotsPlusLooted.h"
+#include "PlayerbotsPlusSkills.h"
 #include "PlayerbotsPlusSpace.h"
 #include "PlayerbotsPlusUtil.h"
 
@@ -1180,6 +1181,10 @@ namespace
         cs.maxCasts      = c.maxCasts;
         cs.minChance     = c.minChance;
         cs.sellMarginPct = c.sellMarginPct;
+        // The kind of person it is may craft to sell before it crafts for a
+        // point (its leaning's "sell": a greedy one).
+        PbpCraft::Leaning const* leaning = PbpSkills_LeaningOf(bot);
+        cs.sellFirst = leaning && leaning->sellFirst;
         const PbpCraft::Choice choice = PbpCraft::Choose(options, cs);
         plan.note = fmt::format("{} thing{} it could make or break down here and now{}", options.size(),
                                 options.size() == 1 ? "" : "s",
